@@ -138,6 +138,8 @@ To support visualization through the web-based visualizer MeshCat, the following
 * [nlohmann/json](https://github.com/nlohmann/json) ~3.7.3
 * [eric-heiden/cpp-base64](https://github.com/eric-heiden/cpp-base64)
 
+See instructions below for each package's preferred installation method
+
 #### libzmq
 It is recommended to install the binary packages, as shown on the [ZeroMQ README file](https://github.com/zeromq/libzmq/blob/master/README.md).
 
@@ -149,7 +151,7 @@ git checkout v4.6.0
 mkdir build && cd build
 cmake ..
 make -j
-make install
+sudo make install
 ```
 
 #### crossguid
@@ -160,7 +162,7 @@ git checkout v0.2.2
 mkdir build && cd build
 cmake ..
 make -j
-make install
+sudo make install
 ```
 
 #### json
