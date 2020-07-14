@@ -32,6 +32,10 @@
 #include "tiny_spatial_transform.h"
 #include "tiny_symmetric_spatial_dyad.h"
 
+#ifdef NEURAL_SIM
+#include "examples/neural_scalar.h"
+#endif
+
 enum TinyJointType {
   JOINT_FIXED = -1,
   JOINT_PRISMATIC_X = 0,
@@ -799,9 +803,7 @@ class TinyMultiBody {
    * matrix. M must be a properly initialized square matrix of size dof_qd().
    */
   void mass_matrix(TinyMatrixXxX* M) { mass_matrix(m_q, M); }
-  void mass_matrix1(TinyMatrixXxX* M) { 
-      mass_matrix(m_q, M); 
-  }
+  void mass_matrix1(TinyMatrixXxX* M) { mass_matrix(m_q, M); }
 
   /**
    * LTDL factorization exploiting branch-induced sparsity pattern in
@@ -962,6 +964,15 @@ class TinyMultiBody {
                     TinyConstants::zero()),
         gravity);
 
+#ifdef NEURAL_SIM
+    for (int i = 0; i < dof(); ++i) {
+      NEURAL_ASSIGN(m_q[i], "q_" + std::to_string(i));
+    }
+    for (int i = 0; i < dof_qd(); ++i) {
+      NEURAL_ASSIGN(m_qd[i], "qd_" + std::to_string(i));
+    }
+#endif
+
     forward_kinematics(q, qd);
 
     for (int i = m_links.size() - 1; i >= 0; i--) {
@@ -977,6 +988,10 @@ class TinyMultiBody {
       // TODO consider nonzero resting position of joint for stiffness?
       tau_val -= link.m_stiffness * get_q_for_link(q, i);
       tau_val -= link.m_damping * get_qd_for_link(qd, i);
+
+#ifdef NEURAL_SIM
+      NEURAL_ASSIGN(tau_val, "tau_" + std::to_string(i));
+#endif
 
       link.m_u = tau_val - link.m_S.dot(link.m_pA);
 
@@ -1045,6 +1060,15 @@ class TinyMultiBody {
       //   auto temp = m_baseArticulatedInertia.inverseOld();
       //   temp.print("OLD Inverted base articulated inertia");
       // }
+
+#ifdef NEURAL_SIM
+      NEURAL_ASSIGN(m_baseBiasForce[0], "base_bias_force_0");
+      NEURAL_ASSIGN(m_baseBiasForce[1], "base_bias_force_1");
+      NEURAL_ASSIGN(m_baseBiasForce[2], "base_bias_force_2");
+      NEURAL_ASSIGN(m_baseBiasForce[3], "base_bias_force_3");
+      NEURAL_ASSIGN(m_baseBiasForce[4], "base_bias_force_4");
+      NEURAL_ASSIGN(m_baseBiasForce[5], "base_bias_force_5");
+#endif
 
       m_baseAcceleration =
           -m_baseArticulatedInertia.inverse().mul_inv(m_baseBiasForce);

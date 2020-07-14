@@ -101,12 +101,14 @@ struct CeresUtils {
   }
 
   template <class T>
-  static T min(const T& a, const T& b) {
+  static T min1(const T& a, const T& b) {
+    using std::min;
     return min(a, b);
   }
 
   template <class T>
-  static T max(const T& a, const T& b) {
+  static T max1(const T& a, const T& b) {
+    using std::max;
     return max(a, b);
   }
 

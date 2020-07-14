@@ -38,8 +38,11 @@ struct EstimationParameter {
   double minimum{-std::numeric_limits<double>::infinity()};
   double maximum{std::numeric_limits<double>::infinity()};
 
+  // coefficient of L1 regularization for this parameter
+  double l1_regularization{0.};
+
   // coefficient of L2 regularization for this parameter
-  double regularization{0.};
+  double l2_regularization{0.};
 
   EstimationParameter &operator=(double rhs) {
     value = rhs;
@@ -106,6 +109,12 @@ class TinyCeresEstimator : ceres::IterationCallback {
    */
   double divide_cost_by_time_exponent{1};
 
+  /**
+   * Whether to set parameter bounds (line search optimizers do not support
+   * this).
+   */
+  bool set_bounds{true};
+
   ceres::Solver::Options options;
 
   TinyCeresEstimator(double dt) : dt(dt) {
@@ -140,10 +149,12 @@ class TinyCeresEstimator : ceres::IterationCallback {
     vars_ = new double[kParameterDim];
     problem_.AddResidualBlock(cost_function_, loss_function, vars_);
 
-    for (int i = 0; i < kParameterDim; ++i) {
-      problem_.SetParameterLowerBound(vars_, i, parameters[i].minimum);
-      problem_.SetParameterUpperBound(vars_, i, parameters[i].maximum);
-      vars_[i] = parameters[i].value;
+    if (set_bounds) {
+      for (int i = 0; i < kParameterDim; ++i) {
+        problem_.SetParameterLowerBound(vars_, i, parameters[i].minimum);
+        problem_.SetParameterUpperBound(vars_, i, parameters[i].maximum);
+        vars_[i] = parameters[i].value;
+      }
     }
 
     return problem_;
@@ -245,8 +256,10 @@ class TinyCeresEstimator : ceres::IterationCallback {
       for (int i = 0; i < kParameterDim; ++i) {
         // store current parameters as double for logging purposes
         parent->current_param_[i] = Utils::getDouble(x[i]);
-        // weighted sum of parameter L2 norms
-        regularization += parent->parameters[i].regularization * x[i] * x[i];
+        // apply regularization
+        regularization += parent->parameters[i].l2_regularization * x[i] * x[i];
+        regularization +=
+            parent->parameters[i].l1_regularization * Utils::abs(x[i]);
       }
       for (int i = 0; i < kResidualDim; ++i) {
         // TODO consider adding separate residual dimension for parameter
