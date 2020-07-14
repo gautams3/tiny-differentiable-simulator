@@ -13,8 +13,12 @@ struct NeuralAugmentation {
   int hidden_units = 5;
   TinyNeuralNetworkActivation activation_fn = NN_ACT_ELU;
 
+  // L1 regularization for input weights (lasso) to encourage sparse inputs
   double input_lasso_regularization{1};
+  // L2 regularization term for upper layers
+  double upper_l2_regularization{1};
 
+  
   void add_wiring(const std::string &output,
                   const std::vector<std::string> &inputs) {
     // TODO consider allowing biases on inputs?
@@ -79,7 +83,11 @@ struct NeuralAugmentation {
         params[pi].maximum = 1;
         params[pi].value = init_weights[wi];
         if (wi < num_first_layer_weights) {
+          // L1 lasso on input weights encourages input sparsity
           params[pi].l1_regularization = input_lasso_regularization;
+        } else {
+          // L2 regularization of weights in upper layers
+          params[pi].l2_regularization = upper_l2_regularization;
         }
       }
       for (int bi = 0; bi < specs[i].num_biases(); ++bi, ++pi) {
