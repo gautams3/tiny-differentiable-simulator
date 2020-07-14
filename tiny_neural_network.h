@@ -334,7 +334,7 @@ class TinyNeuralNetwork : public TinyNeuralNetworkSpecification {
   void save_graphviz(const std::string& filename,
                      const std::vector<std::string>& input_names = {},
                      const std::vector<std::string>& output_names = {}) const {
-    this->template save_graphviz<TinyScalar, TinyConstants>(
+    dynamic_cast<TinyNeuralNetworkSpecification*>(this)->template save_graphviz<TinyScalar, TinyConstants>(
         filename, input_names, output_names, weights, biases);
   }
 };
