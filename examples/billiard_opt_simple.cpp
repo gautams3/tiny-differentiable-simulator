@@ -43,7 +43,7 @@ std::string sphere2red;
 VisualizerAPI* visualizer = nullptr;
 
 // ID of the ball whose position is optimized for
-const int TARGET_ID = 5;
+const int TARGET_ID = 0;
 
 template <typename TinyScalar, typename TinyConstants>
 TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
@@ -54,7 +54,7 @@ TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
   typedef TinyGeometry<TinyScalar, TinyConstants> TinyGeometry;
 
   std::vector<int> visuals;
-  TinyVector3 target(TinyConstants::fraction(35, 10),
+  TinyVector3 target(TinyConstants::fraction(0, 10),
                      TinyConstants::fraction(8, 1), TinyConstants::zero());
   if (vis) {
     vis->resetSimulation();
@@ -73,7 +73,7 @@ TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
   TinyScalar dy = TinyConstants::sin1(deg_60) * radius * TinyConstants::two();
   TinyScalar rx = TinyConstants::zero(), y = TinyConstants::zero();
   int ball_id = 0;
-  for (int column = 1; column <= 3; ++column) {
+  for (int column = 1; column <= 1; ++column) {
     TinyScalar x = rx;
     for (int i = 0; i < column; ++i) {
       const TinyGeometry* geom = world.create_sphere(radius);
@@ -274,14 +274,16 @@ int main(int argc, char* argv[]) {
 
   double init_force_x = 0., init_force_y = 500.;
   int steps = 300;
+  int gd_steps = 100; // gradient_descent_steps
+  double learning_rate = 3e1;
   rollout<double, DoubleUtils>(init_force_x, init_force_y, steps, visualizer);
 
   {
     auto start = high_resolution_clock::now();
     double cost, d_force_x, d_force_y;
-    double learning_rate = 1e2;
+    // double learning_rate = 1e2;
     double force_x = init_force_x, force_y = init_force_y;
-    for (int iter = 0; iter < 50; ++iter) {
+    for (int iter = 0; iter < gd_steps; ++iter) {
       grad_finite(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
       printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
              force_x, force_y);
@@ -290,7 +292,7 @@ int main(int argc, char* argv[]) {
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
-    printf("Finite differences took %ld microseconds.",
+    printf("Finite differences took %ld microseconds.\n",
            static_cast<long>(duration.count()));
   }
   //  {
@@ -298,7 +300,7 @@ int main(int argc, char* argv[]) {
   //    double cost, d_force_x, d_force_y;
   //    double learning_rate = 1e2;
   //    double force_x = init_force_x, force_y = init_force_y;
-  //    for (int iter = 0; iter < 50; ++iter) {
+  //    for (int iter = 0; iter < gd_steps; ++iter) {
   //      grad_stan(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
   //      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter,
   //      cost,
@@ -314,9 +316,9 @@ int main(int argc, char* argv[]) {
   {
     auto start = high_resolution_clock::now();
     double cost, d_force_x, d_force_y;
-    double learning_rate = 1e2;
+    // double learning_rate = 1e2;
     double force_x = init_force_x, force_y = init_force_y;
-    for (int iter = 0; iter < 50; ++iter) {
+    for (int iter = 0; iter < gd_steps; ++iter) {
       grad_dual(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
       printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
              force_x, force_y);
@@ -325,15 +327,15 @@ int main(int argc, char* argv[]) {
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
-    printf("TinyDual took %ld microseconds.",
+    printf("TinyDual took %ld microseconds.\n",
            static_cast<long>(duration.count()));
   }
   {
     auto start = high_resolution_clock::now();
     double cost, d_force_x, d_force_y;
-    double learning_rate = 1e2;
+    // double learning_rate = 1e2;
     double force_x = init_force_x, force_y = init_force_y;
-    for (int iter = 0; iter < 50; ++iter) {
+    for (int iter = 0; iter < gd_steps; ++iter) {
       grad_ceres(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
       printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
              force_x, force_y);
@@ -342,7 +344,7 @@ int main(int argc, char* argv[]) {
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
-    printf("Ceres Jet took %ld microseconds.",
+    printf("Ceres Jet took %ld microseconds.\n",
            static_cast<long>(duration.count()));
     rollout<double, DoubleUtils>(force_x, force_y, steps, visualizer);
   }

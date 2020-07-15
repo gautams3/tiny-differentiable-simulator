@@ -60,6 +60,25 @@ class TinySphere : public TinyGeometry<TinyScalar, TinyConstants> {
   }
 };
 
+template <typename TinyScalar, typename TinyConstants>
+class TinyBox : public TinyGeometry<TinyScalar, TinyConstants> {
+  TinyScalar m_length;
+
+ public:
+  explicit TinyBox(TinyScalar length)
+      : TinyGeometry<TinyScalar, TinyConstants>(TINY_BOX_TYPE),
+        m_length(length) {}
+
+  TinyScalar get_length() const { return m_length; }
+
+  TinyVector3<TinyScalar, TinyConstants> compute_local_inertia(
+      TinyScalar mass) const {
+    TinyScalar elem =
+        TinyConstants::fraction(1, 6) * mass * m_length * m_length;
+    return TinyVector3<TinyScalar, TinyConstants>(elem, elem, elem);
+  }
+};
+
 // capsule aligned with the Z axis
 template <typename TinyScalar, typename TinyConstants>
 class TinyCapsule : public TinyGeometry<TinyScalar, TinyConstants> {

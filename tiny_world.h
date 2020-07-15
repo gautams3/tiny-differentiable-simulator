@@ -38,6 +38,7 @@ class TinyWorld {
   typedef ::TinyCapsule<TinyScalar, TinyConstants> TinyCapsule;
   typedef ::TinySphere<TinyScalar, TinyConstants> TinySphere;
   typedef ::TinyPlane<TinyScalar, TinyConstants> TinyPlane;
+  typedef ::TinyBox<TinyScalar, TinyConstants> TinyBox;
   std::vector<TinyRigidBody*> m_bodies;
 
   std::vector<TinyMultiBody*> m_multi_bodies;
@@ -123,6 +124,12 @@ class TinyWorld {
     TinySphere* sphere = new TinySphere(radius);
     m_geoms.push_back(sphere);
     return sphere;
+  }
+
+  TinyBox* create_box(TinyScalar length) {
+    TinyBox* box = new TinyBox(length);
+    m_geoms.push_back(box);
+    return box;
   }
 
   TinyCollisionDispatcher<TinyScalar, TinyConstants>

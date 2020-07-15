@@ -38,12 +38,13 @@
 #include "tiny_file_utils.h"
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
+std::string box;
 std::string sphere2red;
 
 VisualizerAPI* visualizer = nullptr;
 
 // ID of the ball whose position is optimized for
-const int TARGET_ID = 5;
+const int TARGET_ID = 0;
 
 template <typename TinyScalar, typename TinyConstants>
 TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
@@ -54,7 +55,7 @@ TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
   typedef TinyGeometry<TinyScalar, TinyConstants> TinyGeometry;
 
   std::vector<int> visuals;
-  TinyVector3 target(TinyConstants::fraction(35, 10),
+  TinyVector3 target(TinyConstants::fraction(0, 10),
                      TinyConstants::fraction(8, 1), TinyConstants::zero());
   if (vis) {
     vis->resetSimulation();
@@ -65,44 +66,30 @@ TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
 
   std::vector<TinyRigidBody*> bodies;
 
-  TinyScalar radius = TinyConstants::half();
+  TinyScalar length = TinyConstants::one();
   TinyScalar mass = TinyConstants::one();
-  TinyScalar deg_60 =
-      TinyConstants::pi() / TinyConstants::fraction(3, 1);  // even triangle
-  TinyScalar dx = TinyConstants::cos1(deg_60) * radius * TinyConstants::two();
-  TinyScalar dy = TinyConstants::sin1(deg_60) * radius * TinyConstants::two();
-  TinyScalar rx = TinyConstants::zero(), y = TinyConstants::zero();
-  int ball_id = 0;
-  for (int column = 1; column <= 3; ++column) {
-    TinyScalar x = rx;
-    for (int i = 0; i < column; ++i) {
-      const TinyGeometry* geom = world.create_sphere(radius);
-      TinyRigidBody* body = world.create_rigid_body(mass, geom);
-      body->m_world_pose.m_position =
-          TinyVector3::create(x, y, TinyConstants::zero());
-      bodies.push_back(body);
-      if (vis) {
-        b3RobotSimulatorLoadUrdfFileArgs args;
-        args.m_startPosition.setX(TinyConstants::getDouble(x));
-        args.m_startPosition.setY(TinyConstants::getDouble(y));
-        int sphere_id = visualizer->loadURDF(sphere2red, args);
-        visuals.push_back(sphere_id);
-        if (ball_id == TARGET_ID) {
-          b3RobotSimulatorChangeVisualShapeArgs vargs;
-          vargs.m_objectUniqueId = sphere_id;
-          vargs.m_hasRgbaColor = true;
-          vargs.m_rgbaColor = btVector4(0, 0.6, 1, 1);
-          vis->changeVisualShape(vargs);
-        }
-      }
-      ++ball_id;
-      x += radius * TinyConstants::two();
-    }
-    rx = rx - dx;
-    y = y + dy;
+  TinyScalar x = TinyConstants::zero(), y = TinyConstants::zero();
+  
+  const TinyGeometry* geom = world.create_box(length);
+  TinyRigidBody* body = world.create_rigid_body(mass, geom);
+  body->m_world_pose.m_position =
+      TinyVector3::create(x, y, TinyConstants::zero());
+  bodies.push_back(body);
+  if (vis) {
+    b3RobotSimulatorLoadUrdfFileArgs args;
+    args.m_startPosition.setX(TinyConstants::getDouble(x));
+    args.m_startPosition.setY(TinyConstants::getDouble(y));
+    int box_id = visualizer->loadURDF(box, args);
+    visuals.push_back(box_id);
+    b3RobotSimulatorChangeVisualShapeArgs vargs;
+    vargs.m_objectUniqueId = box_id;
+    vargs.m_hasRgbaColor = true;
+    vargs.m_rgbaColor = btVector4(0, 0.6, 1, 1);
+    vis->changeVisualShape(vargs);
   }
 
   // Create white ball
+  TinyScalar radius = TinyConstants::half();
   TinyVector3 white = TinyVector3::create(
       TinyConstants::zero(), -TinyConstants::two(), TinyConstants::zero());
   const TinyGeometry* white_geom = world.create_sphere(radius);
@@ -113,6 +100,7 @@ TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
   white_ball->apply_central_force(
       TinyVector3::create(force_x, force_y, TinyConstants::zero()));
 
+  
   if (vis) {
     {
       // visualize white ball
@@ -135,10 +123,10 @@ TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
       args.m_startPosition.setX(TinyConstants::getDouble(target.x()));
       args.m_startPosition.setY(TinyConstants::getDouble(target.y()));
       args.m_startPosition.setZ(TinyConstants::getDouble(target.z()));
-      int sphere_id = visualizer->loadURDF(sphere2red, args);
-      visuals.push_back(sphere_id);
+      int box_id = visualizer->loadURDF(box, args);
+      visuals.push_back(box_id);
       b3RobotSimulatorChangeVisualShapeArgs vargs;
-      vargs.m_objectUniqueId = sphere_id;
+      vargs.m_objectUniqueId = box_id;
       vargs.m_hasRgbaColor = true;
       vargs.m_rgbaColor = btVector4(1, 0.6, 0, 0.8);
       vis->changeVisualShape(vargs);
@@ -156,7 +144,7 @@ TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
       std::this_thread::sleep_for(std::chrono::duration<double>(dtd));
       for (int b = 0; b < bodies.size(); b++) {
         const TinyRigidBody* body = bodies[b];
-        int sphere_id = visuals[b];
+        int box_id = visuals[b];
         btVector3 base_pos(
             TinyConstants::getDouble(body->m_world_pose.m_position.getX()),
             TinyConstants::getDouble(body->m_world_pose.m_position.getY()),
@@ -166,7 +154,7 @@ TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
             TinyConstants::getDouble(body->m_world_pose.m_orientation.getY()),
             TinyConstants::getDouble(body->m_world_pose.m_orientation.getZ()),
             TinyConstants::getDouble(body->m_world_pose.m_orientation.getW()));
-        visualizer->resetBasePositionAndOrientation(sphere_id, base_pos,
+        visualizer->resetBasePositionAndOrientation(box_id, base_pos,
                                                     base_orn);
       }
     }
@@ -175,54 +163,6 @@ TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
   // Compute error
   TinyVector3 delta = bodies[TARGET_ID]->m_world_pose.m_position - target;
   return delta.sqnorm();
-}
-
-// Computes gradient using finite differences
-void grad_finite(double force_x, double force_y, double* cost,
-                 double* d_force_x, double* d_force_y, int steps = 300,
-                 double eps = 1e-5) {
-  *cost = rollout<double, DoubleUtils>(force_x, force_y, steps);
-  double cx = rollout<double, DoubleUtils>(force_x + eps, force_y, steps);
-  double cy = rollout<double, DoubleUtils>(force_x, force_y + eps, steps);
-  *d_force_x = (cx - *cost) / eps;
-  *d_force_y = (cy - *cost) / eps;
-}
-
-// void grad_stan(double force_x, double force_y, double* cost, double*
-// d_force_x,
-//               double* d_force_y, int steps = 300, double eps = 1e-5) {
-//  standouble fx = force_x;
-//  fx.d_ = 1;
-//  standouble fy = force_y;
-//
-//  standouble c = rollout<standouble, StanDoubleUtils>(fx, fy, steps);
-//  *cost = c.val();
-//  *d_force_x = c.tangent();
-//
-//  fx.d_ = 0;
-//  fy.d_ = 1;
-//  c = rollout<standouble, StanDoubleUtils>(fx, fy, steps);
-//  *d_force_y = c.tangent();
-//}
-
-void grad_dual(double force_x, double force_y, double* cost, double* d_force_x,
-               double* d_force_y, int steps = 300, double eps = 1e-5) {
-  typedef TinyDual<double> TinyDual;
-  {
-    TinyDual fx(force_x, 1.);
-    TinyDual fy(force_y, 0.);
-
-    TinyDual c = rollout<TinyDual, TinyDualDoubleUtils>(fx, fy, steps);
-    *cost = c.real();
-    *d_force_x = c.dual();
-  }
-  {
-    TinyDual fx(force_x, 0.);
-    TinyDual fy(force_y, 1.);
-
-    TinyDual c = rollout<TinyDual, TinyDualDoubleUtils>(fx, fy, steps);
-    *d_force_y = c.dual();
-  }
 }
 
 struct CeresFunctional {
@@ -256,7 +196,9 @@ void grad_ceres(double force_x, double force_y, double* cost, double* d_force_x,
 }
 
 int main(int argc, char* argv[]) {
+  // TinyFileUtils::find_file("sphere2red.urdf", sphere2red);
   TinyFileUtils::find_file("sphere2red.urdf", sphere2red);
+  TinyFileUtils::find_file("sphere8cube.urdf", box);
   std::string connection_mode = "gui";
 
   using namespace std::chrono;
@@ -274,66 +216,16 @@ int main(int argc, char* argv[]) {
 
   double init_force_x = 0., init_force_y = 500.;
   int steps = 300;
+  int gd_steps = 100; // gradient_descent_steps
+  double learning_rate = 3e1;
   rollout<double, DoubleUtils>(init_force_x, init_force_y, steps, visualizer);
 
   {
     auto start = high_resolution_clock::now();
     double cost, d_force_x, d_force_y;
-    double learning_rate = 1e2;
+    // double learning_rate = 1e2;
     double force_x = init_force_x, force_y = init_force_y;
-    for (int iter = 0; iter < 50; ++iter) {
-      grad_finite(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
-             force_x, force_y);
-      force_x -= learning_rate * d_force_x;
-      force_y -= learning_rate * d_force_y;
-    }
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>(stop - start);
-    printf("Finite differences took %ld microseconds.",
-           static_cast<long>(duration.count()));
-  }
-  //  {
-  //    auto start = high_resolution_clock::now();
-  //    double cost, d_force_x, d_force_y;
-  //    double learning_rate = 1e2;
-  //    double force_x = init_force_x, force_y = init_force_y;
-  //    for (int iter = 0; iter < 50; ++iter) {
-  //      grad_stan(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-  //      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter,
-  //      cost,
-  //             force_x, force_y);
-  //      force_x -= learning_rate * d_force_x;
-  //      force_y -= learning_rate * d_force_y;
-  //    }
-  //    auto stop = high_resolution_clock::now();
-  //    auto duration = duration_cast<microseconds>(stop - start);
-  //    printf("Stan's forward-mode AD took %ld microseconds.",
-  //    static_cast<long>(duration.count()));
-  //  }
-  {
-    auto start = high_resolution_clock::now();
-    double cost, d_force_x, d_force_y;
-    double learning_rate = 1e2;
-    double force_x = init_force_x, force_y = init_force_y;
-    for (int iter = 0; iter < 50; ++iter) {
-      grad_dual(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
-             force_x, force_y);
-      force_x -= learning_rate * d_force_x;
-      force_y -= learning_rate * d_force_y;
-    }
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>(stop - start);
-    printf("TinyDual took %ld microseconds.",
-           static_cast<long>(duration.count()));
-  }
-  {
-    auto start = high_resolution_clock::now();
-    double cost, d_force_x, d_force_y;
-    double learning_rate = 1e2;
-    double force_x = init_force_x, force_y = init_force_y;
-    for (int iter = 0; iter < 50; ++iter) {
+    for (int iter = 0; iter < gd_steps; ++iter) {
       grad_ceres(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
       printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
              force_x, force_y);
@@ -342,7 +234,7 @@ int main(int argc, char* argv[]) {
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
-    printf("Ceres Jet took %ld microseconds.",
+    printf("Ceres Jet took %ld microseconds.\n",
            static_cast<long>(duration.count()));
     rollout<double, DoubleUtils>(force_x, force_y, steps, visualizer);
   }
