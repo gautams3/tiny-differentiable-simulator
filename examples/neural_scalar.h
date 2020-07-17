@@ -5,7 +5,7 @@
 #include <map>
 #include <thread>
 
-#include "tiny_neural_network.h"
+#include "../tiny_neural_network.h"
 
 /**
  * Implements a "neural network" scalar type that accepts input connections from
@@ -37,9 +37,9 @@ class NeuralScalar {
    */
   mutable bool is_dirty_{true};
 
-  mutable std::vector<const NeuralScalar*> inputs_;
+  // mutable std::vector<const NeuralScalar*> inputs_;
 
-  mutable NeuralNetworkType net_;
+  // mutable NeuralNetworkType net_;
 
   /**
    * Neural scalars with the same name reuse the same neural network inputs,
@@ -48,17 +48,43 @@ class NeuralScalar {
   mutable std::string name_;
 
   /**
+   * Index of blueprint whose output is used by this scalar.
+   */
+  mutable int blueprint_id_{-1};
+
+  /**
+   * Index in output vector of neural network that is connected to this scalar.
+   */
+  mutable std::size_t output_id_{0};
+
+  /**
    * This blueprint allows the user to specify neural network inputs and weights
    * to be used once a NeuralScalar with the given name is created.
    */
   struct NeuralBlueprint {
     std::vector<std::string> input_names;
+    std::vector<std::string> output_names;
     NeuralNetworkType net;
+
+    std::vector<Scalar> output_cache;
+    mutable bool is_dirty{true};
   };
 
   struct GlobalData {
-    std::map<std::string, const NeuralScalar*> named_scalars_;
-    std::map<std::string, NeuralBlueprint> blueprints_;
+    std::map<std::string, const NeuralScalar*> named_scalars;
+
+    // map scalar name to the indices of blueprints where it appears as input
+    std::map<std::string, std::vector<int>> scalar_input_to_blueprint;
+    // map scalar name to the index of blueprint where it appears as output
+    std::map<std::string, int> scalar_to_blueprint;
+    std::vector<NeuralBlueprint> blueprints;
+
+    void clear() {
+      named_scalars.clear();
+      scalar_input_to_blueprint.clear();
+      scalar_to_blueprint.clear();
+      blueprints.clear();
+    }
   };
 
   static inline std::map<std::thread::id, GlobalData> data_{};
@@ -71,18 +97,21 @@ class NeuralScalar {
     return data_[id];
   }
 
-  Scalar evaluate_network_() const {
-    // if (!name_.empty() && named_scalars_[name_] != this) {
-    //   return named_scalars_[name_]->evaluate_network_();
-    // }
-    std::vector<Scalar> inputs(inputs_.size());
-    for (std::size_t i = 0; i < inputs_.size(); ++i) {
-      if (inputs_[i] == nullptr) continue;
-      inputs[i] = inputs_[i]->evaluate();
+  static const Scalar& evaluate_network_(int network_id,
+                                         std::size_t output_id) {
+    assert(network_id >= 0);
+
+    auto& data = get_data_();
+    auto& blueprint = data.blueprints[network_id];
+    if (blueprint.is_dirty) {
+      std::vector<Scalar> input(blueprint.input_names.size());
+      for (std::size_t i = 0; i < blueprint.input_names.size(); ++i) {
+        input[i] = data.named_scalars[blueprint.input_names[i]]->evaluate();
+      }
+      blueprint.net.compute(input, blueprint.output_cache);
+      blueprint.is_dirty = false;
     }
-    std::vector<Scalar> output(1);
-    net_.compute(inputs, output);
-    return output[0];
+    return blueprint.output_cache[output_id];
   }
 
  public:
@@ -96,18 +125,19 @@ class NeuralScalar {
 
   inline NeuralScalar(const Scalar& value) : value_(value) { is_dirty_ = true; }
 
-  NeuralScalar(const std::vector<NeuralScalar*>& inputs,
-               bool use_input_bias = true)
-      : inputs_(inputs),
-        net_(static_cast<int>(inputs.size()), use_input_bias) {}
-  NeuralScalar(const std::vector<NeuralScalar*>& inputs,
-               const TinyNeuralNetworkSpecification& spec)
-      : inputs_(inputs), net_(spec) {}
+  // NeuralScalar(const std::vector<NeuralScalar*>& inputs,
+  //              bool use_input_bias = true)
+  //     : inputs_(inputs),
+  //       net_(static_cast<int>(inputs.size()), use_input_bias) {}
+  // NeuralScalar(const std::vector<NeuralScalar*>& inputs,
+  //              const TinyNeuralNetworkSpecification& spec)
+  //     : inputs_(inputs), net_(spec) {}
 
   // implement custom assignment operator to prevent internal data get wiped
   // by unwanted overwrite with a copy-constructed object
   NeuralScalar& operator=(const NeuralScalar& rhs) {
     value_ = rhs.evaluate();
+
     is_dirty_ = true;
     return *this;
   }
@@ -117,32 +147,32 @@ class NeuralScalar {
     return *this;
   }
 
-  const NeuralNetworkType& net() const { return net_; }
-  NeuralNetworkType& net() { return net_; }
+  // const NeuralNetworkType& net() const { return net_; }
+  // NeuralNetworkType& net() { return net_; }
 
   /**
    * Add input connection to this neural network.
    */
-  void connect(NeuralScalar* scalar,
-               TinyNeuralNetworkActivation activation = NN_ACT_IDENTITY) {
-    inputs_.push_back(scalar);
-    net_.set_input_dim(net_.input_dim() + 1);
-    // add output layer (if none has been created yet)
-    if (net_.num_layers() == 1) {
-      net_.add_linear_layer(activation, 1);
-    }
-    initialize();
-    set_dirty();
-  }
+  // void connect(NeuralScalar* scalar,
+  //              TinyNeuralNetworkActivation activation = NN_ACT_IDENTITY) {
+  //   inputs_.push_back(scalar);
+  //   net_.set_input_dim(net_.input_dim() + 1);
+  //   // add output layer (if none has been created yet)
+  //   if (net_.num_layers() == 1) {
+  //     net_.add_linear_layer(activation, 1);
+  //   }
+  //   initialize();
+  //   set_dirty();
+  // }
 
-  void initialize(
-      TinyNeuralNetworkInitialization init_method = NN_INIT_XAVIER) {
-    net_.initialize(init_method);
-  }
+  // void initialize(
+  //     TinyNeuralNetworkInitialization init_method = NN_INIT_XAVIER) {
+  //   net_.initialize(init_method);
+  // }
 
   bool is_dirty() const { return is_dirty_; }
   void set_dirty() {
-    if (net_.output_dim() != 0) {
+    if (blueprint_id_ >= 0) {
       is_dirty_ = true;
     }
   }
@@ -152,7 +182,7 @@ class NeuralScalar {
    * such name exists.
    */
   static const NeuralScalar* retrieve(const std::string& name) {
-    const auto& named_scalars = get_data_().named_scalars_;
+    const auto& named_scalars = get_data_().named_scalars;
     if (named_scalars.find(name) == named_scalars.end()) {
       return nullptr;
     }
@@ -166,34 +196,44 @@ class NeuralScalar {
    */
   void assign(const std::string& name) const {
     name_ = name;
-    auto& data = get_data_();
-    auto& blueprints = data.blueprints_;
-    if (blueprints.find(name) != blueprints.end()) {
-      const NeuralBlueprint& blueprint = blueprints[name];
-      for (const std::string& input_name : blueprint.input_names) {
-        const NeuralScalar* input = retrieve(input_name);
-        if (input == nullptr) {
-          std::cerr << "NeuralScalar named \"" << input_name
-                    << "\" has been requested before it was assigned.\n";
-          assert(0);
+    GlobalData& data = get_data_();
+    if (data.scalar_to_blueprint.find(name) != data.scalar_to_blueprint.end()) {
+      // std::cerr << "NeuralScalar named \"" << name
+      //           << "\" was assigned a name but has no registered
+      //           blueprint.\n";
+      // assert(0);
+      // return;
+      blueprint_id_ = data.scalar_to_blueprint[name];
+      auto& blueprint = data.blueprints[blueprint_id_];
+      // determine the index in the output vector of the network
+      bool found = false;
+      for (std::size_t i = 0; i < blueprint.output_names.size(); ++i) {
+        if (blueprint.output_names[i] == name) {
+          output_id_ = i;
+          found = true;
+          break;
         }
-        inputs_.push_back(input);
       }
-      net_ = blueprint.net;
+      if (!found) {
+        std::cerr << "Error: could not determine output vector index for "
+                     "neural scalar \""
+                  << name << "\" that was assigned a blueprint.\n";
+        assert(0);
+      }
     }
-    data.named_scalars_[name] = this;
+    data.named_scalars[name] = this;
   }
 
   const Scalar& evaluate() const {
     if (!is_dirty_) {
       return cache_;
     }
-    if (inputs_.empty()) {
+    if (blueprint_id_ < 0) {
       is_dirty_ = false;
       cache_ = value_;
       return value_;
     }
-    Scalar net_output = evaluate_network_();
+    Scalar net_output = evaluate_network_(blueprint_id_, output_id_);
     cache_ = is_residual ? value_ + net_output : net_output;
     is_dirty_ = false;
     return cache_;
@@ -205,11 +245,41 @@ class NeuralScalar {
    * specified input connections are made and neural network with the given
    * weights and biases is set up for this scalar.
    */
-  static void add_blueprint(const std::string& scalar_name,
+  static bool add_blueprint(const std::string& scalar_name,
                             const std::vector<std::string>& input_names,
                             const NeuralNetworkType& net) {
-    NeuralBlueprint blueprint{input_names, net};
-    get_data_().blueprints_[scalar_name] = blueprint;
+    return add_blueprint(std::vector<std::string>{scalar_name}, input_names,
+                         net);
+  }
+
+  static bool add_blueprint(const std::vector<std::string>& output_names,
+                            const std::vector<std::string>& input_names,
+                            const NeuralNetworkType& net) {
+    auto& data = get_data_();
+    NeuralBlueprint blueprint{input_names, output_names, net};
+    for (const auto& name : output_names) {
+      if (data.scalar_to_blueprint.find(name) !=
+          data.scalar_to_blueprint.end()) {
+        std::cerr
+            << "Error: duplicate definition of blueprint for output variable \""
+            << name << "\".\n";
+        assert(0);
+        return false;
+      }
+      // register name with blueprint indices
+      data.scalar_to_blueprint[name] = static_cast<int>(data.blueprints.size());
+    }
+    for (const auto& name : output_names) {
+      if (data.scalar_to_blueprint.find(name) ==
+          data.scalar_to_blueprint.end()) {
+        data.scalar_input_to_blueprint[name] = {};
+      }
+      // register name with blueprint indices
+      data.scalar_input_to_blueprint[name].push_back(
+          static_cast<int>(data.blueprints.size()));
+    }
+    data.blueprints.push_back(blueprint);
+    return true;
   }
 
   /**
@@ -218,9 +288,9 @@ class NeuralScalar {
    */
   static int num_blueprint_parameters() {
     int total = 0;
-    const auto& blueprints = get_data_().blueprints_;
-    for (const auto& entry : blueprints) {
-      total += entry.second.net.num_parameters();
+    const auto& blueprints = get_data_().blueprints;
+    for (const auto& blueprint : blueprints) {
+      total += blueprint.net.num_parameters();
     }
     return total;
   }
@@ -237,13 +307,13 @@ class NeuralScalar {
       return;
     }
     int index = 0, next_index;
-    auto& blueprints = get_data_().blueprints_;
-    for (auto& entry : blueprints) {
-      int num_net = entry.second.net.num_parameters();
+    auto& blueprints = get_data_().blueprints;
+    for (auto& blueprint : blueprints) {
+      int num_net = blueprint.net.num_parameters();
       next_index = index + num_net;
       std::vector<Scalar> net_params(params.begin() + index,
                                      params.begin() + next_index);
-      entry.second.net.set_parameters(net_params);
+      blueprint.net.set_parameters(net_params);
 #if DEBUG
       printf("Assigned %d parameters to network of scalar \"%s\".\n", num_net,
              entry.first.c_str());
@@ -252,10 +322,30 @@ class NeuralScalar {
     }
   }
 
-  static void clear_registers() {
+  static void clear_all_blueprints() {
     auto& data = get_data_();
-    data.blueprints_.clear();
-    data.named_scalars_.clear();
+    data.clear();
+  }
+
+  /**
+   * Save all blueprints as graphviz files with the given prefix.
+   */
+  static void save_graphviz(const std::string& filename_prefix = "") {
+    for (const auto& blueprint : get_data_.blueprints) {
+      std::string filename = filename_prefix;
+      for (std::size_t i = 0; i < blueprint.input_names.size(); ++i) {
+        filename += blueprint.input_names[i];
+        if (i < blueprint.input_names.size() - 1) filename += "_";
+      }
+      filename += "--";
+      for (std::size_t i = 0; i < blueprint.output_names.size(); ++i) {
+        filename += blueprint.output_names[i];
+        if (i < blueprint.output_names.size() - 1) filename += "_";
+      }
+      filename += ".dot";
+      blueprint.net.save_graphviz(filename, blueprint.input_names,
+                                  blueprint.output_names);
+    }
   }
 
   /// Scalar operators create plain NeuralScalars that do not have neural
@@ -375,10 +465,10 @@ struct NeuralScalarUtils {
     return Utils::tanh(v.evaluate());
   }
   static NeuralScalar min1(const NeuralScalar& a, const NeuralScalar& b) {
-    return Utils::min(a.evaluate(), b.evaluate());
+    return Utils::min1(a.evaluate(), b.evaluate());
   }
   static NeuralScalar max1(const NeuralScalar& a, const NeuralScalar& b) {
-    return Utils::max(a.evaluate(), b.evaluate());
+    return Utils::max1(a.evaluate(), b.evaluate());
   }
 
   static NeuralScalar zero() { return scalar_from_double(0.); }

@@ -232,7 +232,7 @@ struct rollout_dynamics {
         world.m_mb_constraint_solver = contact_model;
 
         // neural network for contact friction force
-        Scalar::clear_registers();
+        Scalar::clear_all_blueprints();
         typedef typename Scalar::NeuralNetworkType NeuralNetwork;
         NeuralNetwork net_contact_friction(2);  // # inputs
         net_contact_friction.add_linear_layer(NN_ACT_ELU, 3, true);

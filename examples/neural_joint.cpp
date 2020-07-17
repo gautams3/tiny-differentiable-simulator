@@ -10,12 +10,18 @@
 #include "tiny_world.h"
 
 // whether to use Parallel Basin Hopping
-#define USE_PBH false
+#define USE_PBH true
 // whether the state consists of [q qd] or just q
 #define STATE_INCLUDES_QD false
-std::vector<double> start_state;
 const int param_dim = 122;
 NeuralAugmentation augmentation;
+
+const int world_pos_dim = 2 * 7;
+#if STATE_INCLUDES_QD
+const int state_dim = world_pos_dim + 2 * 6;
+#else
+const int state_dim = world_pos_dim;
+#endif
 
 #ifdef USE_MATPLOTLIB
 template <typename T>
@@ -107,10 +113,11 @@ void visualize_trajectory(const std::vector<std::vector<T>> &states,
 }
 
 /**
- * Roll-out pendulum dynamics, and compute states [q, qd].
+ * Roll-out pendulum dynamics, and compute trajectories in global coordinates (position, optionally velocity) of both links.
  */
 template <typename Scalar = double, typename Utils = DoubleUtils>
-void rollout_pendulum(const std::vector<Scalar> &params,
+void rollout_groundtruth_pendulum(const std::vector<Scalar> &params,
+                      std::vector<double> start_state,
                       std::vector<std::vector<Scalar>> &output_states,
                       int time_steps, double dt,
                       const std::array<double, 2> &damping = {0., 0.},
@@ -168,17 +175,99 @@ void rollout_pendulum(const std::vector<Scalar> &params,
     }
   }
   for (int t = 0; t < time_steps; ++t) {
-#if STATE_INCLUDES_QD
-    output_states[t].resize(2 * mb->dof());
-#else
-    output_states[t].resize(mb->dof());
-#endif
-    for (int i = 0; i < mb->dof(); ++i) {
-      output_states[t][i] = mb->m_q[i];
-#if STATE_INCLUDES_QD
-      output_states[t][i + mb->dof()] = mb->m_qd[i];
-#endif
+    output_states[t].resize(state_dim);
+    for (std::size_t i = 0; i < mb->m_links.size(); ++i) {
+      mb->m_links[i].m_X_world.get_7d(output_states[t], i * 7);
     }
+#if STATE_INCLUDES_QD
+    for (std::size_t i = 0; i < mb->m_links.size(); ++i) {
+      const auto &vel = mb->m_links[i].m_v;
+      for (int j = 0; j < 6; ++j) {
+        output_states[t][i * 6 + world_pos_dim + j] = vel[j];
+      }
+    }
+#endif
+    mb->forward_dynamics(gravity);
+
+    mb->integrate(Utils::scalar_from_double(dt));
+  }
+
+#if !USE_PBH
+  // visualize_trajectory(output_states, params, Scalar(dt));
+#endif
+}
+
+template <typename Scalar = double, typename Utils = DoubleUtils>
+void rollout_neural_pendulum(const std::vector<Scalar> &params,
+                      std::vector<std::vector<Scalar>> &output_states,
+                      int time_steps, double dt,
+                      std::vector<Scalar> *kin_energy = nullptr) {
+  TinyVector3<Scalar, Utils> gravity(Utils::zero(), Utils::zero(),
+                                     Utils::fraction(-981, 100));
+  output_states.resize(time_steps);
+  TinyWorld<Scalar, Utils> world;
+  TinyMultiBody<Scalar, Utils> *mb1 = world.create_multi_body();
+  mb1->m_isFloating = true;
+  init_compound_pendulum<Scalar, Utils>(*mb1, world, 1);  
+
+  if constexpr (std::is_same_v<Scalar, double>) {
+    mb->m_links[0].m_damping = damping[0];
+    mb->m_links[1].m_damping = damping[1];
+  }
+  if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+    if (!params.empty()) {
+      typedef typename Scalar::InnerScalarType IScalar;
+      typedef typename Scalar::InnerUtilsType IUtils;
+      std::vector<IScalar> iparams(params.size());
+      for (std::size_t i = 0; i < params.size(); ++i) {
+        iparams[i] = params[i].evaluate();
+      }
+      augmentation.template instantiate<IScalar, IUtils>(iparams);
+
+      // typedef typename Scalar::NeuralNetworkType NeuralNetwork;
+      // NeuralNetwork net_tau_0(1);
+      // net_tau_0.add_linear_layer(NN_ACT_IDENTITY, 1, false);
+      // net_tau_0.initialize();
+      // net_tau_0.weights[0] = params[0].evaluate();
+      // Scalar::add_blueprint("tau_0", {"qd_0"}, net_tau_0);
+
+      // NeuralNetwork net_tau_1(1);
+      // net_tau_1.add_linear_layer(NN_ACT_IDENTITY, 1, false);
+      // net_tau_1.initialize();
+      // net_tau_1.weights[0] = params[1].evaluate();
+      // Scalar::add_blueprint("tau_1", {"qd_1"}, net_tau_1);
+
+      // assign scalar names so that the defined blueprints can be used
+      // mb->m_qd[0].assign("qd_0");
+      // mb->m_qd[1].assign("qd_1");
+      // mb->m_tau[0].assign("tau_0");
+      // mb->m_tau[1].assign("tau_1");
+    }
+  }
+
+  if (static_cast<int>(start_state.size()) >= mb->dof()) {
+    for (int i = 0; i < mb->dof(); ++i) {
+      mb->m_q[i] = Utils::scalar_from_double(start_state[i]);
+    }
+    if (static_cast<int>(start_state.size()) >= 2 * mb->dof()) {
+      for (int i = 0; i < mb->dof_qd(); ++i) {
+        mb->m_qd[i] = Utils::scalar_from_double(start_state[i + mb->dof()]);
+      }
+    }
+  }
+  for (int t = 0; t < time_steps; ++t) {
+    output_states[t].resize(state_dim);
+    for (std::size_t i = 0; i < mb->m_links.size(); ++i) {
+      mb->m_links[i].m_X_world.get_7d(output_states[t], i * 7);
+    }
+#if STATE_INCLUDES_QD
+    for (std::size_t i = 0; i < mb->m_links.size(); ++i) {
+      const auto &vel = mb->m_links[i].m_v;
+      for (int j = 0; j < 6; ++j) {
+        output_states[t][i * 6 + world_pos_dim + j] = vel[j];
+      }
+    }
+#endif
     mb->forward_dynamics(gravity);
 
     mb->integrate(Utils::scalar_from_double(dt));

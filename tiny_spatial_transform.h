@@ -35,6 +35,7 @@ class TinySpatialTransform {
   typedef ::TinyVector3<TinyScalar, TinyConstants> TinyVector3;
   typedef ::TinySpatialMotionVector<TinyScalar, TinyConstants>
       TinySpatialMotionVector;
+  typedef ::TinyQuaternion<TinyScalar, TinyConstants> TinyQuaternion;
 
   TinyVector3 m_translation;
   TinyMatrix3x3 m_rotation;
@@ -44,6 +45,18 @@ class TinySpatialTransform {
   void set_identity() {
     m_translation.set_zero();
     m_rotation.set_identity();
+  }
+
+  void get_7d(std::vector<TinyScalar>& pos, int i = 0) const {
+    TinyQuaternion quat;
+    m_rotation.getRotation(quat);
+    pos[i + 0] = quat.x();
+    pos[i + 1] = quat.y();
+    pos[i + 2] = quat.z();
+    pos[i + 3] = quat.w();
+    pos[i + 4] = m_translation.x();
+    pos[i + 5] = m_translation.y();
+    pos[i + 6] = m_translation.z();
   }
 
   /**

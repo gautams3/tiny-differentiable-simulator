@@ -38,6 +38,7 @@ struct NeuralAugmentation {
                    std::size_t param_index_offset = 0) const {
     typedef NeuralScalar<Scalar, Utils> NScalar;
     typedef NeuralScalarUtils<Scalar, Utils> NUtils;
+    NScalar::clear_all_blueprints();
     typedef typename NScalar::NeuralNetworkType NeuralNetwork;
     std::size_t pi = param_index_offset;
     for (std::size_t i = 0; i < specs.size(); ++i) {
@@ -79,8 +80,8 @@ struct NeuralAugmentation {
           specs[i].num_units(1) * specs[i].input_dim();
       for (int wi = 0; wi < specs[i].num_weights(); ++wi, ++pi) {
         params[pi].name = net_prefix + "w_" + std::to_string(wi);
-        params[pi].minimum = -1;
-        params[pi].maximum = 1;
+        params[pi].minimum = -0.1;
+        params[pi].maximum = 0.1;
         params[pi].value = init_weights[wi];
         if (wi < num_first_layer_weights) {
           // L1 lasso on input weights encourages input sparsity
@@ -92,8 +93,8 @@ struct NeuralAugmentation {
       }
       for (int bi = 0; bi < specs[i].num_biases(); ++bi, ++pi) {
         params[pi].name = net_prefix + "b_" + std::to_string(bi);
-        params[pi].minimum = -1;
-        params[pi].maximum = 1;
+        params[pi].minimum = -0.2;
+        params[pi].maximum = 0.2;
         params[pi].value = init_biases[bi];
       }
     }
