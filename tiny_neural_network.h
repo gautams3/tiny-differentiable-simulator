@@ -22,6 +22,7 @@
 #include <fstream>
 #include <random>
 #include <vector>
+#include <iostream>
 
 enum TinyNeuralNetworkActivation {
   NN_ACT_IDENTITY = -1,

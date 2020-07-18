@@ -17,6 +17,8 @@
 #ifndef TINY_SPATIAL_TRANSFORM_H
 #define TINY_SPATIAL_TRANSFORM_H
 
+#include <vector>
+
 #include "tiny_matrix3x3.h"
 #include "tiny_spatial_motion_vector.h"
 #include "tiny_vector3.h"

@@ -137,7 +137,11 @@ if (Bullet_FOUND)
 
         add_executable(neural_joint neural_joint.cpp ${TDS_HDRS})
         target_link_libraries(neural_joint pybullet_visualizer_api ${DL}
-                ${CERES_LIBRARIES})     
+                ${CERES_LIBRARIES})    
+
+        add_executable(neural_push neural_push.cpp ${TDS_HDRS})
+        target_link_libraries(neural_push pybullet_visualizer_api ${DL}
+                ${CERES_LIBRARIES})      
 
         add_executable(policy_optimization policy_optimization.cpp ${TDS_HDRS})
         target_link_libraries(policy_optimization pybullet_visualizer_api ${DL}
