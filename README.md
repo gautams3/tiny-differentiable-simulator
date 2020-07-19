@@ -224,6 +224,22 @@ make -j
 make install
 ```
 
+### HDF5
+This dependency is only necessary for Sim2Real experiments with the MIT Push Dataset.
+
+On Ubuntu, install the HDF5 libraries via
+```
+sudo apt-get install libhdf5-dev
+```
+In `third_party/`, clone the [HighFive](https://github.com/BlueBrain/HighFive) submodule (`v2.2`) and build via 
+```
+mkdir build && cd build
+cmake .. -DHIGHFIVE_USE_BOOST=OFF
+make -j
+make install
+```
+
+
 ---
 
 *Disclaimer: This is not an official Google product.*

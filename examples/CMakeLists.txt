@@ -83,6 +83,7 @@ ENDIF()
 #    message(STATUS "${_variableName}=${${_variableName}}")
 # endforeach()
 
+find_package(HighFive)
 
 
 set(MESHCAT_LIBRARIES crossguid cpp_base64 zmq )
@@ -139,9 +140,12 @@ if (Bullet_FOUND)
         target_link_libraries(neural_joint pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES})    
 
-        add_executable(neural_push neural_push.cpp ${TDS_HDRS})
-        target_link_libraries(neural_push pybullet_visualizer_api ${DL}
-                ${CERES_LIBRARIES})      
+        if (HighFive_FOUND)
+            include_directories(${HighFive_INCLUDE_DIRS})
+            add_executable(neural_push neural_push.cpp ${TDS_HDRS})
+            target_link_libraries(neural_push pybullet_visualizer_api ${DL}
+                HighFive ${CERES_LIBRARIES})      
+        endif (HighFive_FOUND)
 
         add_executable(policy_optimization policy_optimization.cpp ${TDS_HDRS})
         target_link_libraries(policy_optimization pybullet_visualizer_api ${DL}

@@ -1,0 +1,6 @@
+[submodule "third_party/-b"]
+	path = third_party/-b
+	url = git@github.com:BlueBrain/HighFive.git
+[submodule "third_party/HighFive"]
+	path = third_party/HighFive
+	url = git@github.com:BlueBrain/HighFive.git

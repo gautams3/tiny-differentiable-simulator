@@ -16,6 +16,7 @@
 #include <stdio.h>
 
 #include <chrono>
+#include <highfive/H5Easy.hpp>
 #include <iostream>
 #include <thread>
 
@@ -29,32 +30,101 @@
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
-static VisualizerAPI *gSim = nullptr;
-void MyTinySubmitProfileTiming3(const std::string &profile_name) {
-  if (gSim) {
-    gSim->submitProfileTiming(profile_name);
+struct PushData {
+  std::vector<double> tip_x, tip_y, tip_yaw;
+  std::vector<double> time;
+  std::vector<double> object_x, object_y, object_yaw;
+  std::vector<double> tip_wrench_x, tip_wrench_y, tip_wrench_yaw;
+
+  PushData(const std::string &filename) {
+    std::vector<std::vector<double>> vecs;
+    H5Easy::File push_file(filename, H5Easy::File::ReadOnly);
+    HighFive::DataSet data = push_file.getDataSet("tip_pose");
+    data.read(vecs);
+    for (std::size_t i = 0; i < vecs.size(); ++i) {
+      const auto &vec = vecs[i];
+      time.push_back(vec[0]);  // times are very similar for all datasets
+      tip_x.push_back(vec[1]);
+      tip_y.push_back(vec[2]);
+      tip_yaw.push_back(vec[3]);
+    }
+    vecs.clear();
+
+    data = push_file.getDataSet("object_pose");
+    data.read(vecs);
+    for (std::size_t i = 0; i < vecs.size(); ++i) {
+      const auto &vec = vecs[i];
+      object_x.push_back(vec[1]);
+      object_y.push_back(vec[2]);
+      object_yaw.push_back(vec[3]);
+    }
+    vecs.clear();
+
+    data = push_file.getDataSet("ft_wrench");
+    data.read(vecs);
+    for (std::size_t i = 0; i < vecs.size(); ++i) {
+      const auto &vec = vecs[i];
+      tip_wrench_x.push_back(vec[1]);
+      tip_wrench_y.push_back(vec[2]);
+      tip_wrench_yaw.push_back(vec[3]);
+    }
+    vecs.clear();
+
+    // trim the datasets to match in length
+    std::size_t min_len =
+        std::min({time.size(), object_x.size(), tip_wrench_x.size()});
+    time.resize(min_len);
+    tip_x.resize(min_len);
+    tip_y.resize(min_len);
+    tip_yaw.resize(min_len);
+    object_x.resize(min_len);
+    object_y.resize(min_len);
+    object_yaw.resize(min_len);
+    tip_wrench_x.resize(min_len);
+    tip_wrench_y.resize(min_len);
+    tip_wrench_yaw.resize(min_len);
+
+    assert(tip_x.size() == tip_y.size() && tip_y.size() == tip_yaw.size() &&
+           tip_yaw.size() == time.size() && time.size() == object_x.size() &&
+           object_x.size() == object_y.size() &&
+           object_y.size() == object_yaw.size() &&
+           object_yaw.size() == tip_wrench_x.size() &&
+           tip_wrench_x.size() == tip_wrench_y.size() &&
+           tip_wrench_y.size() == tip_wrench_yaw.size());
+
+    std::cout << "Read push dataset \"" + filename + "\" with " << tip_x.size()
+              << " entries.\n";
   }
-}
+};
 
 int main(int argc, char *argv[]) {
   std::string connection_mode = "gui";
 
-  std::string urdf_filename;
-  //"cheetah_link0_1.urdf"
-  //"pendulum5.urdf"
-  //"sphere2.urdf"
-  TinyFileUtils::find_file("mit-push/obj/ellip2.urdf", urdf_filename);
+  std::string object_filename;
+  TinyFileUtils::find_file("mit-push/obj/rect1.urdf", object_filename);
+  std::string tip_filename;
+  TinyFileUtils::find_file("mit-push/obj/tip.urdf", tip_filename);
   std::string plane_filename;
-  TinyFileUtils::find_file("plane_implicit.urdf", plane_filename);
+  TinyFileUtils::find_file("mit-push/obj/plywood.urdf", plane_filename);
 
-  if (argc > 1) urdf_filename = std::string(argv[1]);
+  std::string push_filename;
+  TinyFileUtils::find_file(
+      "mit-push/abs_rect1/"
+      "motion_surface=abs_shape=rect1_a=0_v=20_i=0.000_s=0.700_t=0.000_rep="
+      "0004.h5",
+      push_filename);
+
+  PushData data(push_filename);
+
+  if (argc > 1) object_filename = std::string(argv[1]);
   bool floating_base = true;
 
   // Set NaN trap
   feenableexcept(FE_INVALID | FE_OVERFLOW);
 
   printf("floating_base=%d\n", floating_base);
-  printf("urdf_filename=%s\n", urdf_filename.c_str());
+  printf("object_filename=%s\n", object_filename.c_str());
+  printf("tip_filename=%s\n", tip_filename.c_str());
   VisualizerAPI *sim2 = new VisualizerAPI();
   bool isConnected2 = sim2->connect(eCONNECT_DIRECT);
 
@@ -78,92 +148,88 @@ int main(int argc, char *argv[]) {
 
   int rotateCamera = 0;
 
-  TinyWorld<double, DoubleUtils> world;
-  TinyMultiBody<double, DoubleUtils> *system = world.create_multi_body();
-  TinySystemConstructor<> constructor(urdf_filename, plane_filename);
-  constructor.m_is_floating = floating_base;
-  constructor(sim2, sim, world, &system);
+  typedef double Scalar;
+  typedef DoubleUtils Utils;
+
+  TinyUrdfCache<Scalar, Utils> urdf_cache;
+
+  TinyWorld<Scalar, Utils> world;
+  TinyMultiBody<Scalar, Utils> *object = world.create_multi_body();
+  TinyMultiBody<Scalar, Utils> *tip = world.create_multi_body();
+  TinySystemConstructor<> constructor(object_filename, plane_filename);
+  constructor(sim2, sim, world, &object);
+
+  auto tip_urdf =
+      urdf_cache.template retrieve<VisualizerAPI>(tip_filename, sim2, sim);
+  TinyUrdfToMultiBody<Scalar, Utils>::convert_to_multi_body(tip_urdf, world,
+                                                            *tip);
+  tip->initialize();
+
   // delete world.m_mb_constraint_solver;
   // world.m_mb_constraint_solver =
-  //     new TinyMultiBodyConstraintSolverSpring<double, DoubleUtils>;
+  //     new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
 
-  //  system->m_q[0] = 2.;
-  //  system->m_q[1] = 1.2;
-  //  system->m_q[2] = 0.1;
-  //  system->m_qd[3] = 5;
-  system->m_q[1] = .2;
+  // object->m_q[2] = 0.5;
   fflush(stdout);
 
-  if (floating_base) {
-    TinyQuaternion<double, DoubleUtils> start_rot;
-    start_rot.set_euler_rpy(TinyVector3<double, DoubleUtils>(0.0, 0.0, M_PI_2));
-    start_rot.set_euler_rpy(TinyVector3<double, DoubleUtils>(0.8, 1.1, 0.9));
-    const double initial_height = 1.2;
-    const TinyVector3<double, DoubleUtils> initial_velocity(
-      0.0, 0., 0.);
-    system->m_q[0] = start_rot.x();
-    system->m_q[1] = start_rot.y();
-    system->m_q[2] = start_rot.z();
-    system->m_q[3] = start_rot.w();
-    system->m_q[4] = 0.;
-    system->m_q[5] = 0.;
-    system->m_q[6] = initial_height;
-
-    system->m_qd[0] = 0.;
-    system->m_qd[1] = 0.;
-    system->m_qd[2] = 0.;
-    system->m_qd[3] = initial_velocity.x();
-    system->m_qd[4] = initial_velocity.y();
-    system->m_qd[5] = initial_velocity.z();
-
-    // apply some "random" rotation
-    // system->m_q[0] = 0.06603363263475902;
-    // system->m_q[1] = 0.2764891273883223;
-    // system->m_q[2] = 0.2477976811032405;
-    // system->m_q[3] = 0.9261693317298725;
-    // system->m_q[6] = 2;
-  }
-  system->print_state();
+  object->print_state();
 
   double dt = 1. / 1000.;
   double time = 0;
-  while (sim->canSubmitCommand()) {
-    double gravZ = sim->readUserDebugParameter(grav_id);
-    world.set_gravity(TinyVector3<double, DoubleUtils>(0, 0, gravZ));
 
-    {
-      // system->control(dt, control);
-      sim->submitProfileTiming("forwardDynamics");
-      system->forward_dynamics(world.get_gravity());
-      sim->submitProfileTiming("");
-      PyBulletUrdfImport<double, DoubleUtils>::sync_graphics_transforms(system,
-                                                                        *sim);
-      system->clear_forces();
+  while (true) {
+    printf("Playback...\n");
+    for (std::size_t i = 0; i < data.time.size(); ++i) {
+      object->m_q[0] = data.object_x[i];
+      object->m_q[1] = data.object_y[i];
+      object->m_q[3] = data.object_yaw[i];
+      object->forward_kinematics();
+      PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object, *sim);
+      tip->m_q[0] = data.tip_x[i];
+      tip->m_q[1] = data.tip_y[i];
+      tip->forward_kinematics();
+      PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(tip, *sim);
+      std::this_thread::sleep_for(std::chrono::duration<double>(dt));
     }
-
-    {
-      sim->submitProfileTiming("integrate_q");
-      // system->integrate_q(dt);  //??
-      sim->submitProfileTiming("");
-    }
-
-    {
-      sim->submitProfileTiming("world_step");
-      world.step(dt);
-      fflush(stdout);
-      sim->submitProfileTiming("");
-      time += dt;
-    }
-
-    {
-      sim->submitProfileTiming("integrate");
-      system->integrate(dt);
-      // system->print_state();
-      sim->submitProfileTiming("");
-    }
-    std::this_thread::sleep_for(std::chrono::duration<double>(dt));
-    sim->setGravity(btVector3(0, 0, gravZ));
+    std::this_thread::sleep_for(std::chrono::duration<double>(5.));
   }
+
+  // while (sim->canSubmitCommand()) {
+  //   double gravZ = sim->readUserDebugParameter(grav_id);
+  //   world.set_gravity(TinyVector3<Scalar, Utils>(0, 0, gravZ));
+
+  //   {
+  //     // object->control(dt, control);
+  //     sim->submitProfileTiming("forwardDynamics");
+  //     object->forward_dynamics(world.get_gravity());
+  //     sim->submitProfileTiming("");
+  //     PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object,
+  //     *sim); object->clear_forces();
+  //   }
+
+  //   {
+  //     sim->submitProfileTiming("integrate_q");
+  //     // object->integrate_q(dt);  //??
+  //     sim->submitProfileTiming("");
+  //   }
+
+  //   {
+  //     sim->submitProfileTiming("world_step");
+  //     world.step(dt);
+  //     fflush(stdout);
+  //     sim->submitProfileTiming("");
+  //     time += dt;
+  //   }
+
+  //   {
+  //     sim->submitProfileTiming("integrate");
+  //     object->integrate(dt);
+  //     // object->print_state();
+  //     sim->submitProfileTiming("");
+  //   }
+  //   std::this_thread::sleep_for(std::chrono::duration<double>(dt));
+  //   sim->setGravity(btVector3(0, 0, gravZ));
+  // }
 
   sim->disconnect();
   sim2->disconnect();
