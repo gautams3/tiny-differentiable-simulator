@@ -22,6 +22,7 @@
 
 #include "Utils/b3Clock.h"
 #include "pybullet_visualizer_api.h"
+#include "tiny_dataset.h"
 #include "tiny_double_utils.h"
 #include "tiny_file_utils.h"
 #include "tiny_mb_constraint_solver_spring.h"
@@ -31,24 +32,40 @@
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
 struct PushData {
-  std::vector<double> tip_x, tip_y, tip_yaw;
   std::vector<double> time;
+  std::vector<double> tip_x, tip_y, tip_yaw;
   std::vector<double> object_x, object_y, object_yaw;
   std::vector<double> tip_wrench_x, tip_wrench_y, tip_wrench_yaw;
 
-  PushData(const std::string &filename) {
+  double dt{0};
+
+  struct Entry {
+    double tip_x, tip_y, tip_yaw;
+    double object_x, object_y, object_yaw;
+    double tip_wrench_x, tip_wrench_y, tip_wrench_yaw;
+  };
+
+  PushData(const std::string &filename) : dt(0) {
     std::vector<std::vector<double>> vecs;
     H5Easy::File push_file(filename, H5Easy::File::ReadOnly);
     HighFive::DataSet data = push_file.getDataSet("tip_pose");
     data.read(vecs);
     for (std::size_t i = 0; i < vecs.size(); ++i) {
       const auto &vec = vecs[i];
-      time.push_back(vec[0]);  // times are very similar for all datasets
+      if (i > 0) {
+        // start time from 0
+        time.push_back(vec[0] - time[0]);
+        dt += time[i] - time[i - 1];
+      } else {
+        time.push_back(0);
+      }
       tip_x.push_back(vec[1]);
       tip_y.push_back(vec[2]);
       tip_yaw.push_back(vec[3]);
     }
     vecs.clear();
+
+    dt /= time.size() - 1;
 
     data = push_file.getDataSet("object_pose");
     data.read(vecs);
@@ -93,19 +110,61 @@ struct PushData {
            tip_wrench_y.size() == tip_wrench_yaw.size());
 
     std::cout << "Read push dataset \"" + filename + "\" with " << tip_x.size()
-              << " entries.\n";
+              << " entries.\n\tTime step: " << dt << "\n";
+  }
+
+  Entry get(double t) const {
+    if (t <= 0.0) {
+      return Entry{
+          tip_x[0],        tip_y[0],        tip_yaw[0],
+          object_x[0],     object_y[0],     object_yaw[0],
+          tip_wrench_x[0], tip_wrench_y[0], tip_wrench_yaw[0],
+      };
+    }
+    if (t >= time.back()) {
+      return Entry{
+          tip_x.back(),        tip_y.back(),        tip_yaw.back(),
+          object_x.back(),     object_y.back(),     object_yaw.back(),
+          tip_wrench_x.back(), tip_wrench_y.back(), tip_wrench_yaw.back()};
+    }
+    // linear interpolation
+    int i = static_cast<int>(std::floor(t / dt + 0.5));
+    double alpha = (t - i * dt) / dt;
+    return Entry{
+        (1 - alpha) * tip_x[i] + alpha * tip_x[i + 1],
+        (1 - alpha) * tip_y[i] + alpha * tip_y[i + 1],
+        (1 - alpha) * tip_yaw[i] + alpha * tip_yaw[i + 1],
+        (1 - alpha) * object_x[i] + alpha * object_x[i + 1],
+        (1 - alpha) * object_y[i] + alpha * object_y[i + 1],
+        (1 - alpha) * object_yaw[i] + alpha * object_yaw[i + 1],
+        (1 - alpha) * tip_wrench_x[i] + alpha * tip_wrench_x[i + 1],
+        (1 - alpha) * tip_wrench_y[i] + alpha * tip_wrench_y[i + 1],
+        (1 - alpha) * tip_wrench_yaw[i] + alpha * tip_wrench_yaw[i + 1]};
   }
 };
 
 int main(int argc, char *argv[]) {
+  typedef double Scalar;
+  typedef DoubleUtils Utils;
+
   std::string connection_mode = "gui";
 
+  std::string shape = "rect1";
+
   std::string object_filename;
-  TinyFileUtils::find_file("mit-push/obj/rect1.urdf", object_filename);
+  TinyFileUtils::find_file("mit-push/obj/" + shape + ".urdf", object_filename);
   std::string tip_filename;
   TinyFileUtils::find_file("mit-push/obj/tip.urdf", tip_filename);
-  std::string plane_filename;
-  TinyFileUtils::find_file("mit-push/obj/plywood.urdf", plane_filename);
+  std::string ground_filename;
+  TinyFileUtils::find_file("mit-push/obj/plywood.urdf", ground_filename);
+
+  std::string exterior_filename;
+  TinyFileUtils::find_file("mit-push/obj/" + shape + "_ext.npy",
+                           exterior_filename);
+  TinyNumpyReader<Scalar, 2> npy_reader;
+  bool npy_success = npy_reader.Open(exterior_filename);
+  assert(npy_success);
+  auto exterior = npy_reader.Read();
 
   std::string push_filename;
   TinyFileUtils::find_file(
@@ -146,36 +205,35 @@ int main(int argc, char *argv[]) {
   sim->setTimeOut(10);
   int grav_id = sim->addUserDebugParameter("gravity", -10, 10, -2);
 
-  int rotateCamera = 0;
-
-  typedef double Scalar;
-  typedef DoubleUtils Utils;
-
   TinyUrdfCache<Scalar, Utils> urdf_cache;
 
   TinyWorld<Scalar, Utils> world;
-  TinyMultiBody<Scalar, Utils> *object = world.create_multi_body();
-  TinyMultiBody<Scalar, Utils> *tip = world.create_multi_body();
-  TinySystemConstructor<> constructor(object_filename, plane_filename);
-  constructor(sim2, sim, world, &object);
 
-  auto tip_urdf =
-      urdf_cache.template retrieve<VisualizerAPI>(tip_filename, sim2, sim);
-  TinyUrdfToMultiBody<Scalar, Utils>::convert_to_multi_body(tip_urdf, world,
-                                                            *tip);
-  tip->initialize();
+  TinyMultiBody<Scalar, Utils> *ground =
+      urdf_cache.construct(ground_filename, world, sim2, sim);
+  TinyMultiBody<Scalar, Utils> *object =
+      urdf_cache.construct(object_filename, world, sim2, sim);
+  TinyMultiBody<Scalar, Utils> *tip =
+      urdf_cache.construct(tip_filename, world, sim2, sim);
 
   // delete world.m_mb_constraint_solver;
   // world.m_mb_constraint_solver =
   //     new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
 
-  // object->m_q[2] = 0.5;
   fflush(stdout);
-
-  object->print_state();
 
   double dt = 1. / 1000.;
   double time = 0;
+
+  for (auto &link : object->m_links) {
+    for (auto visual_id : link.m_visual_uids1) {
+      b3RobotSimulatorChangeVisualShapeArgs vargs;
+      vargs.m_objectUniqueId = visual_id;
+      vargs.m_hasRgbaColor = true;
+      vargs.m_rgbaColor = btVector4(0.1, 0.6, 0, 0.7);
+      sim->changeVisualShape(vargs);
+    }
+  }
 
   while (true) {
     printf("Playback...\n");

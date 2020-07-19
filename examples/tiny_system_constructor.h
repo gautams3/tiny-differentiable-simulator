@@ -54,6 +54,23 @@ struct TinyUrdfCache {
     }
     return data[urdf_filename];
   }
+
+  template <typename VisualizerAPI>
+  TinyMultiBody<Scalar, Utils>* construct(const std::string& urdf_filename,
+                                          TinyWorld<Scalar, Utils>& world,
+                                          VisualizerAPI* sim,
+                                          VisualizerAPI* vis,
+                                          bool is_floating = false) {
+    b3RobotSimulatorLoadUrdfFileArgs args;
+    args.m_flags |= URDF_MERGE_FIXED_LINKS;
+    TinyMultiBody<Scalar, Utils>* mb = world.create_multi_body();
+    const auto& urdf_data = retrieve(urdf_filename, sim, vis, args);
+    TinyUrdfToMultiBody<Scalar, Utils>::convert_to_multi_body(urdf_data, world,
+                                                              *mb);
+    mb->m_isFloating = is_floating;
+    mb->initialize();
+    return mb;
+  }
 };
 
 /**
