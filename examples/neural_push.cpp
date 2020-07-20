@@ -155,11 +155,10 @@ Scalar sqr_distance(const Scalar &x1, const Scalar &y1, const Scalar &x2,
 // Euclidean distance between point (px, py) and line segment (x1, y1, x2, y2)
 template <typename Scalar, typename Utils>
 Scalar line_distance(const Scalar &px, const Scalar &py, const Scalar &x1,
-                     const Scalar &y1, const Scalar &x2, const Scalar &y2) {
-  // Scalar x21 = x2 - x1, y21 = y2 - y1;
-  // return Utils::abs(x21 * (y1 - py) - (x1 - px) * y21) /
-  //        Utils::sqrt1(x21 * x21 + y21 * y21);
-
+                     const Scalar &y1, const Scalar &x2, const Scalar &y2,
+                     const Scalar &radius, Scalar &line_intersect_x,
+                     Scalar &line_intersect_y, Scalar &circle_intersect_x,
+                     Scalar &circle_intersect_y) {
   Scalar x21 = x2 - x1;
   Scalar y21 = y2 - y1;
 
@@ -172,29 +171,31 @@ Scalar line_distance(const Scalar &px, const Scalar &py, const Scalar &x1,
   else if (u < Utils::zero())
     u = Utils::zero();
 
-  Scalar x = x1 + u * x21;
-  Scalar y = y1 + u * y21;
+  line_intersect_x = x1 + u * x21;
+  line_intersect_y = y1 + u * y21;
 
-  Scalar dx = x - px;
-  Scalar dy = y - py;
+  Scalar dx = line_intersect_x - px;
+  Scalar dy = line_intersect_y - py;
 
   Scalar dist = Utils::sqrt1(dx * dx + dy * dy);
+
+  circle_intersect_x = px + radius * dx / dist;
+  circle_intersect_y = py + radius * dy / dist;
 
   return dist;
 }
 
-void update_position(VisualizerAPI *sim, int object_id, double x, double y,
-                     double z) {
-  btVector3 pos(x, y, z);
-  btQuaternion orn;
-  sim->resetBasePositionAndOrientation(object_id, pos, orn);
-}
-
+/**
+ * Computes a contact point between the tip (circle) and a 2D polygon described
+ * by its edges in a contiguous array of points.
+ *
+ *    Multi body `a` is the tip.
+ *    Multi body `b` is the object.
+ */
 template <typename Scalar, typename Utils>
 TinyContactPointMultiBody<Scalar, Utils> compute_contact(
     TinyMultiBody<Scalar, Utils> *tip, TinyMultiBody<Scalar, Utils> *object,
-    TinyDataset<Scalar, 2> exterior, VisualizerAPI *sim,
-    std::vector<int> sphere_ids, double tip_radius = 0.0045) {
+    TinyDataset<Scalar, 2> exterior, const Scalar &tip_radius = 0.0045) {
   const Scalar tip_x = tip->m_q[0];
   const Scalar tip_y = tip->m_q[1];
   // printf("tip:  [%.6f %.6f]\n", tip_x, tip_y);
@@ -206,6 +207,7 @@ TinyContactPointMultiBody<Scalar, Utils> compute_contact(
   const std::size_t num_ext = exterior.Shape()[0];
   if (num_ext == 0) {
     std::cerr << "Error: Empty exterior passed to compute_contact!\n";
+    assert(0);
     return cp;
   }
 
@@ -228,8 +230,6 @@ TinyContactPointMultiBody<Scalar, Utils> compute_contact(
     const auto &y = exterior[{i, 1}] - exterior_center_y;
     exterior[{i, 0}] = object_x + x * cos_yaw - y * sin_yaw + exterior_center_x;
     exterior[{i, 1}] = object_y + y * cos_yaw + x * sin_yaw + exterior_center_y;
-    // update_position(sim, sphere_ids[i], exterior[{i, 0}], exterior[{i, 1}],
-    //                 0.01);
   }
 
   // find closest point
@@ -252,11 +252,18 @@ TinyContactPointMultiBody<Scalar, Utils> compute_contact(
   const Scalar cx = exterior[{min_i, 0}], cy = exterior[{min_i, 1}];
   const Scalar lx = exterior[{left_i, 0}], ly = exterior[{left_i, 1}];
   const Scalar rx = exterior[{right_i, 0}], ry = exterior[{right_i, 1}];
-  Scalar left_dist = line_distance<Scalar, Utils>(tip_x, tip_y, cx, cy, lx, ly);
-  Scalar right_dist =
-      line_distance<Scalar, Utils>(tip_x, tip_y, rx, ry, cx, cy);
-  // compute line normal
-  cp.m_world_normal_on_b.set_zero();
+  Scalar left_line_intersect_x, left_line_intersect_y, left_circle_intersect_x,
+      left_circle_intersect_y;
+  Scalar right_line_intersect_x, right_line_intersect_y,
+      right_circle_intersect_x, right_circle_intersect_y;
+  Scalar left_dist = line_distance<Scalar, Utils>(
+      tip_x, tip_y, cx, cy, lx, ly, tip_radius, left_line_intersect_x,
+      left_line_intersect_y, left_circle_intersect_x, left_circle_intersect_y);
+  Scalar right_dist = line_distance<Scalar, Utils>(
+      tip_x, tip_y, rx, ry, cx, cy, tip_radius, right_line_intersect_x,
+      right_line_intersect_y, right_circle_intersect_x,
+      right_circle_intersect_y);
+
   bool inside = false;
   if (right_dist < left_dist) {
     printf("RIGHT  ");
@@ -265,8 +272,19 @@ TinyContactPointMultiBody<Scalar, Utils> compute_contact(
       inside = true;
     }
     cp.m_distance = right_dist;
+
+    // compute line normal
     cp.m_world_normal_on_b.m_x = cy - ry;
     cp.m_world_normal_on_b.m_y = -(cx - rx);
+    cp.m_world_normal_on_b.m_z = Utils::zero();
+
+    cp.m_world_point_on_a.m_x = right_circle_intersect_x;
+    cp.m_world_point_on_a.m_y = right_circle_intersect_y;
+    cp.m_world_point_on_a.m_z = Utils::zero();
+
+    cp.m_world_point_on_b.m_x = right_line_intersect_x;
+    cp.m_world_point_on_b.m_y = right_line_intersect_y;
+    cp.m_world_point_on_b.m_z = Utils::zero();
   } else {
     printf("LEFT   ");
     // check if point is inside boundary, i.e. "below" the edge
@@ -274,19 +292,24 @@ TinyContactPointMultiBody<Scalar, Utils> compute_contact(
       inside = true;
     }
     cp.m_distance = left_dist;
-    cp.m_world_normal_on_b.m_x = ly - cy;
-    cp.m_world_normal_on_b.m_y = -(lx - cx);
+
+    // compute line normal
+    cp.m_world_normal_on_b.m_x = cy - ry;
+    cp.m_world_normal_on_b.m_y = -(cx - rx);
+    cp.m_world_normal_on_b.m_z = Utils::zero();
+
+    cp.m_world_point_on_a.m_x = left_circle_intersect_x;
+    cp.m_world_point_on_a.m_y = left_circle_intersect_y;
+    cp.m_world_point_on_a.m_z = Utils::zero();
+
+    cp.m_world_point_on_b.m_x = left_line_intersect_x;
+    cp.m_world_point_on_b.m_y = left_line_intersect_y;
+    cp.m_world_point_on_b.m_z = Utils::zero();
   }
   if (inside) {
     cp.m_distance = -cp.m_distance;
-    // cp.m_world_normal_on_b.m_x = -cp.m_world_normal_on_b.m_x;
-    // cp.m_world_normal_on_b.m_y = -cp.m_world_normal_on_b.m_y;
   }
   cp.m_distance -= tip_radius;
-  // TODO find accurate contact point
-  cp.m_world_point_on_b.m_x = tip_x;
-  cp.m_world_point_on_b.m_y = tip_y;
-  cp.m_world_point_on_b.m_z = Utils::zero();
   printf("contact normal: [%.3f %.3f] \t", cp.m_world_normal_on_b.m_x,
          cp.m_world_normal_on_b.m_y);
   printf("inside? %i \t", inside);
@@ -304,6 +327,13 @@ int make_sphere(VisualizerAPI *sim, float r = 1, float g = 0.6f, float b = 0,
   vargs.m_rgbaColor = btVector4(r, g, b, a);
   sim->changeVisualShape(vargs);
   return sphere_id;
+}
+
+void update_position(VisualizerAPI *sim, int object_id, double x, double y,
+                     double z) {
+  btVector3 pos(x, y, z);
+  btQuaternion orn;
+  sim->resetBasePositionAndOrientation(object_id, pos, orn);
 }
 
 int main(int argc, char *argv[]) {
@@ -397,16 +427,16 @@ int main(int argc, char *argv[]) {
     auto *spring_contact =
         new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
     spring_contact->spring_k = 10;
-    spring_contact->damper_d = 10;
-    spring_contact->mu_static = 0.01;
+    spring_contact->damper_d = 1;
+    spring_contact->mu_static = 0.1;
     // spring_contact->friction_model = FRICTION_NONE;
     world.m_mb_constraint_solver = spring_contact;
-    world.default_friction = 1.5;
+    world.default_friction = 0.5;
   }
 
-  // NCP solver for contact between tip and object
-  // TinyMultiBodyConstraintSolver<Scalar, Utils> tip_contact_model;
-  TinyMultiBodyConstraintSolverSpring<Scalar, Utils> tip_contact_model;
+  // Choose solver for contact between tip and object
+  TinyMultiBodyConstraintSolver<Scalar, Utils> tip_contact_model;
+  // TinyMultiBodyConstraintSolverSpring<Scalar, Utils> tip_contact_model;
 
   fflush(stdout);
 
@@ -428,13 +458,13 @@ int main(int argc, char *argv[]) {
 
   printf("dt: %.5f\n", Utils::getDouble(dt));
 
-  while (true) {
+  while (sim->isConnected()) {
     printf("Playback...\n");
 
     object->initialize();
     object->m_q[0] = data.object_x[0];
     object->m_q[1] = data.object_y[0];
-    object->m_q[2] = 0.1;
+    object->m_q[2] = 0.02;
     object->m_q[3] = data.object_yaw[0];
     object->forward_kinematics();
     PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object, *sim);
@@ -449,16 +479,13 @@ int main(int argc, char *argv[]) {
       tip->forward_kinematics();
       PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(tip, *sim);
 
-      // world.m_additional_MultiBodyContacts.clear();
       object->forward_dynamics(world.get_gravity());
       object->clear_forces();
-      auto tip_contact =
-          compute_contact(tip, object, exterior, sim, sphere_ids);
+      auto tip_contact = compute_contact(tip, object, exterior);
       tip_contact_model.resolveCollision({tip_contact}, dt);
-      // world.m_additional_MultiBodyContacts.push_back(
-      //     {});
       world.step(dt);
       object->integrate(dt);
+      object->forward_kinematics();
       PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object, *sim);
 
       true_object->m_q[0] = data.object_x[i];
@@ -473,48 +500,8 @@ int main(int argc, char *argv[]) {
     std::this_thread::sleep_for(std::chrono::duration<double>(5.));
   }
 
-  // while (sim->canSubmitCommand()) {
-  //   double gravZ = sim->readUserDebugParameter(grav_id);
-  //   world.set_gravity(TinyVector3<Scalar, Utils>(0, 0, gravZ));
-
-  //   {
-  //     // object->control(dt, control);
-  //     sim->submitProfileTiming("forwardDynamics");
-  //     object->forward_dynamics(world.get_gravity());
-  //     sim->submitProfileTiming("");
-  //     PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object,
-  //     *sim); object->clear_forces();
-  //   }
-
-  //   {
-  //     sim->submitProfileTiming("integrate_q");
-  //     // object->integrate_q(dt);  //??
-  //     sim->submitProfileTiming("");
-  //   }
-
-  //   {
-  //     sim->submitProfileTiming("world_step");
-  //     world.step(dt);
-  //     fflush(stdout);
-  //     sim->submitProfileTiming("");
-  //     time += dt;
-  //   }
-
-  //   {
-  //     sim->submitProfileTiming("integrate");
-  //     object->integrate(dt);
-  //     // object->print_state();
-  //     sim->submitProfileTiming("");
-  //   }
-  //   std::this_thread::sleep_for(std::chrono::duration<double>(dt));
-  //   sim->setGravity(btVector3(0, 0, gravZ));
-  // }
-
-  sim->disconnect();
-  sim2->disconnect();
-
-  // delete sim;
-  // delete sim2;
+  delete sim;
+  delete sim2;
 
   return EXIT_SUCCESS;
 }
