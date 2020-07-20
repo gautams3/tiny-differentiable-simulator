@@ -1,17 +1,3 @@
-// Copyright 2020 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #include <fenv.h>
 #include <stdio.h>
 
@@ -336,13 +322,18 @@ void update_position(VisualizerAPI *sim, int object_id, double x, double y,
   sim->resetBasePositionAndOrientation(object_id, pos, orn);
 }
 
+template <typename Scalar, typename Utils>
+struct PushExperiment {
+
+};
+
 int main(int argc, char *argv[]) {
   typedef double Scalar;
   typedef DoubleUtils Utils;
 
   std::string connection_mode = "gui";
 
-  std::string shape = "rect1";
+  std::string shape = "butter";
 
   std::string object_filename;
   TinyFileUtils::find_file("mit-push/obj/" + shape + ".urdf", object_filename);
@@ -361,9 +352,8 @@ int main(int argc, char *argv[]) {
 
   std::string push_filename;
   TinyFileUtils::find_file(
-      "mit-push/abs_rect1/"
-      "motion_surface=abs_shape=rect1_a=0_v=20_i=0.000_s=0.700_t=0.000_rep="
-      "0004.h5",
+      "mit-push/abs/" + shape + "/" + shape + "_h5/"
+      "motion_surface=abs_shape=" + shape + "_a=0_v=10_i=0.000_s=0.000_t=0.000.h5",
       push_filename);
 
   PushData data(push_filename);
@@ -396,12 +386,6 @@ int main(int argc, char *argv[]) {
 
   sim->resetSimulation();
   sim->setTimeOut(10);
-  int grav_id = sim->addUserDebugParameter("gravity", -10, 10, -2);
-
-  std::vector<int> sphere_ids;
-  for (std::size_t i = 0; i < exterior.Shape()[0]; ++i) {
-    sphere_ids.push_back(make_sphere(sim));
-  }
 
   TinyUrdfCache<Scalar, Utils> urdf_cache;
 
@@ -422,12 +406,12 @@ int main(int argc, char *argv[]) {
       urdf_cache.construct(tip_filename, world2, sim2, sim);
 
   {
-    // TODO set up neural contact (friction) model
+    // set up contact (friction) model for surface <-> object contact
     delete world.m_mb_constraint_solver;
     auto *spring_contact =
         new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
-    spring_contact->spring_k = 10;
-    spring_contact->damper_d = 1;
+    spring_contact->spring_k = 1;
+    spring_contact->damper_d = 0.1;
     spring_contact->mu_static = 0.1;
     // spring_contact->friction_model = FRICTION_NONE;
     world.m_mb_constraint_solver = spring_contact;
@@ -437,6 +421,8 @@ int main(int argc, char *argv[]) {
   // Choose solver for contact between tip and object
   TinyMultiBodyConstraintSolver<Scalar, Utils> tip_contact_model;
   // TinyMultiBodyConstraintSolverSpring<Scalar, Utils> tip_contact_model;
+  // friction between tip and object from the paper
+  world2.default_friction = 0.25;
 
   fflush(stdout);
 
@@ -458,6 +444,10 @@ int main(int argc, char *argv[]) {
 
   printf("dt: %.5f\n", Utils::getDouble(dt));
 
+  auto yaw_correction = [](const Scalar& yaw) {
+    return yaw + M_PI_2;
+  };
+
   while (sim->isConnected()) {
     printf("Playback...\n");
 
@@ -465,7 +455,7 @@ int main(int argc, char *argv[]) {
     object->m_q[0] = data.object_x[0];
     object->m_q[1] = data.object_y[0];
     object->m_q[2] = 0.02;
-    object->m_q[3] = data.object_yaw[0];
+    object->m_q[3] = yaw_correction(data.object_yaw[0]);
     object->forward_kinematics();
     PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object, *sim);
 
@@ -490,7 +480,7 @@ int main(int argc, char *argv[]) {
 
       true_object->m_q[0] = data.object_x[i];
       true_object->m_q[1] = data.object_y[i];
-      true_object->m_q[3] = data.object_yaw[i];
+      true_object->m_q[3] = yaw_correction(data.object_yaw[i]);
       true_object->forward_kinematics();
       PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(true_object,
                                                                   *sim);
