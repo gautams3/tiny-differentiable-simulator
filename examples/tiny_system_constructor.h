@@ -34,8 +34,9 @@ struct TinyUrdfCache {
   template <typename VisualizerAPI>
   const UrdfStructures& retrieve(const std::string& urdf_filename,
                                  VisualizerAPI* sim, VisualizerAPI* vis,
+                                 bool ignore_cache = false,
                                  UrdfFileArgs args = UrdfFileArgs()) {
-    if (data.find(urdf_filename) == data.end()) {
+    if (ignore_cache || data.find(urdf_filename) == data.end()) {
       printf("Loading URDF \"%s\".\n", urdf_filename.c_str());
       int robotId = sim->loadURDF(urdf_filename, args);
       data[urdf_filename] = UrdfStructures();
@@ -46,8 +47,9 @@ struct TinyUrdfCache {
     return data[urdf_filename];
   }
 
-  const UrdfStructures& retrieve(const std::string& urdf_filename) {
-    if (data.find(urdf_filename) == data.end()) {
+  const UrdfStructures& retrieve(const std::string& urdf_filename,
+                                 bool ignore_cache = false) {
+    if (ignore_cache || data.find(urdf_filename) == data.end()) {
       printf("Loading URDF \"%s\".\n", urdf_filename.c_str());
       TinyUrdfParser<Scalar, Utils> parser;
       data[urdf_filename] = parser.load_urdf(urdf_filename);
@@ -60,11 +62,13 @@ struct TinyUrdfCache {
                                           TinyWorld<Scalar, Utils>& world,
                                           VisualizerAPI* sim,
                                           VisualizerAPI* vis,
+                                          bool ignore_cache = false,
                                           bool is_floating = false) {
     b3RobotSimulatorLoadUrdfFileArgs args;
     args.m_flags |= URDF_MERGE_FIXED_LINKS;
     TinyMultiBody<Scalar, Utils>* mb = world.create_multi_body();
-    const auto& urdf_data = retrieve(urdf_filename, sim, vis, args);
+    const auto& urdf_data =
+        retrieve(urdf_filename, sim, vis, ignore_cache, args);
     TinyUrdfToMultiBody<Scalar, Utils>::convert_to_multi_body(urdf_data, world,
                                                               *mb);
     mb->m_isFloating = is_floating;

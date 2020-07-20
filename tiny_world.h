@@ -146,6 +146,8 @@ class TinyWorld {
       m_allContacts;
   std::vector<std::vector<TinyContactPointMultiBody<TinyScalar, TinyConstants>>>
       m_allMultiBodyContacts;
+  std::vector<std::vector<TinyContactPointMultiBody<TinyScalar, TinyConstants>>>
+      m_additional_MultiBodyContacts;
 
   std::vector<TinyContactPoint<TinyScalar, TinyConstants>> m_contacts;
 
@@ -317,6 +319,9 @@ class TinyWorld {
           m_multi_bodies, &m_dispatcher, m_allMultiBodyContacts,
           default_restitution, default_friction);
       submitProfileTiming("");
+      m_allMultiBodyContacts.insert(m_allMultiBodyContacts.end(),
+                                    m_additional_MultiBodyContacts.begin(),
+                                    m_additional_MultiBodyContacts.end());
     }
 
     {
@@ -334,6 +339,8 @@ class TinyWorld {
       } else {
         mb_solver_iters = m_num_solver_iterations;
       }
+      // std::cout << "Resolving " << m_allMultiBodyContacts.size()
+      //           << " contacts.\n";
       for (int i = 0; i < mb_solver_iters; i++) {
         for (int c = 0; c < m_allMultiBodyContacts.size(); c++) {
           m_mb_constraint_solver->resolveCollision(m_allMultiBodyContacts[c],

@@ -153,10 +153,10 @@ struct TinyMultiBodyConstraintSolver {
       mb_b->submitProfileTiming("");
     }
     if (!is_positive_definite_a) {
-      printf("LCP: mass matrix a is not positive definite");
+      printf("LCP: mass matrix a is not positive definite\n");
     }
     if (!is_positive_definite_b) {
-      printf("LCP: mass matrix b is not positive definite");
+      printf("LCP: mass matrix b is not positive definite\n");
     }
     assert(is_positive_definite_a);
     assert(is_positive_definite_b);
@@ -283,7 +283,7 @@ struct TinyMultiBodyConstraintSolver {
       }
     }
 
-    //    jac_con.print("Constraint Jacobian");
+    // jac_con.print("Constraint Jacobian");
 
     TinyMatrixXxX jac_con_t = jac_con.transpose();
     TinyMatrixXxX lcp_A;
