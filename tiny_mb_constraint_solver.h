@@ -117,7 +117,7 @@ struct TinyMultiBodyConstraintSolver {
   // Args:
   // cps: contact points with distances < 0
   // dt : delta time (in seconds)
-  virtual void resolveCollision(std::vector<TinyContactPoint>& cps,
+  virtual void resolveCollision(const std::vector<TinyContactPoint>& cps,
                                 TinyScalar dt) {
     if (cps.empty()) return;
     const int n_c = static_cast<int>(cps.size());

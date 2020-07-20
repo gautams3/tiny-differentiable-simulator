@@ -391,14 +391,22 @@ int main(int argc, char *argv[]) {
   TinyMultiBody<Scalar, Utils> *tip =
       urdf_cache.construct(tip_filename, world2, sim2, sim);
 
-  delete world.m_mb_constraint_solver;
-  auto *spring_contact = new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
-  spring_contact->spring_k = 10;
-  spring_contact->damper_d = 10;
-  spring_contact->mu_static = 0.0001;
-  // spring_contact->friction_model = FRICTION_NONE;
-  world.m_mb_constraint_solver = spring_contact;
-world.default_friction = 0.01;
+  {
+    // TODO set up neural contact (friction) model
+    delete world.m_mb_constraint_solver;
+    auto *spring_contact =
+        new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
+    spring_contact->spring_k = 10;
+    spring_contact->damper_d = 10;
+    spring_contact->mu_static = 0.01;
+    // spring_contact->friction_model = FRICTION_NONE;
+    world.m_mb_constraint_solver = spring_contact;
+    world.default_friction = 1.5;
+  }
+
+  // NCP solver for contact between tip and object
+  // TinyMultiBodyConstraintSolver<Scalar, Utils> tip_contact_model;
+  TinyMultiBodyConstraintSolverSpring<Scalar, Utils> tip_contact_model;
 
   fflush(stdout);
 
@@ -423,7 +431,7 @@ world.default_friction = 0.01;
   while (true) {
     printf("Playback...\n");
 
-object->initialize();
+    object->initialize();
     object->m_q[0] = data.object_x[0];
     object->m_q[1] = data.object_y[0];
     object->m_q[2] = 0.1;
@@ -441,11 +449,14 @@ object->initialize();
       tip->forward_kinematics();
       PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(tip, *sim);
 
-      world.m_additional_MultiBodyContacts.clear();
+      // world.m_additional_MultiBodyContacts.clear();
       object->forward_dynamics(world.get_gravity());
       object->clear_forces();
-      world.m_additional_MultiBodyContacts.push_back(
-          {compute_contact(tip, object, exterior, sim, sphere_ids)});
+      auto tip_contact =
+          compute_contact(tip, object, exterior, sim, sphere_ids);
+      tip_contact_model.resolveCollision({tip_contact}, dt);
+      // world.m_additional_MultiBodyContacts.push_back(
+      //     {});
       world.step(dt);
       object->integrate(dt);
       PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object, *sim);
