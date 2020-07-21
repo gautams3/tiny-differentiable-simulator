@@ -19,6 +19,7 @@
 
 #include <ceres/ceres.h>
 
+#include <algorithm>
 #include <mutex>
 #include <random>
 #include <string>
@@ -81,13 +82,16 @@ class TinyCeresEstimator : ceres::IterationCallback {
     }
   }
 
-  // Sample states from ground-truth system dynamics, i.e. a list of states.
-  std::vector<std::vector<double>> target_states;
+  // Reference trajectories from ground-truth system dynamics, i.e. a list of
+  // states.
+  std::vector<std::vector<std::vector<double>>> target_trajectories;
 
-  // Times from ground-truth trajectory, i.e. when the target_states happend,
-  // may be left empty (then target_states are assumed to overlap with
-  // simulation states).
-  std::vector<double> target_times;
+  // Times from ground-truth trajectory, i.e. when the target_trajectories
+  // happend, may be left empty (then target_trajectories are assumed to overlap
+  // with simulation states).
+  std::vector<std::vector<double>> target_times;
+
+  std::size_t minibatch_size{1};
 
   double dt{1e-2};
 
@@ -128,14 +132,14 @@ class TinyCeresEstimator : ceres::IterationCallback {
  public:
   virtual void rollout(const std::vector<ADScalar> &params,
                        std::vector<std::vector<ADScalar>> &output_states,
-                       double dt) const = 0;
+                       double dt, std::size_t ref_id) const = 0;
   virtual void rollout(const std::vector<double> &params,
                        std::vector<std::vector<double>> &output_states,
-                       double dt) const = 0;
+                       double dt, std::size_t ref_id) const = 0;
 
   ceres::Problem &setup(ceres::LossFunction *loss_function = nullptr) {
-    assert(!target_states.empty() &&
-           static_cast<int>(target_states[0].size()) >= kStateDim);
+    assert(!target_trajectories.empty() &&
+           static_cast<int>(target_trajectories[0].size()) >= kStateDim);
 
     if (cost_function_) {
       delete cost_function_;
@@ -202,7 +206,14 @@ class TinyCeresEstimator : ceres::IterationCallback {
   struct CostFunctor {
     CeresEstimator *parent{nullptr};
 
-    CostFunctor(CeresEstimator *parent) : parent(parent) {}
+    mutable std::vector<std::size_t> ref_indices;
+
+    CostFunctor(CeresEstimator *parent) : parent(parent) {
+      ref_indices.resize(parent->target_trajectories.size());
+      for (std::size_t i = 0; i < parent->target_trajectories.size(); ++i) {
+        ref_indices[i] = i;
+      }
+    }
 
 #ifdef USE_MATPLOTLIB
     template <typename T>
@@ -225,27 +236,9 @@ class TinyCeresEstimator : ceres::IterationCallback {
     // Computes the cost (residual) for input parameters x.
     template <typename T>
     bool operator()(const T *const x, T *residual) const {
-      // first roll-out simulation given the current parameters
-      const std::vector<T> params(x, x + kParameterDim);
-      std::vector<std::vector<T>> rollout_states;
-      const double dt = parent->dt;
-      parent->rollout(params, rollout_states, dt);
-      // plot_trajectory(rollout_states);
-
-      const auto &target_states = parent->target_states;
-      // plot_trajectory(target_states);
-      const auto &target_times = parent->target_times;
-      int n_rollout = static_cast<int>(rollout_states.size());
-      int n_target = static_cast<int>(target_states.size());
-      if (target_times.empty() &&
-          rollout_states.size() != target_states.size()) {
-        fprintf(
-            stderr,
-            "If no target_times are provided to TinyCeresEstimator, the "
-            "number of target_states (%i) must match the number of roll-out "
-            "states (%i).\n",
-            n_target, n_rollout);
-        return false;
+      if (ref_indices.size() > 1) {
+        // shuffle indices before minibatching
+        std::random_shuffle(ref_indices.begin(), ref_indices.end());
       }
 
       // select the right scalar traits based on the type of the input
@@ -266,77 +259,120 @@ class TinyCeresEstimator : ceres::IterationCallback {
         // regularization
         residual[i] = regularization;
       }
-
-      T difference;
-
       int nonfinite = 0;
-      std::vector<T> rollout_state(kStateDim, Utils::zero());
-      double time;
-      std::vector<std::vector<double>> error_evolution;
-      // plot_trajectory(target_states);
-      // plot_trajectory(rollout_states);
-      for (int t = 0; t < n_target; ++t) {
-        if (target_times.empty()) {
-          // assume target states line up with rollout states
-          rollout_state = rollout_states[t];
-          time = dt * t;
-        } else {
-          // linear interpolation of rollout states at the target times
-          double target_time = target_times[t];
-          // numerically stable way to get index of rollout state
-          int rollout_i = static_cast<int>(std::floor(target_time / dt + 0.5));
-          if (rollout_i >= n_rollout - 1) {
-            // fprintf(stderr,
-            //         "Target time %.4f (step %i) corresponds to a state (%i) "
-            //         "that has not been rolled out.\n",
-            //         target_time, t, rollout_i);
-            break;
-          }
-          double alpha = (target_time - rollout_i * dt) / dt;
-          const std::vector<T> &left = rollout_states[rollout_i];
-          const std::vector<T> &right = rollout_states[rollout_i + 1];
 
+      for (std::size_t traj_id = 0; traj_id < parent->minibatch_size;
+           ++traj_id) {
+        const std::size_t ref_id = ref_indices[traj_id];
+
+        // first roll-out simulation given the current parameters
+        const std::vector<T> params(x, x + kParameterDim);
+        std::vector<std::vector<T>> rollout_states;
+        const double dt = parent->dt;
+        parent->rollout(params, rollout_states, dt, ref_id);
+        // plot_trajectory(rollout_states);
+
+        const auto &target_states = parent->target_trajectories[ref_id];
+        // plot_trajectory(target_trajectories);
+        const auto &target_times = parent->target_times[ref_id];
+        int n_rollout = static_cast<int>(rollout_states.size());
+        int n_target = static_cast<int>(target_states.size());
+
+        if (target_times.empty() && n_rollout != n_target) {
+          fprintf(stderr,
+                  "If no target_times are provided to TinyCeresEstimator, the "
+                  "number of target_trajectories (%i) must match the number of "
+                  "roll-out "
+                  "states (%i).\n",
+                  n_target, n_rollout);
+          return false;
+        }
+
+        T difference;
+
+        std::vector<T> rollout_state(kStateDim, Utils::zero());
+        double time;
+        std::vector<std::vector<double>> error_evolution;
+        // plot_trajectory(target_states);
+        // plot_trajectory(rollout_states);
+        for (int t = 0; t < n_target; ++t) {
+          if (target_times.empty()) {
+            // assume target states line up with rollout states
+            rollout_state = rollout_states[t];
+            time = dt * t;
+          } else {
+            // linear interpolation of rollout states at the target times
+            double target_time = target_times[t];
+            // numerically stable way to get index of rollout state
+            int rollout_i =
+                static_cast<int>(std::floor(target_time / dt + 0.5));
+            if (rollout_i >= n_rollout - 1) {
+              // fprintf(stderr,
+              //         "Target time %.4f (step %i) corresponds to a state
+              //         (%i) " "that has not been rolled out.\n",
+              //         target_time, t, rollout_i);
+              break;
+            }
+            double alpha = (target_time - rollout_i * dt) / dt;
+            const std::vector<T> &left = rollout_states[rollout_i];
+            const std::vector<T> &right = rollout_states[rollout_i + 1];
+
+            for (int i = 0; i < kStateDim; ++i) {
+              rollout_state[i] = (1. - alpha) * left[i] + alpha * right[i];
+            }
+            time = target_time;
+          }
+
+          // skip time steps for which no target state samples exist
+          std::vector<double> error_state(kStateDim);
           for (int i = 0; i < kStateDim; ++i) {
-            rollout_state[i] = (1. - alpha) * left[i] + alpha * right[i];
-          }
-          time = target_time;
-        }
-
-        // skip time steps for which no target state samples exist
-        std::vector<double> error_state(kStateDim);
-        for (int i = 0; i < kStateDim; ++i) {
-          difference = target_states[t][i] - rollout_state[i];
-          difference *= difference;
-          double dd = Utils::getDouble(difference);
-          if (std::isinf(dd) || std::isnan(dd)) {
-            ++nonfinite;
-            continue;
-          } else if (std::abs(dd) > 1e10) {
-            ++nonfinite;
-            printf(" NONFINITE!!! ");
+            difference = target_states[t][i] - rollout_state[i];
+            difference *= difference;
+            double dd = Utils::getDouble(difference);
+            if (std::isinf(dd) || std::isnan(dd)) {
+              ++nonfinite;
+              continue;
+            } else if (std::abs(dd) > 1e10) {
+              ++nonfinite;
+              printf(" NONFINITE!!! ");
 #ifdef USE_MATPLOTLIB
-            plot_trajectory(rollout_states);
+              plot_trajectory(rollout_states);
 #endif
-            continue;
-          }
-          // printf("%.3f  ", Utils::getDouble(difference));
+              continue;
+            }
+            // printf("%.3f  ", Utils::getDouble(difference));
 
-          // discount contribution of errors at later time steps to mitigate
-          // gradient explosion on long roll-outs
-          if (parent->divide_cost_by_time_factor != 0. && t > 0) {
-            difference /= std::pow(parent->divide_cost_by_time_factor * time,
-                                   parent->divide_cost_by_time_exponent);
-          }
+            // discount contribution of errors at later time steps to mitigate
+            // gradient explosion on long roll-outs
+            if (parent->divide_cost_by_time_factor != 0. && t > 0) {
+              difference /= std::pow(parent->divide_cost_by_time_factor * time,
+                                     parent->divide_cost_by_time_exponent);
+            }
 
-          if constexpr (kResidualMode == RES_MODE_1D) {
-            *residual += difference;
-          } else if constexpr (kResidualMode == RES_MODE_STATE) {
-            residual[i] += difference;
+            if constexpr (kResidualMode == RES_MODE_1D) {
+              *residual += difference / T(double(parent->minibatch_size));
+            } else if constexpr (kResidualMode == RES_MODE_STATE) {
+              residual[i] += difference / T(double(parent->minibatch_size));
+            }
+            error_state[i] = dd;
           }
-          error_state[i] = dd;
+          error_evolution.push_back(error_state);
+          // printf("[[res: %.3f]]  ", Utils::getDouble(*residual));
         }
-        error_evolution.push_back(error_state);
-        // printf("[[res: %.3f]]  ", Utils::getDouble(*residual));
+
+        printf("params: ");
+        for (int ri = 0; ri < kParameterDim; ++ri) {
+          printf("%.4f  ", Utils::getDouble(params[ri]));
+        }
+        printf("\tresidual: ");
+        for (int ri = 0; ri < kResidualDim; ++ri) {
+          printf("%.6f  ", Utils::getDouble(residual[ri]));
+        }
+        if (nonfinite > 0) {
+          std::cerr << "nonfinite: " << nonfinite;
+        }
+        // std::cout << "  thread ID: " << std::this_thread::get_id();
+        printf("\n");
       }
       // plot_trajectory(error_evolution);
       // plt::named_plot("difference", error_evolution);
@@ -344,19 +380,6 @@ class TinyCeresEstimator : ceres::IterationCallback {
 
       // if (parent->options.minimizer_progress_to_stdout &&
       // Utils::getDouble(residual[0]) < 0.) {
-      printf("params: ");
-      for (int ri = 0; ri < kParameterDim; ++ri) {
-        printf("%.4f  ", Utils::getDouble(params[ri]));
-      }
-      printf("\tresidual: ");
-      for (int ri = 0; ri < kResidualDim; ++ri) {
-        printf("%.6f  ", Utils::getDouble(residual[ri]));
-      }
-      if (nonfinite > 0) {
-        std::cerr << "nonfinite: " << nonfinite;
-      }
-      // std::cout << "  thread ID: " << std::this_thread::get_id();
-      printf("\n");
       // } else {
       //   printf("\tcost: %.6f  nonfinite: %d\n",
       //   Utils::getDouble(residual[0]), nonfinite);

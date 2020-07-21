@@ -209,7 +209,7 @@ class PendulumEstimator
 
   void rollout(const std::vector<ADScalar> &params,
                std::vector<std::vector<ADScalar>> &output_states,
-               double dt) const override {
+               double dt, std::size_t ref_id) const override {
     typedef CeresUtils<kParameterDim> ADUtils;
     typedef NeuralScalar<ADScalar, ADUtils> NScalar;
     typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
@@ -223,7 +223,7 @@ class PendulumEstimator
   }
   void rollout(const std::vector<double> &params,
                std::vector<std::vector<double>> &output_states,
-               double dt) const override {
+               double dt, std::size_t ref_id) const override {
     typedef NeuralScalar<double, DoubleUtils> NScalar;
     typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
     auto n_params = NUtils::to_neural(params);
@@ -275,8 +275,8 @@ int main(int argc, char *argv[]) {
   std::function<std::unique_ptr<Estimator>()> construct_estimator =
       [&target_times, &target_states, &time_steps, &dt]() {
         auto estimator = std::make_unique<Estimator>(time_steps, dt);
-        estimator->target_times = target_times;
-        estimator->target_states = target_states;
+        estimator->target_times = {target_times};
+        estimator->target_trajectories = {target_states};
         estimator->options.minimizer_progress_to_stdout = !USE_PBH;
         estimator->options.max_num_consecutive_invalid_steps = 100;
         estimator->set_bounds = false;
