@@ -229,7 +229,12 @@ struct TinyMultiBodyConstraintSolverSpring
     const TinyScalar four = two * two;
     const TinyScalar zero = TinyConstants::zero();
 
-    const TinyScalar vvt = v / v_transition;
+    TinyScalar vvt = v / v_transition;
+    if (vvt > TinyConstants::fraction(10000, 1)) {
+      printf("vvt:          %.8f\n", TinyConstants::getDouble(vvt));
+      printf("v_transition: %.8f\n", TinyConstants::getDouble(v_transition));
+      vvt = TinyConstants::fraction(10000, 1);
+    }
 
 #ifdef DEBUG
     printf("mu: %.5f   force: %.5f\n", mu, fn);
@@ -327,8 +332,9 @@ struct TinyMultiBodyConstraintSolverSpring
         TinyVector3 lateral_rel_vel =
             rel_vel - normal_rel_vel * cp.m_world_normal_on_b;
         //      lateral_rel_vel.print("lateral_rel_vel");
-        const TinyScalar lateral = lateral_rel_vel.length();
-        //      printf("lateral_rel_vel.length(): %.6f\n", lateral);
+        TinyScalar lateral = lateral_rel_vel.length();
+        // printf("lateral_rel_vel.length(): %.6f\n",
+        //        TinyConstants::getDouble(lateral));
 
         TinyVector3 fr_direction1, fr_direction2;
         if (lateral < TinyConstants::fraction(1, 10000)) {
@@ -340,8 +346,24 @@ struct TinyMultiBodyConstraintSolverSpring
           fr_direction1 = lateral_rel_vel * (TinyConstants::one() / lateral);
           //        fr_direction2 = fr_direction1.cross(cp.m_world_normal_on_b);
         }
+        if (lateral > TinyConstants::fraction(10000, 1)) {
+          lateral_rel_vel.print("lateral_rel_vel");
+          printf("lateral_rel_vel.length(): %.6f\n",
+                 TinyConstants::getDouble(lateral));
+          rel_vel.print("rel_vel");
+          cp.m_world_normal_on_b.print("cp.m_world_normal_on_b");
+          lateral = TinyConstants::fraction(10000, 1);
+        }
         TinyScalar friction =
             compute_friction_force(force_normal, lateral, cp.m_friction);
+        if (friction > TinyConstants::fraction(10000, 1)) {
+          printf("friction: %.6f\n", TinyConstants::getDouble(friction));
+
+          printf("force_normal: %.6f\n",
+                 TinyConstants::getDouble(force_normal));
+          printf("lateral: %.6f\n", TinyConstants::getDouble(lateral));
+          friction = TinyConstants::fraction(10000, 1);
+        }
         TinyVector3 friction_vector = fr_direction1 * friction;
         tau_a += jac_a.mul_transpose(friction_vector);
         tau_b -= jac_b.mul_transpose(friction_vector);

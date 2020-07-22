@@ -17,7 +17,7 @@
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
 // whether to use Parallel Basin Hopping
-#define USE_PBH false
+#define USE_PBH true
 const int param_dim = 3;
 const int state_dim = 3;
 const ResidualMode res_mode = RES_MODE_1D;
@@ -330,7 +330,7 @@ int main(int argc, char *argv[]) {
   bool floating_base = true;
 
   // Set NaN trap
-  feenableexcept(FE_INVALID | FE_OVERFLOW);
+  // feenableexcept(FE_INVALID | FE_OVERFLOW);
 
   printf("floating_base=%d\n", floating_base);
   printf("object_filename=%s\n", object_filename.c_str());
@@ -369,13 +369,14 @@ int main(int argc, char *argv[]) {
         VisualizerAPI *sim_direct = new VisualizerAPI();
         bool isConnected2 = sim_direct->connect(eCONNECT_DIRECT);
         estimator->add_training_dataset(push_filename, sim_direct, sim_direct);
-        estimator->use_finite_diff = false;
+        estimator->use_finite_diff = true;
         return estimator;
       };
 
   std::vector<double> best_params;
   PushEstimator estimator;
   estimator.add_training_dataset(push_filename, sim, sim2);
+  estimator.use_finite_diff = true;
   estimator.setup();
 
   // best_params = {0.1000022164, 0.9283739043, 0.1999897444};
