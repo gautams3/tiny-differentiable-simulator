@@ -60,7 +60,7 @@ class TinyWorld {
   TinyScalar default_friction{TinyConstants::fraction(2, 10)};
   TinyScalar default_restitution{TinyConstants::zero()};
 
-  explicit TinyWorld(TinyScalar gravity_z = TinyConstants::fraction(-98, 10))
+  explicit TinyWorld(TinyScalar gravity_z = TinyConstants::fraction(-981, 100))
       : m_gravity_acceleration(TinyConstants::zero(), TinyConstants::zero(),
                                gravity_z),
         m_constraint_solver(

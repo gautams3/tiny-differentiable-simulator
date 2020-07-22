@@ -17,7 +17,7 @@
 #ifndef PYBULLET_URDF_IMPORT_H
 #define PYBULLET_URDF_IMPORT_H
 
-#include "SharedMemory/b3RobotSimulatorClientAPI_NoDirect.h"
+// #include "SharedMemory/b3RobotSimulatorClientAPI_NoDirect.h"
 #include "tiny_multi_body.h"
 #include "tiny_urdf_structures.h"
 
@@ -75,9 +75,10 @@ struct PyBulletUrdfImport {
         }
       };
 
-      joint.joint_axis_xyz.setValue(TinyConstants::scalar_from_double(jointInfo.m_jointAxis[0]),
-                                    TinyConstants::scalar_from_double(jointInfo.m_jointAxis[1]),
-                                    TinyConstants::scalar_from_double(jointInfo.m_jointAxis[2]));
+      joint.joint_axis_xyz.setValue(
+          TinyConstants::scalar_from_double(jointInfo.m_jointAxis[0]),
+          TinyConstants::scalar_from_double(jointInfo.m_jointAxis[1]),
+          TinyConstants::scalar_from_double(jointInfo.m_jointAxis[2]));
 
       if (jointInfo.m_parentIndex < 0) {
         joint.parent_name = urdf_structures.m_base_links[0].link_name;
@@ -129,14 +130,17 @@ struct PyBulletUrdfImport {
 
       btTransform tmp2(btQuaternion::getIdentity(), parentCom2JointPos);
       btTransform pos = parentInertia * tmp2;
-      joint.joint_origin_xyz.setValue(TinyConstants::scalar_from_double(pos.getOrigin()[0]),
-                                      TinyConstants::scalar_from_double(pos.getOrigin()[1]),
-                                      TinyConstants::scalar_from_double(pos.getOrigin()[2]));
+      joint.joint_origin_xyz.setValue(
+          TinyConstants::scalar_from_double(pos.getOrigin()[0]),
+          TinyConstants::scalar_from_double(pos.getOrigin()[1]),
+          TinyConstants::scalar_from_double(pos.getOrigin()[2]));
       btScalar roll, pitch, yaw;
       pos_.getRotation().getEulerZYX(yaw, pitch, roll);
       btVector3 rpy = btVector3(roll, pitch, yaw);
-      joint.joint_origin_rpy.setValue(TinyConstants::scalar_from_double(rpy[0]), TinyConstants::scalar_from_double(rpy[1]),
-                                      TinyConstants::scalar_from_double(rpy[2]));
+      joint.joint_origin_rpy.setValue(
+          TinyConstants::scalar_from_double(rpy[0]),
+          TinyConstants::scalar_from_double(rpy[1]),
+          TinyConstants::scalar_from_double(rpy[2]));
       urdf_structures.m_links.push_back(child_link);
       urdf_structures.m_joints.push_back(joint);
     }
@@ -150,11 +154,15 @@ struct PyBulletUrdfImport {
       TinyQuaternion<TinyScalar, TinyConstants> rot;
       TinySpatialTransform<TinyScalar, TinyConstants> geom_X_world =
           body->m_base_X_world * body->m_X_visuals[v];
-      btVector3 base_pos(geom_X_world.m_translation.getX(),
-                         geom_X_world.m_translation.getY(),
-                         geom_X_world.m_translation.getZ());
+      btVector3 base_pos(
+          TinyConstants::getDouble(geom_X_world.m_translation.getX()),
+          TinyConstants::getDouble(geom_X_world.m_translation.getY()),
+          TinyConstants::getDouble(geom_X_world.m_translation.getZ()));
       geom_X_world.m_rotation.getRotation(rot);
-      btQuaternion base_orn(rot.getX(), rot.getY(), rot.getZ(), rot.getW());
+      btQuaternion base_orn(TinyConstants::getDouble(rot.getX()),
+                            TinyConstants::getDouble(rot.getY()),
+                            TinyConstants::getDouble(rot.getZ()),
+                            TinyConstants::getDouble(rot.getW()));
       viz_api.resetBasePositionAndOrientation(visual_id, base_pos, base_orn);
     }
 
@@ -164,11 +172,15 @@ struct PyBulletUrdfImport {
         TinyQuaternion<TinyScalar, TinyConstants> rot;
         TinySpatialTransform<TinyScalar, TinyConstants> geom_X_world =
             body->m_links[l].m_X_world * body->m_links[l].m_X_visuals[v];
-        btVector3 base_pos(geom_X_world.m_translation.getX(),
-                           geom_X_world.m_translation.getY(),
-                           geom_X_world.m_translation.getZ());
+        btVector3 base_pos(
+            TinyConstants::getDouble(geom_X_world.m_translation.getX()),
+            TinyConstants::getDouble(geom_X_world.m_translation.getY()),
+            TinyConstants::getDouble(geom_X_world.m_translation.getZ()));
         geom_X_world.m_rotation.getRotation(rot);
-        btQuaternion base_orn(rot.getX(), rot.getY(), rot.getZ(), rot.getW());
+        btQuaternion base_orn(TinyConstants::getDouble(rot.getX()),
+                              TinyConstants::getDouble(rot.getY()),
+                              TinyConstants::getDouble(rot.getZ()),
+                              TinyConstants::getDouble(rot.getW()));
         viz_api.resetBasePositionAndOrientation(visual_id, base_pos, base_orn);
       }
     }
@@ -205,7 +217,9 @@ struct PyBulletUrdfImport {
         btQuaternion(dyn.m_localInertialFrame[3], dyn.m_localInertialFrame[4],
                      dyn.m_localInertialFrame[5], dyn.m_localInertialFrame[6]));
     urdfLink.urdf_inertial.origin_rpy.setValue(
-        TinyConstants::scalar_from_double(rpy[0]), TinyConstants::scalar_from_double(rpy[1]), TinyConstants::scalar_from_double(rpy[2]));
+        TinyConstants::scalar_from_double(rpy[0]),
+        TinyConstants::scalar_from_double(rpy[1]),
+        TinyConstants::scalar_from_double(rpy[2]));
 
     // visual shapes
     b3VisualShapeInformation visualShapeInfo;
@@ -216,25 +230,30 @@ struct PyBulletUrdfImport {
       if (visual.m_linkIndex == linkIndex) {
         TinyUrdfVisual<TinyScalar, TinyConstants> viz;
         // offset
-        viz.origin_xyz.setValue(TinyConstants::scalar_from_double(visual.m_localVisualFrame[0]),
-                                TinyConstants::scalar_from_double(visual.m_localVisualFrame[1]),
-                                TinyConstants::scalar_from_double(visual.m_localVisualFrame[2]));
+        viz.origin_xyz.setValue(
+            TinyConstants::scalar_from_double(visual.m_localVisualFrame[0]),
+            TinyConstants::scalar_from_double(visual.m_localVisualFrame[1]),
+            TinyConstants::scalar_from_double(visual.m_localVisualFrame[2]));
         btVector3 rpy = sim_api.getEulerFromQuaternion(btQuaternion(
             visual.m_localVisualFrame[3], visual.m_localVisualFrame[4],
             visual.m_localVisualFrame[5], visual.m_localVisualFrame[6]));
-        viz.origin_rpy.setValue(TinyConstants::scalar_from_double(rpy[0]), TinyConstants::scalar_from_double(rpy[1]),
+        viz.origin_rpy.setValue(TinyConstants::scalar_from_double(rpy[0]),
+                                TinyConstants::scalar_from_double(rpy[1]),
                                 TinyConstants::scalar_from_double(rpy[2]));
 
-        viz.m_material.material_rgb.setValue(TinyConstants::scalar_from_double(visual.m_rgbaColor[0]),
-                                             TinyConstants::scalar_from_double(visual.m_rgbaColor[1]),
-                                             TinyConstants::scalar_from_double(visual.m_rgbaColor[2]));
-        // viz.material_a = TinyConstants::scalar_from_double(visual.m_rgbaColor[3]);
+        viz.m_material.material_rgb.setValue(
+            TinyConstants::scalar_from_double(visual.m_rgbaColor[0]),
+            TinyConstants::scalar_from_double(visual.m_rgbaColor[1]),
+            TinyConstants::scalar_from_double(visual.m_rgbaColor[2]));
+        // viz.material_a =
+        // TinyConstants::scalar_from_double(visual.m_rgbaColor[3]);
 
         // try to load for now, until we can manually 'override' the shape world
         // transform
         switch (visual.m_visualGeometryType) {
           case GEOM_SPHERE: {
-            viz.geometry.m_sphere.m_radius = TinyConstants::scalar_from_double(visual.m_dimensions[0]);
+            viz.geometry.m_sphere.m_radius =
+                TinyConstants::scalar_from_double(visual.m_dimensions[0]);
             viz.geometry.geom_type = TINY_SPHERE_TYPE;
             break;
           }
@@ -248,9 +267,10 @@ struct PyBulletUrdfImport {
           }
           case GEOM_BOX: {
             TinyVector3<TinyScalar, TinyConstants> halfExtents;
-            halfExtents.setValue(TinyConstants::scalar_from_double(visual.m_dimensions[0]),
-                                 TinyConstants::scalar_from_double(visual.m_dimensions[1]),
-                                 TinyConstants::scalar_from_double(visual.m_dimensions[2]));
+            halfExtents.setValue(
+                TinyConstants::scalar_from_double(visual.m_dimensions[0]),
+                TinyConstants::scalar_from_double(visual.m_dimensions[1]),
+                TinyConstants::scalar_from_double(visual.m_dimensions[2]));
             viz.geometry.m_box.m_extents =
                 halfExtents * TinyConstants::fraction(2, 1);
             viz.geometry.geom_type = TINY_BOX_TYPE;
@@ -271,7 +291,8 @@ struct PyBulletUrdfImport {
             viz.geometry.geom_type = TINY_MESH_TYPE;
             break;
           }
-          default: {}
+          default: {
+          }
         }
 
         urdfLink.urdf_visual_shapes.push_back(viz);
@@ -307,13 +328,15 @@ struct PyBulletUrdfImport {
                        colShapeData.m_localCollisionFrame[6]));
       btTransform col_tr = inertial_tr * col_local_tr;
 
-      col.origin_xyz.setValue(TinyConstants::scalar_from_double(col_tr.getOrigin()[0]),
-                              TinyConstants::scalar_from_double(col_tr.getOrigin()[1]),
-                              TinyConstants::scalar_from_double(col_tr.getOrigin()[2]));
+      col.origin_xyz.setValue(
+          TinyConstants::scalar_from_double(col_tr.getOrigin()[0]),
+          TinyConstants::scalar_from_double(col_tr.getOrigin()[1]),
+          TinyConstants::scalar_from_double(col_tr.getOrigin()[2]));
       btVector3 rpy;
       col_tr.getRotation().getEulerZYX(rpy[0], rpy[1], rpy[2]);
 
-      col.origin_rpy.setValue(TinyConstants::scalar_from_double(rpy[0]), TinyConstants::scalar_from_double(rpy[1]),
+      col.origin_rpy.setValue(TinyConstants::scalar_from_double(rpy[0]),
+                              TinyConstants::scalar_from_double(rpy[1]),
                               TinyConstants::scalar_from_double(rpy[2]));
 
       switch (colShapeData.m_collisionGeometryType) {
@@ -358,7 +381,8 @@ struct PyBulletUrdfImport {
           urdfLink.urdf_collision_shapes.push_back(col);
           break;
         }
-        default: {}
+        default: {
+        }
       };
     }
   }
@@ -457,7 +481,8 @@ struct PyBulletUrdfImport {
             visual_shape.sync_visual_body_uid1 = viz_uid;
             break;
           }
-          default: {}
+          default: {
+          }
         }
       }
     }
