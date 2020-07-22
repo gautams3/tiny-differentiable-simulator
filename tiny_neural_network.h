@@ -295,8 +295,8 @@ class TinyNeuralNetwork : public TinyNeuralNetworkSpecification {
   using TinyNeuralNetworkSpecification::compute;
   using TinyNeuralNetworkSpecification::initialize;
 
-  explicit TinyNeuralNetwork(int input_dim = 0)
-      : TinyNeuralNetworkSpecification(input_dim) {}
+  explicit TinyNeuralNetwork(int input_dim = 0, bool use_input_bias = true)
+      : TinyNeuralNetworkSpecification(input_dim, use_input_bias) {}
   TinyNeuralNetwork(int input_dim, const std::vector<int>& layer_sizes,
                     TinyNeuralNetworkActivation activation,
                     bool learn_bias = true)

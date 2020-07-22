@@ -93,7 +93,9 @@ class TinyCeresEstimator : ceres::IterationCallback {
 
   std::size_t minibatch_size{1};
 
-  double dt{1e-2};
+  mutable double dt{1e-2};
+
+  bool use_finite_diff{false};
 
   /**
    * The following 2 terms are for optional time normalization to mitigate
@@ -132,10 +134,10 @@ class TinyCeresEstimator : ceres::IterationCallback {
  public:
   virtual void rollout(const std::vector<ADScalar> &params,
                        std::vector<std::vector<ADScalar>> &output_states,
-                       double dt, std::size_t ref_id) const = 0;
+                       double &dt, std::size_t ref_id) const = 0;
   virtual void rollout(const std::vector<double> &params,
                        std::vector<std::vector<double>> &output_states,
-                       double dt, std::size_t ref_id) const = 0;
+                       double &dt, std::size_t ref_id) const = 0;
 
   ceres::Problem &setup(ceres::LossFunction *loss_function = nullptr) {
     assert(!target_trajectories.empty() &&
@@ -144,9 +146,18 @@ class TinyCeresEstimator : ceres::IterationCallback {
     if (cost_function_) {
       delete cost_function_;
     }
-    cost_function_ =
-        new ceres::AutoDiffCostFunction<CostFunctor, kResidualDim,
-                                        kParameterDim>(new CostFunctor(this));
+
+    if (use_finite_diff) {
+      cost_function_ =
+          new ceres::NumericDiffCostFunction<CostFunctor, ceres::CENTRAL,
+                                             kResidualDim, kParameterDim>(
+              new CostFunctor(this));
+    } else {
+      cost_function_ =
+          new ceres::AutoDiffCostFunction<CostFunctor, kResidualDim,
+                                          kParameterDim>(new CostFunctor(this));
+    }
+
     if (vars_) {
       delete[] vars_;
     }
@@ -268,8 +279,9 @@ class TinyCeresEstimator : ceres::IterationCallback {
         // first roll-out simulation given the current parameters
         const std::vector<T> params(x, x + kParameterDim);
         std::vector<std::vector<T>> rollout_states;
-        const double dt = parent->dt;
+        double &dt = parent->dt;
         parent->rollout(params, rollout_states, dt, ref_id);
+        // printf("dt: %.6f\n", dt);
         // plot_trajectory(rollout_states);
 
         const auto &target_states = parent->target_trajectories[ref_id];
@@ -344,10 +356,10 @@ class TinyCeresEstimator : ceres::IterationCallback {
 
             // discount contribution of errors at later time steps to mitigate
             // gradient explosion on long roll-outs
-            if (parent->divide_cost_by_time_factor != 0. && t > 0) {
-              difference /= std::pow(parent->divide_cost_by_time_factor * time,
-                                     parent->divide_cost_by_time_exponent);
-            }
+            // if (parent->divide_cost_by_time_factor != 0. && t > 0) {
+            //   difference /= std::pow(parent->divide_cost_by_time_factor * time,
+            //                          parent->divide_cost_by_time_exponent);
+            // }
 
             if constexpr (kResidualMode == RES_MODE_1D) {
               *residual += difference / T(double(parent->minibatch_size));
@@ -454,7 +466,7 @@ class BasinHoppingEstimator {
     for (std::size_t k = 0; k < num_workers; ++k) {
       workers_.emplace_back([this, k, &start_time]() {
         auto estimator = this->estimator_constructor();
-        estimator->setup(new ceres::HuberLoss(1.));  // TODO expose this
+        estimator->setup(new ceres::TrivialLoss); //new ceres::HuberLoss(1.));  // TODO expose this
         if (k == 0) {
           // set initial guess
           estimator->set_params(this->params);

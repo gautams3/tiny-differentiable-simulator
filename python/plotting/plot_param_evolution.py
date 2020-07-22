@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import os
 
 folder = "../../"
-evolution_file = "param_evolution.txt"
+evolution_file = "param_evolution_push.txt"
 
 path = os.path.join(folder, evolution_file)
 evolution_data = np.loadtxt(path)

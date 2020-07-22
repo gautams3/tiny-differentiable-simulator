@@ -34,8 +34,8 @@ struct TinyUrdfCache {
   template <typename VisualizerAPI>
   const UrdfStructures& retrieve(const std::string& urdf_filename,
                                  VisualizerAPI* sim, VisualizerAPI* vis,
-                                 bool ignore_cache = false,
-                                 UrdfFileArgs args = UrdfFileArgs()) {
+                                 UrdfFileArgs args = UrdfFileArgs(),
+                                 bool ignore_cache = false) {
     if (ignore_cache || data.find(urdf_filename) == data.end()) {
       printf("Loading URDF \"%s\".\n", urdf_filename.c_str());
       int robotId = sim->loadURDF(urdf_filename, args);
@@ -68,7 +68,7 @@ struct TinyUrdfCache {
     args.m_flags |= URDF_MERGE_FIXED_LINKS;
     TinyMultiBody<Scalar, Utils>* mb = world.create_multi_body();
     const auto& urdf_data =
-        retrieve(urdf_filename, sim, vis, ignore_cache, args);
+        retrieve(urdf_filename, sim, vis, args, ignore_cache);
     TinyUrdfToMultiBody<Scalar, Utils>::convert_to_multi_body(urdf_data, world,
                                                               *mb);
     mb->m_isFloating = is_floating;
@@ -116,7 +116,7 @@ struct TinySystemConstructor {
                   TinyWorld<Scalar, Utils>& world,
                   TinyMultiBody<Scalar, Utils>** system,
                   bool clear_cache = false) const {
-    thread_local static TinyUrdfCache<Scalar, Utils> cache;
+    static TinyUrdfCache<Scalar, Utils> cache;
     if (clear_cache) {
       cache.data.clear();
     }

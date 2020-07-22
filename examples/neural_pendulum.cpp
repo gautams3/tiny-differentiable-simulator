@@ -9,7 +9,7 @@
 #include "tiny_world.h"
 
 // whether to use Parallel Basin Hopping
-#define USE_PBH true
+#define USE_PBH false
 // whether the state consists of [q qd] or just q
 #define STATE_INCLUDES_QD false
 std::vector<double> start_state;
@@ -138,15 +138,16 @@ void rollout_pendulum(const std::vector<Scalar> &params,
   //   }
   // }
   if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+    Scalar::clear_all_blueprints();
     if (!params.empty()) {
       typedef typename Scalar::NeuralNetworkType NeuralNetwork;
-      NeuralNetwork net_tau_0(1);
+      NeuralNetwork net_tau_0(1, false);
       net_tau_0.add_linear_layer(NN_ACT_IDENTITY, 1, false);
       net_tau_0.initialize();
       net_tau_0.weights[0] = params[0].evaluate();
       Scalar::add_blueprint("tau_0", {"qd_0"}, net_tau_0);
 
-      NeuralNetwork net_tau_1(1);
+      NeuralNetwork net_tau_1(1, false);
       net_tau_1.add_linear_layer(NN_ACT_IDENTITY, 1, false);
       net_tau_1.initialize();
       net_tau_1.weights[0] = params[1].evaluate();
@@ -213,8 +214,8 @@ class PendulumEstimator
   }
 
   void rollout(const std::vector<ADScalar> &params,
-               std::vector<std::vector<ADScalar>> &output_states,
-               double dt, std::size_t ref_id) const override {
+               std::vector<std::vector<ADScalar>> &output_states, double &dt,
+               std::size_t ref_id) const override {
     typedef CeresUtils<kParameterDim> ADUtils;
     typedef NeuralScalar<ADScalar, ADUtils> NScalar;
     typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
@@ -227,8 +228,8 @@ class PendulumEstimator
     }
   }
   void rollout(const std::vector<double> &params,
-               std::vector<std::vector<double>> &output_states,
-               double dt, std::size_t ref_id) const override {
+               std::vector<std::vector<double>> &output_states, double &dt,
+               std::size_t ref_id) const override {
     typedef NeuralScalar<double, DoubleUtils> NScalar;
     typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
     auto n_params = NUtils::to_neural(params);
@@ -311,11 +312,10 @@ int main(int argc, char *argv[]) {
 
   // XXX verify cost is zero for the true network weights
   double cost;
-  double gradient[4];
+  double gradient[param_dim];
   double my_params[] = {-true_damping[0], -true_damping[1]};
   estimator->compute_loss(my_params, &cost, gradient);
-  std::cout << "Gradient: " << gradient[0] << "  " << gradient[1] << "  "
-            << gradient[2] << "  " << gradient[3] << "  \n";
+  std::cout << "Gradient: " << gradient[0] << "  " << gradient[1] << "\n";
   std::cout << "Cost: " << cost << "\n";
   assert(cost < 1e-4);
 

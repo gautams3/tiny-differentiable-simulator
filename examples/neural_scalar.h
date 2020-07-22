@@ -103,14 +103,14 @@ class NeuralScalar {
 
     auto& data = get_data_();
     auto& blueprint = data.blueprints[network_id];
-    if (blueprint.is_dirty) {
+    // if (blueprint.is_dirty) {
       std::vector<Scalar> input(blueprint.input_names.size());
       for (std::size_t i = 0; i < blueprint.input_names.size(); ++i) {
         input[i] = data.named_scalars[blueprint.input_names[i]]->evaluate();
       }
       blueprint.net.compute(input, blueprint.output_cache);
-      blueprint.is_dirty = false;
-    }
+      // blueprint.is_dirty = false;
+    // }
     return blueprint.output_cache[output_id];
   }
 
@@ -199,8 +199,7 @@ class NeuralScalar {
     GlobalData& data = get_data_();
     if (data.scalar_to_blueprint.find(name) != data.scalar_to_blueprint.end()) {
       // std::cerr << "NeuralScalar named \"" << name
-      //           << "\" was assigned a name but has no registered
-      //           blueprint.\n";
+      //           << "\" was assigned a name but has no registered blueprint.\n";
       // assert(0);
       // return;
       blueprint_id_ = data.scalar_to_blueprint[name];
@@ -257,6 +256,9 @@ class NeuralScalar {
                             const NeuralNetworkType& net) {
     auto& data = get_data_();
     NeuralBlueprint blueprint{input_names, output_names, net};
+    int this_blueprint_id = static_cast<int>(data.blueprints.size());
+
+    // set up mapping from _output_ scalar indices to this blueprint
     for (const auto& name : output_names) {
       if (data.scalar_to_blueprint.find(name) !=
           data.scalar_to_blueprint.end()) {
@@ -267,17 +269,20 @@ class NeuralScalar {
         return false;
       }
       // register name with blueprint indices
-      data.scalar_to_blueprint[name] = static_cast<int>(data.blueprints.size());
+      data.scalar_to_blueprint[name] = this_blueprint_id;
     }
-    for (const auto& name : output_names) {
-      if (data.scalar_to_blueprint.find(name) ==
-          data.scalar_to_blueprint.end()) {
+
+    // set up mapping from _input_ scalar indices to this blueprint
+    for (const auto& name : input_names) {
+      if (data.scalar_input_to_blueprint.find(name) ==
+          data.scalar_input_to_blueprint.end()) {
         data.scalar_input_to_blueprint[name] = {};
       }
       // register name with blueprint indices
       data.scalar_input_to_blueprint[name].push_back(
-          static_cast<int>(data.blueprints.size()));
+          this_blueprint_id);
     }
+
     data.blueprints.push_back(blueprint);
     return true;
   }
