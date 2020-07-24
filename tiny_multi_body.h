@@ -1400,6 +1400,7 @@ class TinyMultiBody {
     TinySpatialTransform base_X_world;
     // compute world point transform for the initial joint angles
     forward_kinematics_q(q, &base_X_world, &links_X_world);
+    if (m_links.empty()) return jac;
     // convert start point in world coordinates to link frame
     const TinyVector3 base_point =
         links_X_world[link_index].apply_inverse(start_point);

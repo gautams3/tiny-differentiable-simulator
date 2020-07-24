@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include <chrono>
+#include <filesystem>
 #include <iostream>
 #include <thread>
 
@@ -94,8 +95,6 @@ struct Laboratory {
       // contact_ground->friction_model = FRICTION_NONE;
       world_ground.default_friction = Scalar(0.5);
     }
-
-    world_tip.default_friction = Scalar(0.25);
   }
 
   ~Laboratory() { delete contact_ground; }
@@ -150,9 +149,39 @@ class PushEstimator
     trajectories.push_back(data);
     target_times.push_back(data.time);
     target_trajectories.push_back(data.states);
-    add_laboratory<double, DoubleUtils>(urdf_cache_double, &labs_double, data,
-                                        sim, sim2);
-    add_laboratory<ADScalar, ADUtils>(urdf_cache_ad, &labs_ad, data, sim, sim2);
+
+    add_laboratory(data, sim, sim2);
+  }
+
+  void add_laboratory(const PushData &data, VisualizerAPI *sim,
+                      VisualizerAPI *sim2) {
+    std::string shape_urdf_filename, surface_urdf_filename, tip_urdf_filename,
+        exterior_filename;
+
+    TinyFileUtils::find_file("mit-push/obj/" + data.shape_name + ".urdf",
+                             shape_urdf_filename);
+    TinyFileUtils::find_file("mit-push/obj/" + data.surface_name + ".urdf",
+                             surface_urdf_filename);
+    TinyFileUtils::find_file("mit-push/obj/tip.urdf", tip_urdf_filename);
+    TinyFileUtils::find_file("mit-push/obj/" + data.shape_name + "_ext.npy",
+                             exterior_filename);
+
+    add_laboratory<double, DoubleUtils>(
+        data.lab_name, shape_urdf_filename, surface_urdf_filename,
+        tip_urdf_filename, exterior_filename, urdf_cache_double, &labs_double,
+        sim, sim2);
+    add_laboratory<ADScalar, ADUtils>(data.lab_name, shape_urdf_filename,
+                                      surface_urdf_filename, tip_urdf_filename,
+                                      exterior_filename, urdf_cache_ad,
+                                      &labs_ad, sim, sim2);
+  }
+
+  void load_laboratories(VisualizerAPI *sim, VisualizerAPI *sim2) {
+    for (const auto &data : trajectories) {
+      if (labs_double.find(data.lab_name) == labs_double.end()) {
+        add_laboratory(data, sim, sim2);
+      }
+    }
   }
 
   void rollout(const std::vector<ADScalar> &params,
@@ -171,25 +200,18 @@ class PushEstimator
  private:
   template <typename Scalar, typename Utils>
   static void add_laboratory(
+      const std::string &lab_name, const std::string &shape_urdf_filename,
+      const std::string &surface_urdf_filename,
+      const std::string &tip_urdf_filename,
+      const std::string &exterior_filename,
       TinyUrdfCache<Scalar, Utils> &urdf_cache,
       std::map<std::string, Laboratory<Scalar, Utils> *> *labs,
-      const PushData &data, VisualizerAPI *sim, VisualizerAPI *sim2) {
-    if (labs->find(data.lab_name) != labs->end()) {
+      VisualizerAPI *sim, VisualizerAPI *sim2) {
+    // only add a new "laboratory" for a novel shape-surface combination
+    if (labs->find(lab_name) != labs->end()) {
       return;
     }
-
-    std::string shape_urdf_filename, surface_urdf_filename, tip_urdf_filename,
-        exterior_filename;
-
-    TinyFileUtils::find_file("mit-push/obj/" + data.shape_name + ".urdf",
-                             shape_urdf_filename);
-    TinyFileUtils::find_file("mit-push/obj/" + data.surface_name + ".urdf",
-                             surface_urdf_filename);
-    TinyFileUtils::find_file("mit-push/obj/tip.urdf", tip_urdf_filename);
-    TinyFileUtils::find_file("mit-push/obj/" + data.shape_name + "_ext.npy",
-                             exterior_filename);
-
-    (*labs)[data.lab_name] = new Laboratory<Scalar, Utils>(
+    (*labs)[lab_name] = new Laboratory<Scalar, Utils>(
         urdf_cache, shape_urdf_filename, surface_urdf_filename,
         tip_urdf_filename, exterior_filename, sim, sim2);
   }
@@ -223,6 +245,12 @@ class PushEstimator
   void rollout(const std::vector<Scalar> &params,
                std::vector<std::vector<Scalar>> &output_states, double &dt,
                std::size_t ref_id, VisualizerAPI *sim = nullptr) const {
+    // printf("Rollout with parameters:");
+    // for (const Scalar &p : params) {
+    //   printf("\t%.5f", Utils::getDouble(p));
+    // }
+    // printf("\n");
+
     const auto &data = trajectories[ref_id];
     dt = data.dt * skip_steps;
     this->dt = dt;
@@ -260,15 +288,24 @@ class PushEstimator
 
       object->forward_dynamics(world_ground.get_gravity());
       object->clear_forces();
+      object->integrate_q(sdt);
+
       transform_points<Scalar, Utils>(lab.object_exterior,
                                       lab.tf_object_exterior, object->m_q[0],
                                       object->m_q[1], object->m_q[3]);
       auto tip_contact =
           compute_contact<Scalar, Utils>(tip, object, lab.tf_object_exterior);
+
+      // XXX friction between tip and object
+      tip_contact.m_friction = Scalar(0.25);  // Scalar(1);
+      lab.tip_contact_model.erp = Scalar(0.001);
+      lab.tip_contact_model.cfm = Scalar(0.000001);
+
       lab.tip_contact_model.resolveCollision({tip_contact}, sdt);
+
       world_ground.step(sdt);
       object->integrate(sdt);
-      object->forward_kinematics();
+      // object->print_state();
 
       if (i % skip_steps == 0) {
         output_states.push_back(
@@ -281,6 +318,7 @@ class PushEstimator
         true_object->m_q[1] = Scalar(data.object_y[i]);
         true_object->m_q[3] = Scalar(data.object_yaw[i]);
         true_object->forward_kinematics();
+        object->forward_kinematics();
 
         PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(tip, *sim);
         PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object,
@@ -295,6 +333,8 @@ class PushEstimator
 };
 
 int main(int argc, char *argv[]) {
+  google::InitGoogleLogging(argv[0]);
+
   typedef double Scalar;
   typedef DoubleUtils Utils;
 
@@ -355,8 +395,28 @@ int main(int argc, char *argv[]) {
   sim->resetSimulation();
   sim->setTimeOut(10);
 
+  // create estimator for single-thread optimization (without PBH) and
+  // visualization
+  PushEstimator frontend_estimator;
+  std::string path = std::filesystem::path(push_filename).parent_path();
+  for (const auto &entry : std::filesystem::directory_iterator(path)) {
+    std::cout << "Loading " << entry.path() << std::endl;
+    frontend_estimator.add_training_dataset(entry.path(), sim, sim2);
+    if (frontend_estimator.trajectories.size() >= 100) {
+      break;
+    }
+  }
+  // frontend_estimator.add_training_dataset(push_filename, sim, sim2);
+  frontend_estimator.use_finite_diff = false;
+  frontend_estimator.minibatch_size = 50;
+  // frontend_estimator.options.line_search_direction_type = ceres::LineSearchDirectionType::STEEPEST_DESCENT;
+  // frontend_estimator.options.line_search_type = ceres::LineSearchType::WOLFE;
+  // frontend_estimator.options.minimizer_type = ceres::MinimizerType::LINE_SEARCH;
+  frontend_estimator.set_bounds = true;
+  frontend_estimator.setup();
+
   std::function<std::unique_ptr<PushEstimator>()> construct_estimator =
-      [&push_filename]() {
+      [&push_filename, &frontend_estimator]() {
         auto estimator = std::make_unique<PushEstimator>();
         estimator->options.minimizer_progress_to_stdout = !USE_PBH;
         estimator->options.max_num_consecutive_invalid_steps = 100;
@@ -368,16 +428,20 @@ int main(int argc, char *argv[]) {
 
         VisualizerAPI *sim_direct = new VisualizerAPI();
         bool isConnected2 = sim_direct->connect(eCONNECT_DIRECT);
-        estimator->add_training_dataset(push_filename, sim_direct, sim_direct);
-        estimator->use_finite_diff = true;
+        // estimator->add_training_dataset(push_filename, sim_direct,
+        // sim_direct);
+        estimator->trajectories = frontend_estimator.trajectories;
+        estimator->target_trajectories = frontend_estimator.target_trajectories;
+        estimator->target_times = frontend_estimator.target_times;
+        estimator->load_laboratories(sim_direct, sim_direct);
+        estimator->use_finite_diff = frontend_estimator.use_finite_diff;
+        estimator->minibatch_size = frontend_estimator.minibatch_size;
+        estimator->options = frontend_estimator.options;
+        estimator->set_bounds = frontend_estimator.set_bounds;
         return estimator;
       };
 
   std::vector<double> best_params;
-  PushEstimator estimator;
-  estimator.add_training_dataset(push_filename, sim, sim2);
-  estimator.use_finite_diff = true;
-  estimator.setup();
 
   // best_params = {0.1000022164, 0.9283739043, 0.1999897444};
   // best_params = {0.5, 0.5, 0.01};
@@ -385,11 +449,11 @@ int main(int argc, char *argv[]) {
 #if USE_PBH
   std::array<double, param_dim> initial_guess;
   for (int i = 0; i < param_dim; ++i) {
-    initial_guess[i] = 0.0;
+    initial_guess[i] = frontend_estimator.parameters[i].value;
   }
   BasinHoppingEstimator<param_dim, PushEstimator> bhe(construct_estimator,
                                                       initial_guess);
-  bhe.time_limit = 100;
+  bhe.time_limit = 300;
   bhe.run();
 
   printf("Optimized parameters:");
@@ -405,26 +469,27 @@ int main(int argc, char *argv[]) {
   }
 #else
   double cost = 0;
-  double gradient[param_dim] = {0,0,0};
-  estimator.compute_loss(estimator.vars(), &cost, gradient);
+  double gradient[param_dim] = {0, 0, 0};
+  frontend_estimator.compute_loss(frontend_estimator.vars(), &cost, gradient);
 
   printf("Cost: %.6f\n", cost);
-
   printf("Gradient:  ");
   for (int i = 0; i < param_dim; ++i) {
     printf("%.6f  ", gradient[i]);
   }
+  printf("\n\n");
+  // return 0;
 
-  auto summary = estimator.solve();
+  auto summary = frontend_estimator.solve();
   std::cout << summary.FullReport() << std::endl;
   std::cout << "Final cost: " << summary.final_cost << "\n";
 
-  for (const auto &p : estimator.parameters) {
+  for (const auto &p : frontend_estimator.parameters) {
     best_params.push_back(p.value);
   }
 
   std::ofstream file("param_evolution.txt");
-  for (const auto &params : estimator.parameter_evolution()) {
+  for (const auto &params : frontend_estimator.parameter_evolution()) {
     for (int i = 0; i < static_cast<int>(params.size()); ++i) {
       file << params[i];
       if (i < static_cast<int>(params.size()) - 1) file << "\t";
@@ -435,7 +500,7 @@ int main(int argc, char *argv[]) {
 #endif
 
   for (int i = 0; i < param_dim; ++i) {
-    const auto &p = estimator.parameters[i];
+    const auto &p = frontend_estimator.parameters[i];
     printf("%s: %.10f\n", p.name.c_str(), best_params[i]);
   }
 
@@ -443,115 +508,16 @@ int main(int argc, char *argv[]) {
   fflush(stdout);
 
   while (true) {
+    std::size_t ref_id =
+        std::size_t(rand()) % frontend_estimator.trajectories.size();
+    ref_id = 92;
+    std::cout << "Simulating trajectory #" << ref_id << "\t"
+              << frontend_estimator.trajectories[ref_id].filename << "\n";
     std::vector<std::vector<double>> output_states;
-    estimator.template rollout<double, DoubleUtils>(best_params, output_states,
-                                                     data.dt, 0, sim);
+    frontend_estimator.template rollout<double, DoubleUtils>(
+        best_params, output_states, data.dt, ref_id, sim);
     std::this_thread::sleep_for(std::chrono::duration<double>(5.));
   }
-
-  return 0;
-
-  TinyUrdfCache<Scalar, Utils> urdf_cache;
-
-  // create duplicate world object to not get any automatic collision response
-  // between object and tip (we create our own contact point for this
-  // interaction)
-  TinyWorld<Scalar, Utils> world, world2;
-  world.set_gravity(TinyVector3<Scalar, Utils>(0., 0., -9.81));
-
-  TinyMultiBody<Scalar, Utils> *ground =
-      urdf_cache.construct(ground_filename, world, sim2, sim);
-  bool ignore_cache = true;
-  TinyMultiBody<Scalar, Utils> *true_object =
-      urdf_cache.construct(object_filename, world2, sim2, sim, ignore_cache);
-  TinyMultiBody<Scalar, Utils> *object =
-      urdf_cache.construct(object_filename, world, sim2, sim, ignore_cache);
-  TinyMultiBody<Scalar, Utils> *tip =
-      urdf_cache.construct(tip_filename, world2, sim2, sim);
-
-  {
-    // set up contact (friction) model for surface <-> object contact
-    delete world.m_mb_constraint_solver;
-    auto *spring_contact =
-        new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
-    spring_contact->spring_k = 1;
-    spring_contact->damper_d = 0.1;
-    spring_contact->mu_static = 0.1;
-    // spring_contact->friction_model = FRICTION_NONE;
-    world.m_mb_constraint_solver = spring_contact;
-    world.default_friction = 0.5;
-  }
-
-  // Choose solver for contact between tip and object
-  TinyMultiBodyConstraintSolver<Scalar, Utils> tip_contact_model;
-  // TinyMultiBodyConstraintSolverSpring<Scalar, Utils> tip_contact_model;
-  // friction between tip and object from the paper
-  world2.default_friction = 0.25;
-
-  fflush(stdout);
-
-  // double dt = 1. / 1000.;
-  double time = 0;
-
-  for (auto &link : true_object->m_links) {
-    for (auto visual_id : link.m_visual_uids1) {
-      b3RobotSimulatorChangeVisualShapeArgs vargs;
-      vargs.m_objectUniqueId = visual_id;
-      vargs.m_hasRgbaColor = true;
-      vargs.m_rgbaColor = btVector4(0.1, 0.6, 0, 0.7);
-      sim->changeVisualShape(vargs);
-    }
-  }
-
-  std::size_t skip_steps = 1;
-  Scalar dt = skip_steps * data.dt;
-
-  printf("dt: %.5f\n", Utils::getDouble(dt));
-
-  while (sim->isConnected()) {
-    printf("Playback...\n");
-
-    object->initialize();
-    object->m_q[0] = data.object_x[0];
-    object->m_q[1] = data.object_y[0];
-    object->m_q[2] = 0.02;
-    object->m_q[3] = (data.object_yaw[0]);
-    object->forward_kinematics();
-    PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object, *sim);
-
-    for (std::size_t i = 0; i < data.time.size(); i += skip_steps) {
-      tip->m_q[0] = data.tip_x[i];
-      tip->m_q[1] = data.tip_y[i];
-      if (i > 0) {
-        tip->m_qd[0] = (data.tip_x[i] - data.tip_x[i - 1]) / data.dt;
-        tip->m_qd[1] = (data.tip_y[i] - data.tip_y[i - 1]) / data.dt;
-      }
-      tip->forward_kinematics();
-      PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(tip, *sim);
-
-      object->forward_dynamics(world.get_gravity());
-      object->clear_forces();
-      auto tip_contact = compute_contact(tip, object, exterior);
-      tip_contact_model.resolveCollision({tip_contact}, dt);
-      world.step(dt);
-      object->integrate(dt);
-      object->forward_kinematics();
-      PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object, *sim);
-
-      true_object->m_q[0] = data.object_x[i];
-      true_object->m_q[1] = data.object_y[i];
-      true_object->m_q[3] = (data.object_yaw[i]);
-      true_object->forward_kinematics();
-      PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(true_object,
-                                                                  *sim);
-
-      std::this_thread::sleep_for(std::chrono::duration<double>(dt));
-    }
-    std::this_thread::sleep_for(std::chrono::duration<double>(5.));
-  }
-
-  delete sim;
-  delete sim2;
 
   return EXIT_SUCCESS;
 }

@@ -228,13 +228,14 @@ struct TinyMultiBodyConstraintSolverSpring
     const TinyScalar two = TinyConstants::two();
     const TinyScalar four = two * two;
     const TinyScalar zero = TinyConstants::zero();
+    const TinyScalar epsilon = TinyConstants::fraction(1, 1000);
 
     TinyScalar vvt = v / v_transition;
-    if (vvt > TinyConstants::fraction(10000, 1)) {
-      printf("vvt:          %.8f\n", TinyConstants::getDouble(vvt));
-      printf("v_transition: %.8f\n", TinyConstants::getDouble(v_transition));
-      vvt = TinyConstants::fraction(10000, 1);
-    }
+    // if (vvt > TinyConstants::fraction(10000, 1)) {
+    //   printf("vvt:          %.8f\n", TinyConstants::getDouble(vvt));
+    //   printf("v_transition: %.8f\n", TinyConstants::getDouble(v_transition));
+    //   vvt = TinyConstants::fraction(10000, 1);
+    // }
 
 #ifdef DEBUG
     printf("mu: %.5f   force: %.5f\n", mu, fn);
@@ -258,7 +259,8 @@ struct TinyMultiBodyConstraintSolverSpring
         // Simplified three-parameter model (Eq. (4.5))
         // Brown "Contact Modelling for Forward Dynamics of Human Motion"
         TinyScalar denom = fourth * vvt * vvt + three_fourth;
-        return fn * (mu * TinyConstants::tanh(four * vvt) +
+        // XXX add epsilon in tanh() to prevent taking gradients close to zero
+        return fn * (mu * TinyConstants::tanh(four * vvt + epsilon) +
                      (mu_static - mu) * vvt / (denom * denom));
       }
       case FRICTION_NEURAL:
@@ -337,20 +339,23 @@ struct TinyMultiBodyConstraintSolverSpring
         TinyVector3 lateral_rel_vel =
             rel_vel - normal_rel_vel * cp.m_world_normal_on_b;
         // lateral_rel_vel.print("lateral_rel_vel");
-        TinyScalar lateral = lateral_rel_vel.length();
+
+        // TODO remove offset
+        TinyScalar lateral = lateral_rel_vel.length(); // + TinyScalar(0.00001);
         // printf("lateral_rel_vel.length(): %.6f\n",
         //        TinyConstants::getDouble(lateral));
 
         TinyVector3 fr_direction1, fr_direction2;
-        if (lateral < TinyConstants::fraction(1, 10000)) {
-          // use the plane space of the contact normal as friction directions
-          cp.m_world_normal_on_b.plane_space(fr_direction1, fr_direction2);
-        } else {
+        // if (lateral < TinyConstants::fraction(1, 1000)) {
+        //   // use the plane space of the contact normal as friction directions
+        //   cp.m_world_normal_on_b.plane_space(fr_direction1, fr_direction2);
+        // } else {
           // use the negative lateral velocity and its orthogonal as friction
           // directions
           fr_direction1 = lateral_rel_vel * (TinyConstants::one() / lateral);
           //        fr_direction2 = fr_direction1.cross(cp.m_world_normal_on_b);
-        }
+        // }
+
         // if (lateral > TinyConstants::fraction(10000, 1)) {
         //   lateral_rel_vel.print("lateral_rel_vel");
         //   printf("lateral_rel_vel.length(): %.6f\n",

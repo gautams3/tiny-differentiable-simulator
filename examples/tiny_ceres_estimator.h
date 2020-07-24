@@ -28,6 +28,8 @@
 #include "ceres_utils.h"
 #include "tiny_double_utils.h"
 
+#define USE_MATPLOTLIB 1
+
 #ifdef USE_MATPLOTLIB
 #include "third_party/matplotlib-cpp/matplotlibcpp.h"
 namespace plt = matplotlibcpp;
@@ -164,11 +166,13 @@ class TinyCeresEstimator : ceres::IterationCallback {
     vars_ = new double[kParameterDim];
     problem_.AddResidualBlock(cost_function_, loss_function, vars_);
 
+    for (int i = 0; i < kParameterDim; ++i) {
+      parameters[i].value = vars_[i];
+    }
     if (set_bounds) {
       for (int i = 0; i < kParameterDim; ++i) {
         problem_.SetParameterLowerBound(vars_, i, parameters[i].minimum);
         problem_.SetParameterUpperBound(vars_, i, parameters[i].maximum);
-        vars_[i] = parameters[i].value;
       }
     }
 
@@ -228,7 +232,7 @@ class TinyCeresEstimator : ceres::IterationCallback {
 
 #ifdef USE_MATPLOTLIB
     template <typename T>
-    void plot_trajectory(const std::vector<std::vector<T>> &states) const {
+    static void plot_trajectory(const std::vector<std::vector<T>> &states) {
       typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils,
                                  CeresUtils<kParameterDim>>
           Utils;
@@ -244,9 +248,23 @@ class TinyCeresEstimator : ceres::IterationCallback {
     }
 #endif
 
+    template <typename T>
+    static void print_states(const std::vector<std::vector<T>> &states) {
+      typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils,
+                                 CeresUtils<kParameterDim>>
+          Utils;
+      for (const auto &s : states) {
+        for (const T &d : s) {
+          printf("%.2f ", Utils::getDouble(d));
+        }
+        printf("\n");
+      }
+    }
+
     // Computes the cost (residual) for input parameters x.
     template <typename T>
     bool operator()(const T *const x, T *residual) const {
+      // ref_indices[0] = 26; //92;
       if (ref_indices.size() > 1) {
         // shuffle indices before minibatching
         std::random_shuffle(ref_indices.begin(), ref_indices.end());
@@ -272,6 +290,8 @@ class TinyCeresEstimator : ceres::IterationCallback {
       }
       int nonfinite = 0;
 
+      std::string ref_id_str = "ref_id:";
+
       for (std::size_t traj_id = 0; traj_id < parent->minibatch_size;
            ++traj_id) {
         const std::size_t ref_id = ref_indices[traj_id];
@@ -283,9 +303,13 @@ class TinyCeresEstimator : ceres::IterationCallback {
         parent->rollout(params, rollout_states, dt, ref_id);
         // printf("dt: %.6f\n", dt);
         // plot_trajectory(rollout_states);
+        // printf("Rollout states:\n");
+        // print_states(rollout_states);
+
+        ref_id_str += " " + std::to_string(ref_id);
 
         const auto &target_states = parent->target_trajectories[ref_id];
-        // plot_trajectory(target_trajectories);
+        // plot_trajectory(target_states);
         const auto &target_times = parent->target_times[ref_id];
         int n_rollout = static_cast<int>(rollout_states.size());
         int n_target = static_cast<int>(target_states.size());
@@ -329,6 +353,9 @@ class TinyCeresEstimator : ceres::IterationCallback {
             const std::vector<T> &left = rollout_states[rollout_i];
             const std::vector<T> &right = rollout_states[rollout_i + 1];
 
+            // printf("left=%f\t", Utils::getDouble(left[2]));
+            // printf("right=%f\t", Utils::getDouble(right[2]));
+
             for (int i = 0; i < kStateDim; ++i) {
               rollout_state[i] = (1. - alpha) * left[i] + alpha * right[i];
             }
@@ -342,14 +369,21 @@ class TinyCeresEstimator : ceres::IterationCallback {
             difference *= difference;
             double dd = Utils::getDouble(difference);
             if (std::isinf(dd) || std::isnan(dd)) {
+//               printf("!!d!! %f\t", dd);
+//               printf("target_states[t][i]=%f\t", target_states[t][i]);
+//               printf("rollout_state[i]=%f\t",
+//                      Utils::getDouble(rollout_state[i]));
+// #ifdef USE_MATPLOTLIB
+//               plot_trajectory(rollout_states);
+// #endif
               ++nonfinite;
               continue;
             } else if (std::abs(dd) > 1e10) {
               ++nonfinite;
               printf(" NONFINITE!!! ");
-#ifdef USE_MATPLOTLIB
-              plot_trajectory(rollout_states);
-#endif
+// #ifdef USE_MATPLOTLIB
+//               plot_trajectory(rollout_states);
+// #endif
               continue;
             }
             // printf("%.3f  ", Utils::getDouble(difference));
@@ -357,7 +391,8 @@ class TinyCeresEstimator : ceres::IterationCallback {
             // discount contribution of errors at later time steps to mitigate
             // gradient explosion on long roll-outs
             // if (parent->divide_cost_by_time_factor != 0. && t > 0) {
-            //   difference /= std::pow(parent->divide_cost_by_time_factor * time,
+            //   difference /= std::pow(parent->divide_cost_by_time_factor *
+            //   time,
             //                          parent->divide_cost_by_time_exponent);
             // }
 
@@ -380,6 +415,7 @@ class TinyCeresEstimator : ceres::IterationCallback {
         for (int ri = 0; ri < kResidualDim; ++ri) {
           printf("%.6f  ", Utils::getDouble(residual[ri]));
         }
+        printf("\t%s", ref_id_str.c_str());
         if (nonfinite > 0) {
           std::cerr << "nonfinite: " << nonfinite;
         }
@@ -466,7 +502,8 @@ class BasinHoppingEstimator {
     for (std::size_t k = 0; k < num_workers; ++k) {
       workers_.emplace_back([this, k, &start_time]() {
         auto estimator = this->estimator_constructor();
-        estimator->setup(new ceres::TrivialLoss); //new ceres::HuberLoss(1.));  // TODO expose this
+        estimator->setup(new ceres::TrivialLoss);  // new ceres::HuberLoss(1.));
+                                                   // // TODO expose this
         if (k == 0) {
           // set initial guess
           estimator->set_params(this->params);

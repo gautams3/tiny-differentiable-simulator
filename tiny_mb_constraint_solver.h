@@ -57,6 +57,9 @@ struct TinyMultiBodyConstraintSolver {
   // Constraint Force Mixing
   TinyScalar cfm{TinyConstants::fraction(1, 100000)};
 
+  // Number of friction force directions
+  int num_friction_dir{1};
+
   /**
    * Projected Gauss-Seidel solver for a MLCP defined by coefficient matrix A
    * and vector b.
@@ -178,7 +181,6 @@ struct TinyMultiBodyConstraintSolver {
     //  i    is for the contact normal
     //  c+i  is for the friction direction towards the lateral velocity
 
-    int num_friction_dir = 1;
     int dof_per_contact = 1 + num_friction_dir;
 
     TinyMatrixXxX jac_con(dof_per_contact * n_c, n_ab);
@@ -202,7 +204,8 @@ struct TinyMultiBodyConstraintSolver {
       TinyMatrix3xX jac_b =
           cp.m_multi_body_b->point_jacobian(cp.m_link_b, world_point_b);
       // TinyMatrix3xX jac_b =
-      //     cp.m_multi_body_b->point_jacobian_fd(mb_b->m_q, cp.m_link_b, world_point_b);
+      //     cp.m_multi_body_b->point_jacobian_fd(mb_b->m_q, cp.m_link_b,
+      //     world_point_b);
       // jac_b.print("jac_b");
       TinyVectorX jac_b_i = jac_b.mul_transpose(cp.m_world_normal_on_b);
       // jac_b_i.print("jac_b_i");
@@ -245,7 +248,7 @@ struct TinyMultiBodyConstraintSolver {
       // friction direction
       TinyVector3 lateral_rel_vel =
           rel_vel - normal_rel_vel * cp.m_world_normal_on_b;
-      lateral_rel_vel.print("lateral_rel_vel");
+      // lateral_rel_vel.print("lateral_rel_vel");
       const TinyScalar lateral = lateral_rel_vel.length();
       // printf("lateral_rel_vel.length(): %.6f\n",
       //        TinyConstants::getDouble(lateral));

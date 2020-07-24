@@ -17,7 +17,7 @@
 #ifndef PYBULLET_URDF_IMPORT_H
 #define PYBULLET_URDF_IMPORT_H
 
-// #include "SharedMemory/b3RobotSimulatorClientAPI_NoDirect.h"
+#include "SharedMemory/b3RobotSimulatorClientAPI_NoDirect.h"
 #include "tiny_multi_body.h"
 #include "tiny_urdf_structures.h"
 

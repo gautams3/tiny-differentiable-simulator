@@ -319,10 +319,10 @@ class NeuralScalar {
       std::vector<Scalar> net_params(params.begin() + index,
                                      params.begin() + next_index);
       blueprint.net.set_parameters(net_params);
-#if DEBUG
-      printf("Assigned %d parameters to network of scalar \"%s\".\n", num_net,
-             entry.first.c_str());
-#endif
+// #if DEBUG
+//       printf("Assigned %d parameters to network of scalar \"%s\".\n", num_net,
+//              entry.first.c_str());
+// #endif
       index = next_index;
     }
   }

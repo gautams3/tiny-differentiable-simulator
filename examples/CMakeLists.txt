@@ -122,7 +122,7 @@ if (Bullet_FOUND)
         target_link_libraries(ceres_estimation pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES})
 
-        # set(DUSE_MATPLOTLIB true)
+        set(DUSE_MATPLOTLIB true)
         add_executable(ceres_estimation_real ceres_estimation_real.cpp ${TDS_HDRS})
         target_link_libraries(ceres_estimation_real pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES} python2.7)
@@ -138,13 +138,13 @@ if (Bullet_FOUND)
 
         add_executable(neural_joint neural_joint.cpp ${TDS_HDRS})
         target_link_libraries(neural_joint pybullet_visualizer_api ${DL}
-                ${CERES_LIBRARIES})    
+                ${CERES_LIBRARIES})  
 
         if (HighFive_FOUND)
             include_directories(${HighFive_INCLUDE_DIRS})
             add_executable(neural_push neural_push.cpp ${TDS_HDRS})
             target_link_libraries(neural_push pybullet_visualizer_api ${DL}
-                HighFive ${CERES_LIBRARIES})      
+                HighFive ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES})      
         endif (HighFive_FOUND)
 
         add_executable(policy_optimization policy_optimization.cpp ${TDS_HDRS})

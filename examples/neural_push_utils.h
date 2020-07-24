@@ -243,7 +243,7 @@ TinyContactPointMultiBody<Scalar, Utils> compute_contact(
   cp.m_multi_body_a = tip;
   cp.m_link_a = 1;
   cp.m_multi_body_b = object;
-  cp.m_link_b = 3;
+  cp.m_link_b = 2;
   const std::size_t num_ext = exterior.Shape()[0];
   if (num_ext == 0) {
     std::cerr << "Error: Empty exterior passed to compute_contact!\n";
