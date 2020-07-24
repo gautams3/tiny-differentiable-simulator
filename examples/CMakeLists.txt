@@ -147,6 +147,10 @@ if (Bullet_FOUND)
                 HighFive ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES})      
         endif (HighFive_FOUND)
 
+        add_executable(neural_heightfield neural_heightfield.cpp ${TDS_HDRS})
+        target_link_libraries(neural_heightfield pybullet_visualizer_api ${DL}
+            ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES})  
+
         add_executable(policy_optimization policy_optimization.cpp ${TDS_HDRS})
         target_link_libraries(policy_optimization pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES})

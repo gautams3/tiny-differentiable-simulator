@@ -235,7 +235,7 @@ template <typename Scalar, typename Utils>
 TinyContactPointMultiBody<Scalar, Utils> compute_contact(
     TinyMultiBody<Scalar, Utils> *tip, TinyMultiBody<Scalar, Utils> *object,
     const TinyDataset<Scalar, 2> &exterior,
-    const Scalar &tip_radius = Scalar(0.0045)) {
+    const Scalar &tip_radius = Utils::fraction(45, 10000)) {  // 0.0045
   const Scalar tip_x = tip->m_q[0];
   const Scalar tip_y = tip->m_q[1];
   // printf("tip:  [%.6f %.6f]\n", tip_x, tip_y);

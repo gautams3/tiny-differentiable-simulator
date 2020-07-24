@@ -307,11 +307,13 @@ struct TinyMultiBodyConstraintSolverSpring
         const TinyVector3& world_point_a = cp.m_world_point_on_a;
         const TinyVector3& world_point_b = cp.m_world_point_on_b;
         const TinyVector3& world_normal = -cp.m_world_normal_on_b;  // !!!
-        TinyMatrix3xX jac_a = mb_a->point_jacobian(cp.m_link_a, world_point_a);
-        TinyMatrix3xX jac_b = mb_b->point_jacobian(cp.m_link_b, world_point_b);
-        // TinyMatrix3xX jac_a = mb_a->point_jacobian_fd(mb_a->m_q, cp.m_link_a,
+        // TinyMatrix3xX jac_a = mb_a->point_jacobian(cp.m_link_a,
         // world_point_a); TinyMatrix3xX jac_b =
-        // mb_b->point_jacobian_fd(mb_b->m_q, cp.m_link_b, world_point_b);
+        // mb_b->point_jacobian(cp.m_link_b, world_point_b);
+        TinyMatrix3xX jac_a =
+            mb_a->point_jacobian_fd(mb_a->m_q, cp.m_link_a, world_point_a);
+        TinyMatrix3xX jac_b =
+            mb_b->point_jacobian_fd(mb_b->m_q, cp.m_link_b, world_point_b);
         // jac_b.print("jac_b_fd");
 
         TinyVectorX qd_a(mb_a->m_qd);
@@ -332,16 +334,17 @@ struct TinyMultiBodyConstraintSolverSpring
         tau_a += jac_a.mul_transpose(force_vector);
         tau_b -= jac_b.mul_transpose(force_vector);
 
-        if (friction_model == FRICTION_NONE) {
-          continue;
-        }
+        // if (friction_model == FRICTION_NONE) {
+        // continue;
+        // }
         // unilateral friction force
         TinyVector3 lateral_rel_vel =
             rel_vel - normal_rel_vel * cp.m_world_normal_on_b;
         // lateral_rel_vel.print("lateral_rel_vel");
 
         // TODO remove offset
-        TinyScalar lateral = lateral_rel_vel.length(); // + TinyScalar(0.00001);
+        TinyScalar lateral =
+            lateral_rel_vel.length();  // + TinyScalar(0.00001);
         // printf("lateral_rel_vel.length(): %.6f\n",
         //        TinyConstants::getDouble(lateral));
 
@@ -350,10 +353,10 @@ struct TinyMultiBodyConstraintSolverSpring
         //   // use the plane space of the contact normal as friction directions
         //   cp.m_world_normal_on_b.plane_space(fr_direction1, fr_direction2);
         // } else {
-          // use the negative lateral velocity and its orthogonal as friction
-          // directions
-          fr_direction1 = lateral_rel_vel * (TinyConstants::one() / lateral);
-          //        fr_direction2 = fr_direction1.cross(cp.m_world_normal_on_b);
+        // use the negative lateral velocity and its orthogonal as friction
+        // directions
+        fr_direction1 = lateral_rel_vel * (TinyConstants::one() / lateral);
+        // fr_direction2 = fr_direction1.cross(cp.m_world_normal_on_b);
         // }
 
         // if (lateral > TinyConstants::fraction(10000, 1)) {
@@ -364,18 +367,38 @@ struct TinyMultiBodyConstraintSolverSpring
         //   cp.m_world_normal_on_b.print("cp.m_world_normal_on_b");
         //   // lateral = TinyConstants::fraction(10000, 1);
         // }
+
         TinyScalar friction =
             compute_friction_force(force_normal, lateral, cp.m_friction);
         // if (friction > TinyConstants::fraction(10000, 1)) {
         // printf("friction: %.6f\n", TinyConstants::getDouble(friction));
 
-        // printf("force_normal: %.6f\n", TinyConstants::getDouble(force_normal));
-        // printf("lateral: %.6f\n", TinyConstants::getDouble(lateral));
-        // friction = TinyConstants::fraction(10000, 1);
+        // printf("force_normal: %.6f\n",
+        // TinyConstants::getDouble(force_normal)); printf("lateral: %.6f\n",
+        // TinyConstants::getDouble(lateral)); friction =
+        // TinyConstants::fraction(10000, 1);
         // }
         TinyVector3 friction_vector = fr_direction1 * friction;
+
+        if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
+          force_normal.assign("friction/fn");
+          world_point_a.m_x.assign("friction/point.x");
+          world_point_a.m_y.assign("friction/point.y");
+          world_point_a.m_z.assign("friction/point.z");
+          rel_vel.m_x.assign("friction/rel_vel.x");
+          rel_vel.m_y.assign("friction/rel_vel.y");
+          rel_vel.m_z.assign("friction/rel_vel.z");
+          friction_vector.m_x.assign("friction/fr_vec.x");
+          friction_vector.m_y.assign("friction/fr_vec.y");
+          friction_vector.m_z.assign("friction/fr_vec.z");
+        }
+
         tau_a += jac_a.mul_transpose(friction_vector);
         tau_b -= jac_b.mul_transpose(friction_vector);
+
+        // friction_vector = fr_direction2 * friction;
+        // tau_a += jac_a.mul_transpose(friction_vector);
+        // tau_b -= jac_b.mul_transpose(friction_vector);
       }
     }
     // apply forces

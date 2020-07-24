@@ -7,7 +7,8 @@
 struct NeuralAugmentation {
   std::vector<TinyNeuralNetworkSpecification> specs;
 
-  std::vector<std::pair<std::string, std::vector<std::string>>> output_inputs;
+  std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>
+      output_inputs;
 
   int hidden_layers = 2;
   int hidden_units = 5;
@@ -18,7 +19,6 @@ struct NeuralAugmentation {
   // L2 regularization term for upper layers
   double upper_l2_regularization{1};
 
-  
   void add_wiring(const std::string &output,
                   const std::vector<std::string> &inputs) {
     // TODO consider allowing biases on inputs?
@@ -29,7 +29,22 @@ struct NeuralAugmentation {
     }
     // output layer
     spec.add_linear_layer(NN_ACT_IDENTITY, 1);
-    output_inputs.push_back(std::make_pair(output, inputs));
+    output_inputs.push_back(
+        std::make_pair(std::vector<std::string>{output}, inputs));
+    specs.push_back(spec);
+  }
+
+  void add_wiring(const std::vector<std::string> &outputs,
+                  const std::vector<std::string> &inputs) {
+    // TODO consider allowing biases on inputs?
+    TinyNeuralNetworkSpecification spec(static_cast<int>(inputs.size()), false);
+    // define overparameterized NN
+    for (int li = 0; li < hidden_layers; ++li) {
+      spec.add_linear_layer(activation_fn, hidden_units);
+    }
+    // output layer
+    spec.add_linear_layer(NN_ACT_IDENTITY, 1);
+    output_inputs.push_back(std::make_pair(outputs, inputs));
     specs.push_back(spec);
   }
 
@@ -56,7 +71,8 @@ struct NeuralAugmentation {
   template <std::size_t ParameterDim>
   void assign_estimation_parameters(
       std::array<EstimationParameter, ParameterDim> &params,
-      std::size_t param_index_offset = 0,
+      std::size_t param_index_offset = 0, bool apply_l1_regularization = true,
+      bool apply_l2_regularization = true,
       TinyNeuralNetworkInitialization init_method = NN_INIT_XAVIER) const {
     if (num_total_parameters() > ParameterDim) {
       std::cerr << "Error: at least " << num_total_parameters()
@@ -66,7 +82,11 @@ struct NeuralAugmentation {
     }
     std::size_t pi = param_index_offset;
     for (std::size_t i = 0; i < specs.size(); ++i) {
-      std::string net_prefix = "net_" + output_inputs[i].first + "_";
+      std::string output_name = "net";
+      for (const auto& output : output_inputs[i].first) {
+        output_name += "_" + output;
+      }
+      std::string net_prefix = output_name + "_";
       // create sensible initialization for network weights
       std::vector<double> init_weights, init_biases;
       specs[i].template initialize<double, DoubleUtils>(
@@ -74,7 +94,7 @@ struct NeuralAugmentation {
 
       specs[i].template save_graphviz<double, DoubleUtils>(
           "init_net_" + std::to_string(i) + ".dot", output_inputs[i].second,
-          {output_inputs[i].first}, init_weights, init_biases);
+          output_inputs[i].first, init_weights, init_biases);
 
       int num_first_layer_weights =
           specs[i].num_units(1) * specs[i].input_dim();
@@ -83,10 +103,10 @@ struct NeuralAugmentation {
         params[pi].minimum = -0.1;
         params[pi].maximum = 0.1;
         params[pi].value = init_weights[wi];
-        if (wi < num_first_layer_weights) {
+        if (apply_l1_regularization && wi < num_first_layer_weights) {
           // L1 lasso on input weights encourages input sparsity
           params[pi].l1_regularization = input_lasso_regularization;
-        } else {
+        } else if (apply_l2_regularization) {
           // L2 regularization of weights in upper layers
           params[pi].l2_regularization = upper_l2_regularization;
         }

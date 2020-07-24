@@ -6,6 +6,7 @@
 #include <iostream>
 #include <thread>
 
+#include "neural_augmentation.h"
 #include "neural_push_utils.h"
 #include "pybullet_visualizer_api.h"
 #include "tiny_ceres_estimator.h"
@@ -18,7 +19,7 @@
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
 // whether to use Parallel Basin Hopping
-#define USE_PBH true
+#define USE_PBH false
 const int param_dim = 3;
 const int state_dim = 3;
 const ResidualMode res_mode = RES_MODE_1D;
@@ -118,7 +119,11 @@ class PushEstimator
 
   std::size_t skip_steps = 10;
 
-  PushEstimator() : CeresEstimator(0.0) {
+  NeuralAugmentation neural_augmentation;
+  bool use_neural_augmentation{true};
+
+  PushEstimator(bool use_neural_augmentation = true)
+      : CeresEstimator(0.0), use_neural_augmentation(use_neural_augmentation) {
     parameters[0] = {"mu_kinetic", 0.5, 0.1, 1.5};
     parameters[1] = {"mu_static", 0.5, 0.1, 1.5};
     parameters[2] = {"v_transition", 0.01, 0.0001, 0.2};
@@ -129,6 +134,13 @@ class PushEstimator
     //                                           double(rand()) / RAND_MAX,
     //                                           -1., 1., regularization};
     // }
+
+    if (use_neural_augmentation) {
+      bool apply_l1_regularization = false;
+      bool apply_l2_regularization = true;
+      neural_augmentation.assign_estimation_parameters(
+          parameters, 3, apply_l1_regularization, apply_l2_regularization);
+    }
     for (const auto &p : parameters) {
       initial_params.push_back(p.value);
     }
@@ -187,12 +199,36 @@ class PushEstimator
   void rollout(const std::vector<ADScalar> &params,
                std::vector<std::vector<ADScalar>> &output_states, double &dt,
                std::size_t ref_id) const override {
+    if (use_neural_augmentation) {
+      typedef NeuralScalar<ADScalar, ADUtils> NScalar;
+      typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
+      auto n_params = NUtils::to_neural(params);
+      std::vector<std::vector<NScalar>> n_output_states;
+      this->template rollout<NScalar, NUtils>(n_params, n_output_states, dt,
+                                              ref_id);
+      for (const auto &state : n_output_states) {
+        output_states.push_back(NUtils::from_neural(state));
+      }
+      return;
+    }
     this->template rollout<ADScalar, ADUtils>(params, output_states, dt,
                                               ref_id);
   }
   void rollout(const std::vector<double> &params,
                std::vector<std::vector<double>> &output_states, double &dt,
                std::size_t ref_id) const override {
+    if (use_neural_augmentation) {
+      typedef NeuralScalar<double, DoubleUtils> NScalar;
+      typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
+      auto n_params = NUtils::to_neural(params);
+      std::vector<std::vector<NScalar>> n_output_states;
+      this->template rollout<NScalar, NUtils>(n_params, n_output_states, dt,
+                                              ref_id);
+      for (const auto &state : n_output_states) {
+        output_states.push_back(NUtils::from_neural(state));
+      }
+      return;
+    }
     this->template rollout<double, DoubleUtils>(params, output_states, dt,
                                                 ref_id);
   }
@@ -250,6 +286,9 @@ class PushEstimator
     //   printf("\t%.5f", Utils::getDouble(p));
     // }
     // printf("\n");
+    if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
+      neural_augmentation.instantiate(params);
+    }
 
     const auto &data = trajectories[ref_id];
     dt = data.dt * skip_steps;
@@ -408,10 +447,12 @@ int main(int argc, char *argv[]) {
   }
   // frontend_estimator.add_training_dataset(push_filename, sim, sim2);
   frontend_estimator.use_finite_diff = false;
-  frontend_estimator.minibatch_size = 50;
-  // frontend_estimator.options.line_search_direction_type = ceres::LineSearchDirectionType::STEEPEST_DESCENT;
+  frontend_estimator.minibatch_size = 1;  // 50;
+  // frontend_estimator.options.line_search_direction_type =
+  // ceres::LineSearchDirectionType::STEEPEST_DESCENT;
   // frontend_estimator.options.line_search_type = ceres::LineSearchType::WOLFE;
-  // frontend_estimator.options.minimizer_type = ceres::MinimizerType::LINE_SEARCH;
+  // frontend_estimator.options.minimizer_type =
+  // ceres::MinimizerType::LINE_SEARCH;
   frontend_estimator.set_bounds = true;
   frontend_estimator.setup();
 

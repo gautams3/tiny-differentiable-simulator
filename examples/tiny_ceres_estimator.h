@@ -265,10 +265,10 @@ class TinyCeresEstimator : ceres::IterationCallback {
     template <typename T>
     bool operator()(const T *const x, T *residual) const {
       // ref_indices[0] = 26; //92;
-      if (ref_indices.size() > 1) {
-        // shuffle indices before minibatching
-        std::random_shuffle(ref_indices.begin(), ref_indices.end());
-      }
+      // if (ref_indices.size() > 1) {
+      //   // shuffle indices before minibatching
+      //   std::random_shuffle(ref_indices.begin(), ref_indices.end());
+      // }
 
       // select the right scalar traits based on the type of the input
       typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils,
