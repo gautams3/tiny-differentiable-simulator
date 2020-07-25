@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define NEURAL_SIM 1
+
 #include <fenv.h>
 #include <iostream>
 #include <string>
@@ -156,7 +158,29 @@ int main(int argc, char *argv[]) {
   TinyDataset<double, 3> dataset = reader.Read();
 
   // Setup neural augmentation.
-  augmentation.add_wiring();
+  for (std::size_t joint = 0; joint < kJoints - 1; ++joint) {
+    std::vector<std::string> inputs;
+    for (std::size_t i : {joint, joint + 1}) {
+      for (const std::string &info : {"pos", "vel"}) {
+        for (const std::string &dim : {"x", "y", "yaw"}) {
+          inputs.push_back("link_" + std::to_string(joint) + "/" + info + "/" +
+                           dim);
+        }
+      }
+    }
+
+    std::vector<std::string> outputs;
+    for (std::size_t i : {joint, joint + 1}) {
+      for (const std::string &info : {"external_force"}) {
+        for (const std::string &dim : {"x", "y", "yaw"}) {
+          outputs.push_back("link_" + std::to_string(joint) + "/" + info + "/" +
+                            dim);
+        }
+      }
+    }
+
+    augmentation.add_wiring(outputs, inputs);
+  }
 
   // Test rollout.
   std::vector<State<double>> rollout_trajectory_states;
