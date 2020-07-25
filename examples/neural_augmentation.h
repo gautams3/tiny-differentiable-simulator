@@ -68,6 +68,16 @@ struct NeuralAugmentation {
     }
   }
 
+  template <typename Scalar, typename Utils>
+  void instantiate(const std::vector<NeuralScalar<Scalar, Utils>> &params,
+                   std::size_t param_index_offset = 0) const {
+    std::vector<Scalar> iparams(params.size());
+    for (std::size_t i = 0; i < params.size(); ++i) {
+      iparams[i] = params[i].evaluate();
+    }
+    this->template instantiate<Scalar, Utils>(iparams);
+  }
+
   template <std::size_t ParameterDim>
   void assign_estimation_parameters(
       std::array<EstimationParameter, ParameterDim> &params,
@@ -83,7 +93,7 @@ struct NeuralAugmentation {
     std::size_t pi = param_index_offset;
     for (std::size_t i = 0; i < specs.size(); ++i) {
       std::string output_name = "net";
-      for (const auto& output : output_inputs[i].first) {
+      for (const auto &output : output_inputs[i].first) {
         output_name += "_" + output;
       }
       std::string net_prefix = output_name + "_";

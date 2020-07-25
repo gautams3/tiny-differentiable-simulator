@@ -209,7 +209,7 @@ class PendulumEstimator
 
   void rollout(const std::vector<ADScalar> &params,
                std::vector<std::vector<ADScalar>> &output_states,
-               double dt, std::size_t ref_id) const override {
+               double& dt, std::size_t ref_id) const override {
     typedef CeresUtils<kParameterDim> ADUtils;
     typedef NeuralScalar<ADScalar, ADUtils> NScalar;
     typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
@@ -223,7 +223,7 @@ class PendulumEstimator
   }
   void rollout(const std::vector<double> &params,
                std::vector<std::vector<double>> &output_states,
-               double dt, std::size_t ref_id) const override {
+               double& dt, std::size_t ref_id) const override {
     typedef NeuralScalar<double, DoubleUtils> NScalar;
     typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
     auto n_params = NUtils::to_neural(params);

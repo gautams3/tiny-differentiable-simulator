@@ -20,6 +20,7 @@ typedef PyBulletVisualizerAPI VisualizerAPI;
 
 // whether to use Parallel Basin Hopping
 #define USE_PBH false
+#define USE_NEURAL_AUGMENTATION true
 const int param_dim = 3;
 const int state_dim = 3;
 const ResidualMode res_mode = RES_MODE_1D;
@@ -29,6 +30,13 @@ const int residual_dim =
 
 typedef ceres::Jet<double, param_dim> ADScalar;
 typedef CeresUtils<param_dim> ADUtils;
+
+#if USE_NEURAL_AUGMENTATION
+typedef NeuralScalar<double, DoubleUtils> NDScalar;
+typedef NeuralScalarUtils<double, DoubleUtils> NDUtils;
+typedef NeuralScalar<ADScalar, ADUtils> NAScalar;
+typedef NeuralScalarUtils<ADScalar, ADUtils> NAUtils;
+#endif
 
 template <typename Scalar, typename Utils>
 struct Laboratory {
@@ -90,11 +98,11 @@ struct Laboratory {
       world_ground.m_mb_constraint_solver = contact_ground;
 
       // use some sensible initial settings
-      contact_ground->spring_k = Scalar(1);
-      contact_ground->damper_d = Scalar(0.1);
-      contact_ground->mu_static = Scalar(0.1);
+      contact_ground->spring_k = Utils::scalar_from_double(1);
+      contact_ground->damper_d = Utils::scalar_from_double(0.1);
+      contact_ground->mu_static = Utils::scalar_from_double(0.1);
       // contact_ground->friction_model = FRICTION_NONE;
-      world_ground.default_friction = Scalar(0.5);
+      world_ground.default_friction = Utils::scalar_from_double(0.5);
     }
   }
 
@@ -252,11 +260,9 @@ class PushEstimator
         tip_urdf_filename, exterior_filename, sim, sim2);
   }
 
-  template <typename Scalar>
-  constexpr std::conditional_t<std::is_same_v<Scalar, double>,
-                               Laboratory<double, DoubleUtils> &,
-                               Laboratory<ADScalar, ADUtils> &>
-  get_lab(const std::string &lab_name) const {
+  template <typename Scalar, typename Utils>
+  constexpr Laboratory<Scalar, Utils> &get_lab(
+      const std::string &lab_name) const {
     if constexpr (std::is_same_v<Scalar, double>) {
       return *(labs_double[lab_name]);
     } else {
@@ -286,8 +292,8 @@ class PushEstimator
     //   printf("\t%.5f", Utils::getDouble(p));
     // }
     // printf("\n");
-    if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
-      neural_augmentation.instantiate(params);
+    if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+      neural_augmentation.template instantiate<Scalar, Utils>(params);
     }
 
     const auto &data = trajectories[ref_id];
@@ -295,7 +301,7 @@ class PushEstimator
     this->dt = dt;
 
     Laboratory<Scalar, Utils> &lab =
-        this->template get_lab<Scalar>(data.lab_name);
+        this->template get_lab<Scalar, Utils>(data.lab_name);
     auto *tip = lab.tip;
     tip->initialize();
 
@@ -305,23 +311,25 @@ class PushEstimator
 
     auto *object = lab.object;
     object->initialize();
-    object->m_q[0] = Scalar(data.object_x[0]);
-    object->m_q[1] = Scalar(data.object_y[0]);
-    object->m_q[2] = Scalar(0.005);  // initial object height
-    object->m_q[3] = Scalar(data.object_yaw[0]);
+    object->m_q[0] = Utils::scalar_from_double(data.object_x[0]);
+    object->m_q[1] = Utils::scalar_from_double(data.object_y[0]);
+    object->m_q[2] = Utils::scalar_from_double(0.005);  // initial object height
+    object->m_q[3] = Utils::scalar_from_double(data.object_yaw[0]);
     object->forward_kinematics();
 
     auto &world_ground = lab.world_ground;
 
     double sim_dt = data.dt;
-    const Scalar sdt = Scalar(sim_dt);
+    const Scalar sdt = Utils::scalar_from_double(sim_dt);
 
     for (std::size_t i = 0; i < data.time.size(); ++i) {
-      tip->m_q[0] = Scalar(data.tip_x[i]);
-      tip->m_q[1] = Scalar(data.tip_y[i]);
+      tip->m_q[0] = Utils::scalar_from_double(data.tip_x[i]);
+      tip->m_q[1] = Utils::scalar_from_double(data.tip_y[i]);
       if (i > 0) {
-        tip->m_qd[0] = Scalar((data.tip_x[i] - data.tip_x[i - 1]) / sim_dt);
-        tip->m_qd[1] = Scalar((data.tip_y[i] - data.tip_y[i - 1]) / sim_dt);
+        tip->m_qd[0] = Utils::scalar_from_double(
+            (data.tip_x[i] - data.tip_x[i - 1]) / sim_dt);
+        tip->m_qd[1] = Utils::scalar_from_double(
+            (data.tip_y[i] - data.tip_y[i - 1]) / sim_dt);
       }
       tip->forward_kinematics();
 
@@ -336,9 +344,10 @@ class PushEstimator
           compute_contact<Scalar, Utils>(tip, object, lab.tf_object_exterior);
 
       // XXX friction between tip and object
-      tip_contact.m_friction = Scalar(0.25);  // Scalar(1);
-      lab.tip_contact_model.erp = Scalar(0.001);
-      lab.tip_contact_model.cfm = Scalar(0.000001);
+      tip_contact.m_friction =
+          Utils::scalar_from_double(0.25);  // Utils::scalar_from_double(1);
+      lab.tip_contact_model.erp = Utils::scalar_from_double(0.001);
+      lab.tip_contact_model.cfm = Utils::scalar_from_double(0.000001);
 
       lab.tip_contact_model.resolveCollision({tip_contact}, sdt);
 
@@ -353,9 +362,9 @@ class PushEstimator
 
       if (sim) {
         TinyMultiBody<Scalar, Utils> *true_object = lab.true_object;
-        true_object->m_q[0] = Scalar(data.object_x[i]);
-        true_object->m_q[1] = Scalar(data.object_y[i]);
-        true_object->m_q[3] = Scalar(data.object_yaw[i]);
+        true_object->m_q[0] = Utils::scalar_from_double(data.object_x[i]);
+        true_object->m_q[1] = Utils::scalar_from_double(data.object_y[i]);
+        true_object->m_q[3] = Utils::scalar_from_double(data.object_yaw[i]);
         true_object->forward_kinematics();
         object->forward_kinematics();
 
@@ -364,8 +373,7 @@ class PushEstimator
                                                                     *sim);
         PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(true_object,
                                                                     *sim);
-        std::this_thread::sleep_for(
-            std::chrono::duration<double>(Utils::getDouble(sim_dt)));
+        std::this_thread::sleep_for(std::chrono::duration<double>(sim_dt));
       }
     }
   }

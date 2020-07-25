@@ -314,10 +314,10 @@ int main(int argc, char* argv[]) {
   int sphere_target_bl = make_sphere(sim, 0.2f, 0.5f, 1);
 
   GaitGenerator gait(dt);
-  gait.step_length = 0.2;
-  gait.step_height = 0.25;
+  gait.step_length = 0.4;
+  gait.step_height = 0.35;
   gait.lift_ratio = 0.3;
-  gait.period_length = 0.5;
+  gait.period_length = 1.5;
   int walking_start = 500;  // step number when to start walking (first settle)
 
   auto* servo = new TinyServoActuator<double, DoubleUtils>(
@@ -380,7 +380,7 @@ int main(int argc, char* argv[]) {
             target.position.m_z = 0;
           }
         } else if (step > walking_start) {
-        if (time < 1.0)
+        // if (time < 1.0)
           gait.compute(time - walking_start * dt,
                        inverse_kinematics.targets[0].position,
                        inverse_kinematics.targets[1].position,
