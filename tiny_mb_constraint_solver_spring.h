@@ -24,6 +24,10 @@
 
 //#define DEBUG
 
+#ifdef NEURAL_SIM
+#include "examples/neural_scalar.h"
+#endif
+
 enum TinyVelocitySmoothingMethod {
   SMOOTH_VEL_NONE = 0,
   SMOOTH_VEL_SIGMOID,
@@ -344,7 +348,7 @@ struct TinyMultiBodyConstraintSolverSpring
 
         // TODO remove offset
         TinyScalar lateral =
-            lateral_rel_vel.length();  // + TinyScalar(0.00001);
+            lateral_rel_vel.length(); // + TinyConstants::scalar_from_double(0.001);
         // printf("lateral_rel_vel.length(): %.6f\n",
         //        TinyConstants::getDouble(lateral));
 

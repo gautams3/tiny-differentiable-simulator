@@ -21,9 +21,17 @@ typedef PyBulletVisualizerAPI VisualizerAPI;
 // whether to use Parallel Basin Hopping
 #define USE_PBH false
 #define USE_NEURAL_AUGMENTATION true
-const int param_dim = 3;
 const int state_dim = 3;
 const ResidualMode res_mode = RES_MODE_1D;
+
+#if USE_NEURAL_AUGMENTATION
+// const int param_dim = 69;
+// const int param_dim = 45;
+// const int param_dim = 105;
+const int param_dim = 143;
+#else
+const int param_dim = 3;
+#endif
 
 const int residual_dim =
     TinyCeresEstimator<param_dim, state_dim, res_mode>::kResidualDim;
@@ -134,25 +142,7 @@ class PushEstimator
 
   NeuralAugmentation neural_augmentation;
 
-  PushEstimator() : CeresEstimator(0.0) {
-    parameters[0] = {"mu_kinetic", 0.5, 0.1, 1.5};
-    parameters[1] = {"mu_static", 0.5, 0.1, 1.5};
-    parameters[2] = {"v_transition", 0.01, 0.0001, 0.2};
-    // for (int i = 0; i < neural_param_dim; ++i) {
-    //   double regularization = 1;
-    //   parameters[i + analytical_param_dim] = {"nn_weight_" +
-    //   std::to_string(i),
-    //                                           double(rand()) / RAND_MAX,
-    //                                           -1., 1., regularization};
-    // }
-
-#if USE_NEURAL_AUGMENTATION
-    neural_augmentation.assign_estimation_parameters(parameters, 3);
-#endif
-    for (const auto &p : parameters) {
-      initial_params.push_back(p.value);
-    }
-  }
+  PushEstimator() : CeresEstimator(0.0) {}
 
   ~PushEstimator() {
     for (auto &entry : labs_ad) {
@@ -161,6 +151,28 @@ class PushEstimator
     for (auto &entry : labs_double) {
       delete entry.second;
     }
+  }
+
+  ceres::Problem &setup(ceres::LossFunction *loss_function = nullptr) override {
+    parameters[0] = {"mu_kinetic", 0.5, 0.1, 1.5};
+    parameters[1] = {"mu_static", 0.5, 0.1, 1.5};
+    parameters[2] = {"v_transition", 0.01, 0.0001, 0.2};
+
+#if USE_NEURAL_AUGMENTATION
+    neural_augmentation.assign_estimation_parameters(parameters, 3); //, NN_INIT_ZERO);
+    for (int i = 3; i < param_dim; ++i) {
+      parameters[i].value *= 0.001;
+      // parameters[i].value = 0.0;
+      // if (i > 19) {
+      //   parameters[i].value += 0.001; // nonzero bias
+      // }
+    }
+#endif
+    for (const auto &p : parameters) {
+      initial_params.push_back(p.value);
+    }
+
+    return CeresEstimator::setup(loss_function);
   }
 
   void add_training_dataset(const std::string &h5_filename, VisualizerAPI *sim,
@@ -207,6 +219,7 @@ class PushEstimator
   void rollout(const std::vector<ADScalar> &params,
                std::vector<std::vector<ADScalar>> &output_states, double &dt,
                std::size_t ref_id) const override {
+                 printf("rollout AD\n");
 #if USE_NEURAL_AUGMENTATION
     typedef NeuralScalar<ADScalar, ADUtils> NScalar;
     typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
@@ -225,6 +238,7 @@ class PushEstimator
   void rollout(const std::vector<double> &params,
                std::vector<std::vector<double>> &output_states, double &dt,
                std::size_t ref_id) const override {
+                 printf("rollout DOUBLE\n");
 #if USE_NEURAL_AUGMENTATION
     typedef NeuralScalar<double, DoubleUtils> NScalar;
     typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
@@ -293,7 +307,13 @@ class PushEstimator
     // }
     // printf("\n");
     if constexpr (is_neural_scalar<Scalar, Utils>::value) {
-      neural_augmentation.template instantiate<Scalar, Utils>(params);
+      typedef typename Scalar::InnerScalarType IScalar;
+      typedef typename Scalar::InnerUtilsType IUtils;
+      std::vector<IScalar> iparams(params.size());
+      for (std::size_t i = 0; i < params.size(); ++i) {
+        iparams[i] = params[i].evaluate();
+      }
+      neural_augmentation.template instantiate<IScalar, IUtils>(iparams);
     }
 
     const auto &data = trajectories[ref_id];
@@ -461,7 +481,20 @@ int main(int argc, char *argv[]) {
   // frontend_estimator.options.line_search_type = ceres::LineSearchType::WOLFE;
   // frontend_estimator.options.minimizer_type =
   // ceres::MinimizerType::LINE_SEARCH;
-  frontend_estimator.set_bounds = true;
+  frontend_estimator.set_bounds = true; //true;
+  frontend_estimator.neural_augmentation.weight_limit = 100;
+  frontend_estimator.neural_augmentation.bias_limit = 0.1;
+  frontend_estimator.neural_augmentation.input_lasso_regularization = 0;
+  frontend_estimator.neural_augmentation.upper_l2_regularization = 0;
+  frontend_estimator.neural_augmentation.default_hidden_layers = 2;
+  frontend_estimator.neural_augmentation.add_wiring(
+        std::vector<std::string>{"tau_0", "tau_1", "tau_3"},
+        std::vector<std::string>{"q_0", "q_1", "q_3"});
+  frontend_estimator.neural_augmentation.add_wiring(
+        std::vector<std::string>{"friction/fr_vec.x", "friction/fr_vec.y"},
+        std::vector<std::string>{"friction/fn", "friction/point.x",
+                                 "friction/point.y", "friction/rel_vel.x",
+                                 "friction/rel_vel.y"});
   frontend_estimator.setup();
 
   std::function<std::unique_ptr<PushEstimator>()> construct_estimator =
@@ -487,6 +520,7 @@ int main(int argc, char *argv[]) {
         estimator->minibatch_size = frontend_estimator.minibatch_size;
         estimator->options = frontend_estimator.options;
         estimator->set_bounds = frontend_estimator.set_bounds;
+        estimator->neural_augmentation = frontend_estimator.neural_augmentation;
         return estimator;
       };
 
@@ -502,7 +536,7 @@ int main(int argc, char *argv[]) {
   }
   BasinHoppingEstimator<param_dim, PushEstimator> bhe(construct_estimator,
                                                       initial_guess);
-  bhe.time_limit = 300;
+  bhe.time_limit = 60 * 60 * 1;
   bhe.run();
 
   printf("Optimized parameters:");
@@ -517,16 +551,18 @@ int main(int argc, char *argv[]) {
     best_params.push_back(p);
   }
 #else
-  double cost = 0;
-  double gradient[param_dim] = {0, 0, 0};
-  frontend_estimator.compute_loss(frontend_estimator.vars(), &cost, gradient);
-
-  printf("Cost: %.6f\n", cost);
-  printf("Gradient:  ");
-  for (int i = 0; i < param_dim; ++i) {
-    printf("%.6f  ", gradient[i]);
-  }
-  printf("\n\n");
+  // double cost = 0;
+  // double gradient[param_dim] = {0, 0, 0};
+  // frontend_estimator.compute_loss(frontend_estimator.vars(), &cost, gradient);
+  // printf("Cost: %.6f\n", cost);
+  // printf("Gradient:  ");
+  // for (int i = 0; i < param_dim; ++i) {
+  //   printf("%.6f  ", gradient[i]);
+  // }
+  // printf("\n\n");
+  // for (const auto& p : frontend_estimator.parameters) {
+  //   printf("\t%s:  %.8f\n", p.name.c_str(), p.value);
+  // }
   // return 0;
 
   auto summary = frontend_estimator.solve();

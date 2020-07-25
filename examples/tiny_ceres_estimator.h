@@ -141,7 +141,7 @@ class TinyCeresEstimator : ceres::IterationCallback {
                        std::vector<std::vector<double>> &output_states,
                        double &dt, std::size_t ref_id) const = 0;
 
-  ceres::Problem &setup(ceres::LossFunction *loss_function = nullptr) {
+  virtual ceres::Problem &setup(ceres::LossFunction *loss_function = nullptr) {
     assert(!target_trajectories.empty() &&
            static_cast<int>(target_trajectories[0].size()) >= kStateDim);
 
@@ -417,7 +417,7 @@ class TinyCeresEstimator : ceres::IterationCallback {
         }
         printf("\t%s", ref_id_str.c_str());
         if (nonfinite > 0) {
-          std::cerr << "nonfinite: " << nonfinite;
+          std::cerr << "\tnonfinite: " << nonfinite;
         }
         // std::cout << "  thread ID: " << std::this_thread::get_id();
         printf("\n");
