@@ -167,7 +167,7 @@ class TinyCeresEstimator : ceres::IterationCallback {
     problem_.AddResidualBlock(cost_function_, loss_function, vars_);
 
     for (int i = 0; i < kParameterDim; ++i) {
-      parameters[i].value = vars_[i];
+      vars_[i] = parameters[i].value;
     }
     if (set_bounds) {
       for (int i = 0; i < kParameterDim; ++i) {

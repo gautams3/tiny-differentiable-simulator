@@ -36,6 +36,11 @@ typedef NeuralScalar<double, DoubleUtils> NDScalar;
 typedef NeuralScalarUtils<double, DoubleUtils> NDUtils;
 typedef NeuralScalar<ADScalar, ADUtils> NAScalar;
 typedef NeuralScalarUtils<ADScalar, ADUtils> NAUtils;
+#else
+typedef double NDScalar;
+typedef DoubleUtils NDUtils;
+typedef ADScalar NAScalar;
+typedef ADUtils NAUtils;
 #endif
 
 template <typename Scalar, typename Utils>
@@ -122,16 +127,14 @@ class PushEstimator
   // stores trajectories per surface-shape combination
   std::vector<PushData> trajectories;
 
-  mutable std::map<std::string, Laboratory<double, DoubleUtils> *> labs_double;
-  mutable std::map<std::string, Laboratory<ADScalar, ADUtils> *> labs_ad;
+  mutable std::map<std::string, Laboratory<NDScalar, NDUtils> *> labs_double;
+  mutable std::map<std::string, Laboratory<NAScalar, NAUtils> *> labs_ad;
 
   std::size_t skip_steps = 10;
 
   NeuralAugmentation neural_augmentation;
-  bool use_neural_augmentation{true};
 
-  PushEstimator(bool use_neural_augmentation = true)
-      : CeresEstimator(0.0), use_neural_augmentation(use_neural_augmentation) {
+  PushEstimator() : CeresEstimator(0.0) {
     parameters[0] = {"mu_kinetic", 0.5, 0.1, 1.5};
     parameters[1] = {"mu_static", 0.5, 0.1, 1.5};
     parameters[2] = {"v_transition", 0.01, 0.0001, 0.2};
@@ -143,12 +146,9 @@ class PushEstimator
     //                                           -1., 1., regularization};
     // }
 
-    if (use_neural_augmentation) {
-      bool apply_l1_regularization = false;
-      bool apply_l2_regularization = true;
-      neural_augmentation.assign_estimation_parameters(
-          parameters, 3, apply_l1_regularization, apply_l2_regularization);
-    }
+#if USE_NEURAL_AUGMENTATION
+    neural_augmentation.assign_estimation_parameters(parameters, 3);
+#endif
     for (const auto &p : parameters) {
       initial_params.push_back(p.value);
     }
@@ -186,11 +186,11 @@ class PushEstimator
     TinyFileUtils::find_file("mit-push/obj/" + data.shape_name + "_ext.npy",
                              exterior_filename);
 
-    add_laboratory<double, DoubleUtils>(
-        data.lab_name, shape_urdf_filename, surface_urdf_filename,
-        tip_urdf_filename, exterior_filename, urdf_cache_double, &labs_double,
-        sim, sim2);
-    add_laboratory<ADScalar, ADUtils>(data.lab_name, shape_urdf_filename,
+    add_laboratory<NDScalar, NDUtils>(data.lab_name, shape_urdf_filename,
+                                      surface_urdf_filename, tip_urdf_filename,
+                                      exterior_filename, urdf_cache_double,
+                                      &labs_double, sim, sim2);
+    add_laboratory<NAScalar, NAUtils>(data.lab_name, shape_urdf_filename,
                                       surface_urdf_filename, tip_urdf_filename,
                                       exterior_filename, urdf_cache_ad,
                                       &labs_ad, sim, sim2);
@@ -207,38 +207,38 @@ class PushEstimator
   void rollout(const std::vector<ADScalar> &params,
                std::vector<std::vector<ADScalar>> &output_states, double &dt,
                std::size_t ref_id) const override {
-    if (use_neural_augmentation) {
-      typedef NeuralScalar<ADScalar, ADUtils> NScalar;
-      typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
-      auto n_params = NUtils::to_neural(params);
-      std::vector<std::vector<NScalar>> n_output_states;
-      this->template rollout<NScalar, NUtils>(n_params, n_output_states, dt,
-                                              ref_id);
-      for (const auto &state : n_output_states) {
-        output_states.push_back(NUtils::from_neural(state));
-      }
-      return;
+#if USE_NEURAL_AUGMENTATION
+    typedef NeuralScalar<ADScalar, ADUtils> NScalar;
+    typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
+    auto n_params = NUtils::to_neural(params);
+    std::vector<std::vector<NScalar>> n_output_states;
+    this->template rollout<NScalar, NUtils>(n_params, n_output_states, dt,
+                                            ref_id);
+    for (const auto &state : n_output_states) {
+      output_states.push_back(NUtils::from_neural(state));
     }
+#else
     this->template rollout<ADScalar, ADUtils>(params, output_states, dt,
                                               ref_id);
+#endif
   }
   void rollout(const std::vector<double> &params,
                std::vector<std::vector<double>> &output_states, double &dt,
                std::size_t ref_id) const override {
-    if (use_neural_augmentation) {
-      typedef NeuralScalar<double, DoubleUtils> NScalar;
-      typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
-      auto n_params = NUtils::to_neural(params);
-      std::vector<std::vector<NScalar>> n_output_states;
-      this->template rollout<NScalar, NUtils>(n_params, n_output_states, dt,
-                                              ref_id);
-      for (const auto &state : n_output_states) {
-        output_states.push_back(NUtils::from_neural(state));
-      }
-      return;
+#if USE_NEURAL_AUGMENTATION
+    typedef NeuralScalar<double, DoubleUtils> NScalar;
+    typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
+    auto n_params = NUtils::to_neural(params);
+    std::vector<std::vector<NScalar>> n_output_states;
+    this->template rollout<NScalar, NUtils>(n_params, n_output_states, dt,
+                                            ref_id);
+    for (const auto &state : n_output_states) {
+      output_states.push_back(NUtils::from_neural(state));
     }
+#else
     this->template rollout<double, DoubleUtils>(params, output_states, dt,
                                                 ref_id);
+#endif
   }
 
  private:
@@ -263,19 +263,19 @@ class PushEstimator
   template <typename Scalar, typename Utils>
   constexpr Laboratory<Scalar, Utils> &get_lab(
       const std::string &lab_name) const {
-    if constexpr (std::is_same_v<Scalar, double>) {
+    if constexpr (std::is_same_v<Scalar, NDScalar>) {
       return *(labs_double[lab_name]);
     } else {
       return *(labs_ad[lab_name]);
     }
   }
 
-  TinyUrdfCache<double, DoubleUtils> urdf_cache_double;
-  TinyUrdfCache<ADScalar, ADUtils> urdf_cache_ad;
+  TinyUrdfCache<NDScalar, NDUtils> urdf_cache_double;
+  TinyUrdfCache<NAScalar, NAUtils> urdf_cache_ad;
 
   template <typename Scalar>
   constexpr auto &get_cache() {
-    if constexpr (std::is_same_v<Scalar, double>) {
+    if constexpr (std::is_same_v<Scalar, NDScalar>) {
       return urdf_cache_double;
     } else {
       return urdf_cache_ad;
@@ -556,15 +556,19 @@ int main(int argc, char *argv[]) {
   printf("\n\n");
   fflush(stdout);
 
+  std::vector<NDScalar> nparams(best_params.size());
+  for (std::size_t i = 0; i < best_params.size(); ++i) {
+    nparams[i] = NDUtils::scalar_from_double(best_params[i]);
+  }
   while (true) {
     std::size_t ref_id =
         std::size_t(rand()) % frontend_estimator.trajectories.size();
     ref_id = 92;
     std::cout << "Simulating trajectory #" << ref_id << "\t"
               << frontend_estimator.trajectories[ref_id].filename << "\n";
-    std::vector<std::vector<double>> output_states;
-    frontend_estimator.template rollout<double, DoubleUtils>(
-        best_params, output_states, data.dt, ref_id, sim);
+    std::vector<std::vector<NDScalar>> output_states;
+    frontend_estimator.template rollout<NDScalar, NDUtils>(
+        nparams, output_states, data.dt, ref_id, sim);
     std::this_thread::sleep_for(std::chrono::duration<double>(5.));
   }
 

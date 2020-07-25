@@ -81,8 +81,7 @@ struct NeuralAugmentation {
   template <std::size_t ParameterDim>
   void assign_estimation_parameters(
       std::array<EstimationParameter, ParameterDim> &params,
-      std::size_t param_index_offset = 0, bool apply_l1_regularization = true,
-      bool apply_l2_regularization = true,
+      std::size_t param_index_offset = 0,
       TinyNeuralNetworkInitialization init_method = NN_INIT_XAVIER) const {
     if (num_total_parameters() > ParameterDim) {
       std::cerr << "Error: at least " << num_total_parameters()
@@ -113,13 +112,12 @@ struct NeuralAugmentation {
         params[pi].minimum = -0.1;
         params[pi].maximum = 0.1;
         params[pi].value = init_weights[wi];
-        if (apply_l1_regularization && wi < num_first_layer_weights) {
+        if (wi < num_first_layer_weights) {
           // L1 lasso on input weights encourages input sparsity
           params[pi].l1_regularization = input_lasso_regularization;
-        } else if (apply_l2_regularization) {
-          // L2 regularization of weights in upper layers
-          params[pi].l2_regularization = upper_l2_regularization;
         }
+        // L2 regularization of weights in upper layers
+        params[pi].l2_regularization = upper_l2_regularization;
       }
       for (int bi = 0; bi < specs[i].num_biases(); ++bi, ++pi) {
         params[pi].name = net_prefix + "b_" + std::to_string(bi);

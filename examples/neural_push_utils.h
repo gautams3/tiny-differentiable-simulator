@@ -215,10 +215,14 @@ void transform_points(const TinyDataset<double, 2> &exterior,
     exterior_center_y += exterior_center_y / dnum_ext;
   }
   for (std::size_t i = 0; i < num_ext; ++i) {
-    const Scalar x = Scalar(exterior[{i, 0}] - exterior_center_x);
-    const Scalar y = Scalar(exterior[{i, 1}] - exterior_center_y);
-    tf_exterior[{i, 0}] = dx + x * cos_yaw - y * sin_yaw + exterior_center_x;
-    tf_exterior[{i, 1}] = dy + y * cos_yaw + x * sin_yaw + exterior_center_y;
+    const Scalar x =
+        Utils::scalar_from_double(exterior[{i, 0}] - exterior_center_x);
+    const Scalar y =
+        Utils::scalar_from_double(exterior[{i, 1}] - exterior_center_y);
+    tf_exterior[{i, 0}] = dx + x * cos_yaw - y * sin_yaw +
+                          Utils::scalar_from_double(exterior_center_x);
+    tf_exterior[{i, 1}] = dy + y * cos_yaw + x * sin_yaw +
+                          Utils::scalar_from_double(exterior_center_y);
   }
 }
 
