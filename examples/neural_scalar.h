@@ -99,25 +99,32 @@ class NeuralScalar {
 
     auto& data = get_data_();
     auto& blueprint = data.blueprints[network_id];
-    // if (blueprint.is_dirty) {
-    std::vector<Scalar> input(blueprint.input_names.size());
-    for (std::size_t i = 0; i < blueprint.input_names.size(); ++i) {
-      auto input_itr = data.named_scalars.find(blueprint.input_names[i]);
-      if (input_itr == data.named_scalars.end()) {
-        std::string output_name = blueprint.output_names[0];
-        for (std::size_t j = 1; j < blueprint.output_names.size(); ++j) {
-          output_name += std::string(", ") + blueprint.output_names[j];
-        }
-        printf("Error: Could not find named scalar \"%s\" for neural network corresponding to output(s) [%s]. Make sure it has been assigned before the neural network output variables are assigned.\n",
-        blueprint.input_names[i].c_str(), output_name.c_str());
-        assert(0);
-        exit(1);
-      }
-      input[i] = input_itr->second->evaluate();
+    if (output_id == 0) {
+      // avoid re-evaluating the network for every output index
+      blueprint.is_dirty = true;
     }
-    blueprint.net.compute(input, blueprint.output_cache);
-    // blueprint.is_dirty = false;
-    // }
+    if (blueprint.is_dirty) {
+      std::vector<Scalar> input(blueprint.input_names.size());
+      for (std::size_t i = 0; i < blueprint.input_names.size(); ++i) {
+        auto input_itr = data.named_scalars.find(blueprint.input_names[i]);
+        if (input_itr == data.named_scalars.end()) {
+          std::string output_name = blueprint.output_names[0];
+          for (std::size_t j = 1; j < blueprint.output_names.size(); ++j) {
+            output_name += std::string(", ") + blueprint.output_names[j];
+          }
+          printf(
+              "Error: Could not find named scalar \"%s\" for neural network "
+              "corresponding to output(s) [%s]. Make sure it has been assigned "
+              "before the neural network output variables are assigned.\n",
+              blueprint.input_names[i].c_str(), output_name.c_str());
+          assert(0);
+          exit(1);
+        }
+        input[i] = input_itr->second->evaluate();
+      }
+      blueprint.net.compute(input, blueprint.output_cache);
+      blueprint.is_dirty = false;
+    }
     return blueprint.output_cache[output_id];
   }
 
@@ -234,7 +241,8 @@ class NeuralScalar {
     //   const void* address = static_cast<const void*>(this);
     //   std::stringstream ss;
     //   ss << address;
-    //   printf("Assigned neural scalar %s to %s (blueprint: %i).\n", name.c_str(),
+    //   printf("Assigned neural scalar %s to %s (blueprint: %i).\n",
+    //   name.c_str(),
     //          ss.str().c_str(), blueprint_id_);
     // }
   }
@@ -373,7 +381,7 @@ class NeuralScalar {
     const auto& data = get_data_();
     for (const auto& blueprint : data.blueprints) {
       std::cout << "Blueprint for outputs";
-      for (const auto &s : blueprint.output_names) {
+      for (const auto& s : blueprint.output_names) {
         std::cout << " " << s;
       }
       std::cout << ":\n";
