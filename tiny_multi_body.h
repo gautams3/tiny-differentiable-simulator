@@ -888,7 +888,6 @@ public:
 
     for (int i = 0; i < m_links.size(); i++) {
       TinyLink &link = m_links[i];
-      const std::string link_name = "link_" + std::to_string(i);
       int parent = link.m_parent_index;
 
       // update joint transforms, joint velocity (if available)
@@ -904,16 +903,6 @@ public:
             parent >= 0 ? m_links[parent].m_v : m_baseVelocity;
         TinySpatialMotionVector xv = link.m_X_parent2.apply(parentVelocity);
         link.m_v = xv + link.m_vJ;
-#ifdef NEURAL_SIM
-        if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
-          link.m_X_world(3, 0).assign(link_name + "/pos/x");
-          link.m_X_world(3, 1).assign(link_name + "/pos/y");
-          // YAW
-          f_ext[0].assign(link_name + "/external_force/x");
-          f_ext[1].assign(link_name + "/external_force/y");
-          f_ext[5].assign(link_name + "/external_force/yaw");
-        }
-#endif
       } else {
         link.m_X_world = m_base_X_world * link.m_X_parent2;
         link.m_v = link.m_vJ;
@@ -927,10 +916,30 @@ public:
           link.m_X_world.apply_inverse_transpose(link.m_f_ext);
 
 #ifdef NEURAL_SIM
-      if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
-        f_ext[0].assign(link_name + "/external_force/x");
-        f_ext[1].assign(link_name + "/external_force/y");
-        f_ext[5].assign(link_name + "/external_force/yaw");
+      if (i >= 3) {
+        if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
+          // Inputs: Position.
+          link.m_X_world.m_translation[0].assign("link/pos/x");
+          link.m_X_world.m_translation[1].assign("link/pos/y");
+          TinyScalar link_pos_yaw = TinyConstants::atan2(
+              link.m_X_world.m_rotation(0, 1), link.m_X_world.m_rotation(0, 0));
+          link_pos_yaw.assign("link/pos/yaw");
+
+          // Inputs: Velocity.
+          link.m_v[3].assign("link/vel/x");
+          link.m_v[4].assign("link/vel/y");
+          link.m_v[2].assign("link/vel/yaw");
+
+          // Outputs: Applied Force.
+          f_ext[3].assign("link/external_force/x");
+          f_ext[4].assign("link/external_force/y");
+          f_ext[2].assign("link/external_force/yaw");
+
+          // Cache the outputs.
+          f_ext[3].evaluate();
+          f_ext[4].evaluate();
+          f_ext[2].evaluate();
+        }
       }
 #endif
 

@@ -92,6 +92,7 @@ IF(WIN32)
 ENDIF()
 set(HAS_MESHCAT TRUE)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 if (Bullet_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
@@ -147,6 +148,10 @@ if (Bullet_FOUND)
                 HighFive ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES})      
         endif (HighFive_FOUND)
 
+        add_executable(neural_heightfield neural_heightfield.cpp ${TDS_HDRS})
+        target_link_libraries(neural_heightfield pybullet_visualizer_api ${DL}
+            ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES})  
+
         add_executable(policy_optimization policy_optimization.cpp ${TDS_HDRS})
         target_link_libraries(policy_optimization pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES})
@@ -196,7 +201,7 @@ if (Bullet_FOUND)
     target_link_libraries(gravity_compensation pybullet_visualizer_api)
 
     add_executable(experiment_neural_swimmer experiment_neural_swimmer.cpp ${TDS_HDRS})
-    target_link_libraries(experiment_neural_swimmer ${CERES_LIBRARIES} tinyxml2 pybullet_visualizer_api)
+    target_link_libraries(experiment_neural_swimmer ${CERES_LIBRARIES} tinyxml2)
 
 if (HAS_MESHCAT)
     add_executable(laikago_meshcat_example laikago_meshcat_example.cpp ${TDS_HDRS})
