@@ -199,12 +199,12 @@ struct TinyMultiBodyConstraintSolverSpring
       force -= spring_k * xn;
     }
 
-    if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
-      // evaluate neural network blueprint (if available)
-      x.assign("contact_normal_force/x");
-      xd.assign("contact_normal_force/xd");
-      force.assign("contact_normal_force/force");
-    }
+    // if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
+    //   // evaluate neural network blueprint (if available)
+    //   x.assign("contact_normal_force/x");
+    //   xd.assign("contact_normal_force/xd");
+    //   force.assign("contact_normal_force/force");
+    // }
 
     return force;
   }
@@ -268,14 +268,14 @@ struct TinyMultiBodyConstraintSolverSpring
                      (mu_static - mu) * vvt / (denom * denom));
       }
       case FRICTION_NEURAL:
-        if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
-          // evaluate neural network blueprint (if available)
-          fn.assign("contact_friction_force/fn");
-          v.assign("contact_friction_force/v");
-          TinyScalar force = zero;
-          force.assign("contact_friction_force/force");
-          return force.evaluate();
-        }
+        // if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) {
+        //   // evaluate neural network blueprint (if available)
+        //   fn.assign("contact_friction_force/fn");
+        //   v.assign("contact_friction_force/v");
+        //   TinyScalar force = zero;
+        //   force.assign("contact_friction_force/force");
+        //   return force.evaluate();
+        // }
         return zero;
     }
   }
