@@ -548,7 +548,7 @@ class BasinHoppingEstimator {
    * Whether to reduce the standard deviation of the random guess in the
    * parameter as the iteration count increases.
    */
-  bool fade_std{true};
+  bool fade_std{false};
 
   BasinHoppingEstimator(
       const EstimatorConstructor &estimator_constructor,
