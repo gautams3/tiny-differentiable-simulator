@@ -92,10 +92,10 @@ IF(WIN32)
 ENDIF()
 set(HAS_MESHCAT TRUE)
 
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 if (Bullet_FOUND)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fPIC")
     include_directories(${BULLET_INCLUDE_DIRS})
     add_library(pybullet_visualizer_api STATIC pybullet_visualizer_api.cpp)
     target_link_libraries(pybullet_visualizer_api BulletRoboticsGUI BulletExampleBrowserLib
