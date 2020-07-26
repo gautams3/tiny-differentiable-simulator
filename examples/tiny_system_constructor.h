@@ -39,6 +39,11 @@ struct TinyUrdfCache {
     if (ignore_cache || data.find(urdf_filename) == data.end()) {
       printf("Loading URDF \"%s\".\n", urdf_filename.c_str());
       int robotId = sim->loadURDF(urdf_filename, args);
+      if (robotId < 0) {
+        std::cerr << "Error: Could not load URDF file \"" << urdf_filename
+                  << "\".\n";
+        exit(1);
+      }
       data[urdf_filename] = UrdfStructures();
       UrdfImport::extract_urdf_structs(data[urdf_filename], robotId, *sim,
                                        *vis);

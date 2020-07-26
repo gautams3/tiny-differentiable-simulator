@@ -307,11 +307,11 @@ class PushEstimator
   void rollout(const std::vector<Scalar> &params,
                std::vector<std::vector<Scalar>> &output_states, double &dt,
                std::size_t ref_id, VisualizerAPI *sim = nullptr) const {
-    printf("Rollout with parameters:");
-    for (const Scalar &p : params) {
-      printf("\t%.5f", Utils::getDouble(p));
-    }
-    printf("\n");
+    // printf("Rollout with parameters:");
+    // for (const Scalar &p : params) {
+    //   printf("\t%.5f", Utils::getDouble(p));
+    // }
+    // printf("\n");
     if constexpr (is_neural_scalar<Scalar, Utils>::value) {
       typedef typename Scalar::InnerScalarType IScalar;
       typedef typename Scalar::InnerUtilsType IUtils;
@@ -405,10 +405,9 @@ class PushEstimator
         // output_states.push_back(
         //     {out_object_x, out_object_y, out_object_yaw});
 
-
-    if constexpr (is_neural_scalar<Scalar, Utils>::value) {
-      if (i == 20) {Scalar::print_neural_networks();}
-    }
+        // if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+        //   if (i == 20) {Scalar::print_neural_networks();}
+        // }
 
         output_states.push_back(
             {object->m_q[0], object->m_q[1], object->m_q[3]});
