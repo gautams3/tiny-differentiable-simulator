@@ -9,7 +9,7 @@
 
   <default>
     <default class="swimmer">
-      <joint type="hinge" pos="0 -.05 0" axis="0 0 1" limited="true" solreflimit=".05 1" solimplimit="0 .8 .1" armature="1e-6"/>
+      <joint type="hinge" pos="0 -.05 0" axis="0 0 1" limited="false" solreflimit=".05 1" solimplimit="0 .8 .1" armature="1e-6"/>
       <default class="inertial">
         <geom type="box" size=".001 .05 .01" rgba="0 0 0 0" mass=".01"/>
       </default>
