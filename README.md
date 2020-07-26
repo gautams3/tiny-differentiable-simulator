@@ -65,7 +65,7 @@ git checkout v1.14.0
 mkdir build
 cd build
 cmake ..
-make
+make -j
 make install
 ```
 
@@ -154,13 +154,14 @@ make install
 
 #### crossguid
 ```
+apt install uuid-dev
+
 git clone https://github.com/graeme-hill/crossguid.git
 cd crossguid
 git checkout v0.2.2
 mkdir build && cd build
 cmake ..
 make -j
-make install
 ```
 
 #### json
@@ -237,6 +238,26 @@ mkdir build && cd build
 cmake .. -DHIGHFIVE_USE_BOOST=OFF
 make -j
 make install
+```
+
+## Docker Instructions
+
+Build the Docker image
+```sh
+docker build -t tds .
+```
+
+Run the image
+```sh
+docker run -p 8888:8888 -v $(pwd):/root/code/tiny-differentiable-simulator -it tds
+```
+
+Now you can edit files from outside the docker and use docker to build and run the experiments.
+
+You can connect multiple times to this same running docker, for example if you want to access it from multiple shell instances via
+
+```sh
+docker exec -it $(docker ps -qf "ancestor=tds") bash
 ```
 
 

@@ -10,12 +10,14 @@ RUN \
     gcc \
     g++ \
     build-essential \
+    cmake \
     wget \
     curl \
     unzip \
     git \
     git-lfs \
-    python2-dev \
+    python-dev \
+    python-pip \
     python3-dev \
     python3-pip \
     libeigen3-dev \
@@ -28,7 +30,8 @@ RUN \
     libhdf5-dev \
     nano \
     htop \
-    tmux
+    tmux \
+    libcrossguid-dev
 
 RUN mkdir -p /root/code
 
@@ -40,16 +43,12 @@ WORKDIR /root/code/tiny-differentiable-simulator
 RUN pip3 install -r python/requirements.txt
 
 # Check out git submodules
-WORKDIR /root/code/tiny-differentiable-simulator
-RUN git submodule update --init --recursive
+# WORKDIR /root/code/tiny-differentiable-simulator
+# RUN git submodule update --init --recursive
 
-#  Build TDS
-WORKDIR /root/code/tiny-differentiable-simulator
-RUN rm -rf build && cmake -Bbuild . && make -C build experiment_neural_swimmer
-
-# Install Python requirements
-WORKDIR /root/code/tiny-differentiable-simulator/python/plotting
-RUN pip3 install -r requirements.txt
+# #  Build TDS
+# WORKDIR /root/code/tiny-differentiable-simulator
+# RUN rm -rf build && cmake -Bbuild . && make -C build experiment_neural_swimmer
 
 # Set up git lfs
 RUN git lfs install
