@@ -260,6 +260,9 @@ You can connect multiple times to this same running docker, for example if you w
 docker exec -it $(docker ps -qf "ancestor=tds") bash
 ```
 
+Set up GCC as follows:
+
+https://linuxize.com/post/how-to-install-gcc-compiler-on-ubuntu-18-04/
 
 ---
 
