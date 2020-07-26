@@ -568,6 +568,16 @@ class BasinHoppingEstimator {
     auto start_time = high_resolution_clock::now();
     for (std::size_t k = 0; k < num_workers; ++k) {
       workers_.emplace_back([this, k, &start_time]() {
+        std::seed_seq seed{
+            // Time
+            static_cast<std::size_t>(std::chrono::high_resolution_clock::now()
+                                       .time_since_epoch()
+                                       .count()),
+            // counter
+            k};
+
+        std::mt19937 eng(seed);
+
         auto estimator = this->estimator_constructor();
         estimator->setup(new ceres::TrivialLoss);  // new ceres::HuberLoss(1.));
                                                    // // TODO expose this
@@ -630,12 +640,12 @@ class BasinHoppingEstimator {
               std::normal_distribution<double> d{
                   this->params[i],
                   initial_std / (iter + 1.) * (param.maximum - param.minimum)};
-              param.value = d(this->gen_);
+              param.value = d(eng);
             } else {
               std::normal_distribution<double> d{
                   this->params[i],
                   initial_std * (param.maximum - param.minimum)};
-              param.value = d(this->gen_);
+              param.value = d(eng);
             }
             param.value = std::max(param.minimum, param.value);
             param.value = std::min(param.maximum, param.value);
@@ -669,9 +679,6 @@ class BasinHoppingEstimator {
   bool stop_{false};
 
   double best_cost_;
-
-  std::random_device rd_;
-  std::mt19937 gen_{rd_()};
 };
 
 #endif  // TINY_CERES_ESTIMATOR_H
