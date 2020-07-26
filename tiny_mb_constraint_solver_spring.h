@@ -395,6 +395,10 @@ struct TinyMultiBodyConstraintSolverSpring
           friction_vector.m_x.assign("friction/fr_vec.x");
           friction_vector.m_y.assign("friction/fr_vec.y");
           friction_vector.m_z.assign("friction/fr_vec.z");
+
+          friction_vector.m_x.evaluate();
+          friction_vector.m_y.evaluate();
+          friction_vector.m_z.evaluate();
         }
 
         tau_a += jac_a.mul_transpose(friction_vector);

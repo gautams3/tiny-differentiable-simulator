@@ -352,7 +352,7 @@ class NeuralScalar {
    * Save all blueprints as graphviz files with the given prefix.
    */
   static void save_graphviz(const std::string& filename_prefix = "") {
-    for (const auto& blueprint : get_data_.blueprints) {
+    for (const auto& blueprint : get_data_().blueprints) {
       std::string filename = filename_prefix;
       for (std::size_t i = 0; i < blueprint.input_names.size(); ++i) {
         filename += blueprint.input_names[i];
@@ -366,6 +366,18 @@ class NeuralScalar {
       filename += ".dot";
       blueprint.net.save_graphviz(filename, blueprint.input_names,
                                   blueprint.output_names);
+    }
+  }
+
+  static void print_neural_networks() {
+    const auto& data = get_data_();
+    for (const auto& blueprint : data.blueprints) {
+      std::cout << "Blueprint for outputs";
+      for (const auto &s : blueprint.output_names) {
+        std::cout << " " << s;
+      }
+      std::cout << ":\n";
+      blueprint.net.print_params();
     }
   }
 

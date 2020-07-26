@@ -404,6 +404,12 @@ class PushEstimator
         // out_object_yaw.evaluate();
         // output_states.push_back(
         //     {out_object_x, out_object_y, out_object_yaw});
+
+
+    if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+      if (i == 20) {Scalar::print_neural_networks();}
+    }
+
         output_states.push_back(
             {object->m_q[0], object->m_q[1], object->m_q[3]});
       }
