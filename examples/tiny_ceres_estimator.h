@@ -24,6 +24,7 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <atomic>
 
 #include "ceres_utils.h"
 #include "tiny_double_utils.h"
@@ -312,7 +313,7 @@ class TinyCeresEstimator : ceres::IterationCallback {
     // Computes the cost (residual) for input parameters x.
     template <typename T>
     bool operator()(const T *const x, T *residual) const {
-      static int num_evaluations = 0;
+      static std::atomic<int> num_evaluations = 0;
       ++num_evaluations;
       // ref_indices[0] = 26; //92;
       // if (ref_indices.size() > 1) {
@@ -354,7 +355,7 @@ class TinyCeresEstimator : ceres::IterationCallback {
         // printf("dt: %.6f\n", dt);
         // plot_trajectory(rollout_states);
         // printf("Rollout states:\n");
-        // print_states(rollout_states);
+        print_states(rollout_states);
 
         ref_id_str += " " + std::to_string(ref_id);
 

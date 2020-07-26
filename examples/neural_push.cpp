@@ -307,11 +307,11 @@ class PushEstimator
   void rollout(const std::vector<Scalar> &params,
                std::vector<std::vector<Scalar>> &output_states, double &dt,
                std::size_t ref_id, VisualizerAPI *sim = nullptr) const {
-    // printf("Rollout with parameters:");
-    // for (const Scalar &p : params) {
-    //   printf("\t%.5f", Utils::getDouble(p));
-    // }
-    // printf("\n");
+    printf("Rollout with parameters:");
+    for (const Scalar &p : params) {
+      printf("\t%.5f", Utils::getDouble(p));
+    }
+    printf("\n");
     if constexpr (is_neural_scalar<Scalar, Utils>::value) {
       typedef typename Scalar::InnerScalarType IScalar;
       typedef typename Scalar::InnerUtilsType IUtils;

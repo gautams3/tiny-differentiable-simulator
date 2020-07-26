@@ -88,14 +88,16 @@ class NeuralScalar {
     }
   };
 
-  static inline std::map<std::thread::id, GlobalData> data_{};
-
   static GlobalData& get_data_() {
-    auto id = std::this_thread::get_id();
-    if (data_.find(id) == data_.end()) {
-      data_[id] = GlobalData();
-    }
-    return data_[id];
+    static thread_local GlobalData data;
+    return data;
+
+    // std::map<std::thread::id, GlobalData> data_;
+    // auto id = std::this_thread::get_id();
+    // if (data_.find(id) == data_.end()) {
+    //   data_[id] = GlobalData();
+    // }
+    // return data_[id];
   }
 
   static const Scalar& evaluate_network_(int network_id,
