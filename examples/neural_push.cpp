@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include <chrono>
+#include <cxxopts.hpp>
 #include <filesystem>
 #include <iostream>
 #include <thread>
@@ -19,17 +20,18 @@
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
 // whether to use Parallel Basin Hopping
-#define USE_PBH false
+#define USE_PBH true
 #define USE_NEURAL_AUGMENTATION true
 const int state_dim = 3;
 const ResidualMode res_mode = RES_MODE_1D;
 const bool assign_analytical_params = false;
 const std::size_t analytical_param_dim = 3;
+const int num_files = 100;
 
 #if USE_NEURAL_AUGMENTATION
 // const int param_dim = 69;
 // const int param_dim = 71;
-const int param_dim = 45;
+const int param_dim = 75;
 // const int param_dim = 105;
 // const int param_dim = 143;
 #else
@@ -162,7 +164,8 @@ class PushEstimator
     parameters[2] = {"v_transition", 0.01, 0.0001, 0.2};
 
 #if USE_NEURAL_AUGMENTATION
-    neural_augmentation.assign_estimation_parameters(parameters, 3); //, NN_INIT_ZERO);
+    neural_augmentation.assign_estimation_parameters(
+        parameters, analytical_param_dim);  //, NN_INIT_ZERO);
     for (int i = 3; i < param_dim; ++i) {
       parameters[i].value *= 0.1;
       // parameters[i].value = 0.0;
@@ -222,7 +225,7 @@ class PushEstimator
   void rollout(const std::vector<ADScalar> &params,
                std::vector<std::vector<ADScalar>> &output_states, double &dt,
                std::size_t ref_id) const override {
-                 printf("rollout AD\n");
+    printf("rollout AD\n");
 #if USE_NEURAL_AUGMENTATION
     typedef NeuralScalar<ADScalar, ADUtils> NScalar;
     typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
@@ -241,7 +244,7 @@ class PushEstimator
   void rollout(const std::vector<double> &params,
                std::vector<std::vector<double>> &output_states, double &dt,
                std::size_t ref_id) const override {
-                 printf("rollout DOUBLE\n");
+    printf("rollout DOUBLE\n");
 #if USE_NEURAL_AUGMENTATION
     typedef NeuralScalar<double, DoubleUtils> NScalar;
     typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
@@ -316,7 +319,8 @@ class PushEstimator
       for (std::size_t i = 0; i < params.size(); ++i) {
         iparams[i] = params[i].evaluate();
       }
-      neural_augmentation.template instantiate<IScalar, IUtils>(iparams, analytical_param_dim);
+      neural_augmentation.template instantiate<IScalar, IUtils>(
+          iparams, analytical_param_dim);
     }
 
     const auto &data = trajectories[ref_id];
@@ -328,11 +332,11 @@ class PushEstimator
     auto *tip = lab.tip;
     tip->initialize();
 
-if (assign_analytical_params) {
-    lab.world_ground.default_friction = params[0];
-    lab.contact_ground->mu_static = params[1];
-    lab.contact_ground->v_transition = params[2];
-}
+    if (assign_analytical_params) {
+      lab.world_ground.default_friction = params[0];
+      lab.contact_ground->mu_static = params[1];
+      lab.contact_ground->v_transition = params[2];
+    }
 
     auto *object = lab.object;
     object->initialize();
@@ -388,14 +392,12 @@ if (assign_analytical_params) {
         // Scalar object_yaw = object->m_q[3];
         // object_yaw.assign("in_object_yaw");
 
-
         // Scalar out_object_x = object->m_q[0];
         // out_object_x.assign("out_object_x");
         // Scalar out_object_y = object->m_q[1];
         // out_object_y.assign("out_object_y");
         // Scalar out_object_yaw = object->m_q[3];
         // out_object_yaw.assign("out_object_yaw");
-
 
         // out_object_x.evaluate();
         // out_object_y.evaluate();
@@ -428,10 +430,16 @@ if (assign_analytical_params) {
 int main(int argc, char *argv[]) {
   google::InitGoogleLogging(argv[0]);
 
+  cxxopts::Options options("neural_push", "Learn contact friction model");
+  options.add_options()("connection_mode", "Connection mode",
+                        cxxopts::value<std::string>()->default_value("gui"));
+
+  auto cli_args = options.parse(argc, argv);
+
   typedef double Scalar;
   typedef DoubleUtils Utils;
 
-  std::string connection_mode = "gui";
+  std::string connection_mode = cli_args["connection_mode"].as<std::string>();
 
   std::string shape = "butter";
 
@@ -493,45 +501,49 @@ int main(int argc, char *argv[]) {
   PushEstimator frontend_estimator;
   std::string path = std::filesystem::path(push_filename).parent_path();
   for (const auto &entry : std::filesystem::directory_iterator(path)) {
+    if (entry.path().string().find("_a=0_") == std::string::npos) {
+      // skip files with nonzero acceleration
+      continue;
+    }
     std::cout << "Loading " << entry.path() << std::endl;
     frontend_estimator.add_training_dataset(entry.path(), sim, sim2);
-    if (frontend_estimator.trajectories.size() >= 100) {
+    if (frontend_estimator.trajectories.size() >= num_files) {
       break;
     }
   }
   // frontend_estimator.add_training_dataset(push_filename, sim, sim2);
   frontend_estimator.use_finite_diff = false;
-  frontend_estimator.minibatch_size = 1;  // 50;
+  frontend_estimator.minibatch_size = num_files;  // 50;
   // frontend_estimator.options.line_search_direction_type =
   // ceres::LineSearchDirectionType::STEEPEST_DESCENT;
   // frontend_estimator.options.line_search_type = ceres::LineSearchType::WOLFE;
-  frontend_estimator.options.minimizer_type =
-  ceres::MinimizerType::LINE_SEARCH;
-  frontend_estimator.set_bounds = false; //true; //true;
-  frontend_estimator.neural_augmentation.weight_limit = 100;
-  frontend_estimator.neural_augmentation.bias_limit = 0.1;
+  frontend_estimator.options.minimizer_type = ceres::MinimizerType::LINE_SEARCH;
+  frontend_estimator.set_bounds = false;  // true; //true;
+  frontend_estimator.neural_augmentation.weight_limit = 0.05;
+  frontend_estimator.neural_augmentation.bias_limit = 0.00001;
   frontend_estimator.neural_augmentation.input_lasso_regularization = 0;
   frontend_estimator.neural_augmentation.upper_l2_regularization = 0;
-  frontend_estimator.neural_augmentation.default_hidden_layers = 1;
+  frontend_estimator.neural_augmentation.default_hidden_layers = 2;
   // frontend_estimator.neural_augmentation.add_wiring(
   //       std::vector<std::string>{"tau_0", "tau_1", "tau_3"},
   //       std::vector<std::string>{"q_0", "q_1", "q_3"});
   // frontend_estimator.neural_augmentation.add_wiring(
-  //       std::vector<std::string>{"out_object_x", "out_object_y", "out_object_yaw"},
-  //       std::vector<std::string>{"in_object_x", "in_object_y", "in_object_yaw"});
+  //       std::vector<std::string>{"out_object_x", "out_object_y",
+  //       "out_object_yaw"}, std::vector<std::string>{"in_object_x",
+  //       "in_object_y", "in_object_yaw"});
   frontend_estimator.neural_augmentation.add_wiring(
-        std::vector<std::string>{"friction/fr_vec.x", "friction/fr_vec.y"},
-        std::vector<std::string>{"friction/fn", "friction/point.x",
-                                 "friction/point.y", "friction/rel_vel.x",
-                                 "friction/rel_vel.y"});
+      std::vector<std::string>{"friction/fr_vec.x", "friction/fr_vec.y"},
+      std::vector<std::string>{"friction/fn", "friction/point.x",
+                               "friction/point.y", "friction/rel_vel.x",
+                               "friction/rel_vel.y"});
   frontend_estimator.setup();
 
   std::function<std::unique_ptr<PushEstimator>()> construct_estimator =
       [&push_filename, &frontend_estimator]() {
         auto estimator = std::make_unique<PushEstimator>();
         estimator->options.minimizer_progress_to_stdout = !USE_PBH;
-        estimator->options.max_num_consecutive_invalid_steps = 100;
-        estimator->options.max_num_iterations = 200;
+        estimator->options.max_num_consecutive_invalid_steps = 20;
+        estimator->options.max_num_iterations = 100;
         // divide each cost term by integer time step ^ 2 to reduce gradient
         // explosion
         estimator->divide_cost_by_time_factor = 0.;
@@ -565,7 +577,7 @@ int main(int argc, char *argv[]) {
   }
   BasinHoppingEstimator<param_dim, PushEstimator> bhe(construct_estimator,
                                                       initial_guess);
-  bhe.time_limit = 60 * 60 * 1;
+  bhe.time_limit = 60 * 60 * 4;  // 4 hours
   bhe.run();
 
   printf("Optimized parameters:");
@@ -580,20 +592,39 @@ int main(int argc, char *argv[]) {
     best_params.push_back(p);
   }
 #else
-  // double cost = 0;
-  // double gradient[param_dim] = {0, 0, 0};
-  // frontend_estimator.compute_loss(frontend_estimator.vars(), &cost, gradient);
+  double cost = 0;
+  double gradient[param_dim] = {0, 0, 0};
+
+  // double vars[] = {
+  //     0.8419394510,  0.2068648047,  0.2000000000,  -0.0282036139,
+  //     -0.0474505852, -0.0491347716, 0.0159892392,  0.0223616310,
+  //     -0.0474748849, 0.0446727013, 0.0147376202,  -0.0215294212,
+  //     -0.0247493320, -0.0365737791, -0.0552035766, -0.0346462365,
+  //     -0.0163709386, -0.0166282401, -0.0129492093, -0.0546531948,
+  //     0.0140682806,  0.0407330973,  0.0210522115,  0.0207751488,
+  //     -0.0143962013, 0.0417694072,  -0.0180367930, 0.0059515549,
+  //     -0.0497568537, -0.0580535963, -0.0113478764, -0.0111573448,
+  //     -0.0624960850, 0.0160493265,  -0.0618908926, 0.0348041017,
+  //     0.0364463975,  -0.0539135484, -0.0003163419, -0.0005941433,
+  //     0.0008916415,  0.0013013567,  0.0016905169,  -0.0035324497,
+  //     0.0184809508};
+
+  //     best_params = std::vector<double>(vars, vars+param_dim);
+
+  // frontend_estimator.compute_loss(frontend_estimator.vars(), &cost,
+  // gradient);
+  // frontend_estimator.compute_loss(vars, &cost, gradient);
   // printf("Cost: %.6f\n", cost);
   // printf("Gradient:  ");
   // for (int i = 0; i < param_dim; ++i) {
   //   printf("%.6f  ", gradient[i]);
   // }
   // printf("\n\n");
-  // for (const auto& p : frontend_estimator.parameters) {
+  // for (const auto &p : frontend_estimator.parameters) {
   //   printf("\t%s:  %.8f\n", p.name.c_str(), p.value);
   // }
   // return 0;
-  
+
   // frontend_estimator.gradient_descent(0.001, 50);
 
   auto summary = frontend_estimator.solve();
@@ -627,10 +658,10 @@ int main(int argc, char *argv[]) {
   for (std::size_t i = 0; i < best_params.size(); ++i) {
     nparams[i] = NDUtils::scalar_from_double(best_params[i]);
   }
-  while (true) {
+  while (connection_mode == "gui") {
     std::size_t ref_id =
         std::size_t(rand()) % frontend_estimator.trajectories.size();
-    ref_id = 92;
+    // ref_id = 0;
     std::cout << "Simulating trajectory #" << ref_id << "\t"
               << frontend_estimator.trajectories[ref_id].filename << "\n";
     std::vector<std::vector<NDScalar>> output_states;

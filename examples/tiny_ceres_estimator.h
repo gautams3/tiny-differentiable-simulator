@@ -29,7 +29,7 @@
 #include "tiny_double_utils.h"
 
 #define USE_MATPLOTLIB 1
-#undef USE_MATPLOTLIB
+// #undef USE_MATPLOTLIB
 
 #ifdef USE_MATPLOTLIB
 #include "third_party/matplotlib-cpp/matplotlibcpp.h"
@@ -63,7 +63,7 @@ enum ResidualMode { RES_MODE_1D, RES_MODE_STATE };
 
 template <int ParameterDim, int StateDim, ResidualMode ResMode = RES_MODE_1D>
 class TinyCeresEstimator : ceres::IterationCallback {
-public:
+ public:
   static const int kParameterDim = ParameterDim;
   static const int kStateDim = StateDim;
   static const ResidualMode kResidualMode = ResMode;
@@ -124,6 +124,11 @@ public:
    */
   bool set_bounds{true};
 
+  /**
+   * Cost penalty for every roll-out state that is outside sensible limits.
+   */
+  static inline double nonfinite_penalty{1e3};
+
   ceres::Solver::Options options;
 
   TinyCeresEstimator(double dt) : dt(dt) {
@@ -131,10 +136,10 @@ public:
     options.callbacks.push_back(this);
   }
 
-private:
+ private:
   ceres::CostFunction *cost_function_{nullptr};
 
-public:
+ public:
   virtual void rollout(const std::vector<ADScalar> &params,
                        std::vector<std::vector<ADScalar>> &output_states,
                        double &dt, std::size_t ref_id) const = 0;
@@ -239,18 +244,24 @@ public:
     }
   }
 
-  const std::vector<std::array<double, kParameterDim>> &
-  parameter_evolution() const {
+  const std::vector<std::array<double, kParameterDim>> &parameter_evolution()
+      const {
     return param_evolution_;
   }
 
-private:
+  double best_cost() const { return best_cost_; }
+
+  const std::array<double, kParameterDim> &best_parameters() const {
+    return best_params_;
+  }
+
+ private:
   ceres::Problem problem_;
   double *vars_{nullptr};
   std::vector<std::array<double, kParameterDim>> param_evolution_;
   mutable std::array<double, kParameterDim> current_param_;
 
-  mutable double best_cost_;
+  mutable double best_cost_{std::numeric_limits<double>::max()};
   mutable std::array<double, kParameterDim> best_params_;
 
   struct CostFunctor {
@@ -267,7 +278,8 @@ private:
 
 #ifdef USE_MATPLOTLIB
     template <typename T>
-    static void plot_trajectory(const std::vector<std::vector<T>> &states) {
+    static void plot_trajectory(const std::vector<std::vector<T>> &states,
+                                const std::string &title = "Figure") {
       typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils,
                                  CeresUtils<kParameterDim>>
           Utils;
@@ -279,6 +291,7 @@ private:
         plt::named_plot("state[" + std::to_string(i) + "]", traj);
       }
       plt::legend();
+      plt::title(title);
       plt::show();
     }
 #endif
@@ -297,7 +310,10 @@ private:
     }
 
     // Computes the cost (residual) for input parameters x.
-    template <typename T> bool operator()(const T *const x, T *residual) const {
+    template <typename T>
+    bool operator()(const T *const x, T *residual) const {
+      static int num_evaluations = 0;
+      ++num_evaluations;
       // ref_indices[0] = 26; //92;
       // if (ref_indices.size() > 1) {
       //   // shuffle indices before minibatching
@@ -323,7 +339,7 @@ private:
         residual[i] = regularization;
       }
       int nonfinite = 0;
-        const std::vector<T> params(x, x + kParameterDim);
+      const std::vector<T> params(x, x + kParameterDim);
 
       std::string ref_id_str = "ref_id:";
 
@@ -352,8 +368,7 @@ private:
           fprintf(stderr,
                   "If no target_times are provided to TinyCeresEstimator, the "
                   "number of target_trajectories (%i) must match the number of "
-                  "roll-out "
-                  "states (%i).\n",
+                  "roll-out states (%i).\n",
                   n_target, n_rollout);
           return false;
         }
@@ -363,8 +378,8 @@ private:
         std::vector<T> rollout_state(kStateDim, Utils::zero());
         double time;
         std::vector<std::vector<double>> error_evolution;
-        // plot_trajectory(target_states);
-        // plot_trajectory(rollout_states);
+        // plot_trajectory(target_states, "target_states");
+        // plot_trajectory(rollout_states, "rollout_states");
         for (int t = 0; t < n_target; ++t) {
           if (target_times.empty()) {
             // assume target states line up with rollout states
@@ -453,16 +468,21 @@ private:
         printf("\t%s", ref_id_str.c_str());
         if (nonfinite > 0) {
           std::cerr << "\tnonfinite: " << nonfinite;
+          for (int ri = 0; ri < kResidualDim; ++ri) {
+            residual[ri] += nonfinite * nonfinite_penalty;
+          }
         }
         // std::cout << "  thread ID: " << std::this_thread::get_id();
         printf("\n");
       }
 
-      if constexpr(kResidualMode == RES_MODE_1D) {
+      if constexpr (kResidualMode == RES_MODE_1D) {
         double res = Utils::getDouble(*residual);
         if (res < parent->best_cost_) {
-          printf("Found new best cost %.6f < %.6f\n",
-          res, parent->best_cost_);
+          if (num_evaluations > 1) {
+            printf("Found new best cost %.6f < %.6f\n", res,
+                   parent->best_cost_);
+          }
           for (int ri = 0; ri < kParameterDim; ++ri) {
             parent->best_params_[ri] = Utils::getDouble(params[ri]);
           }
@@ -483,8 +503,8 @@ private:
     }
   };
 
-  ceres::CallbackReturnType
-  operator()(const ceres::IterationSummary &summary) override {
+  ceres::CallbackReturnType operator()(
+      const ceres::IterationSummary &summary) override {
     param_evolution_.push_back(current_param_);
     return ceres::SOLVER_CONTINUE;
   }
@@ -498,11 +518,12 @@ private:
  * McCarty & McGuire "Parallel Monotonic Basin Hopping for Low Thrust
  * Trajectory Optimization"
  */
-template <int ParameterDim, typename Estimator> class BasinHoppingEstimator {
+template <int ParameterDim, typename Estimator>
+class BasinHoppingEstimator {
   static const int kParameterDim = ParameterDim;
   typedef std::function<std::unique_ptr<Estimator>()> EstimatorConstructor;
 
-public:
+ public:
   EstimatorConstructor estimator_constructor;
   std::array<double, kParameterDim> params;
   std::size_t num_workers;
@@ -533,7 +554,8 @@ public:
       const EstimatorConstructor &estimator_constructor,
       const std::array<double, kParameterDim> &initial_guess,
       std::size_t num_workers = std::thread::hardware_concurrency())
-      : estimator_constructor(estimator_constructor), params(initial_guess),
+      : estimator_constructor(estimator_constructor),
+        params(initial_guess),
         num_workers(num_workers) {
     workers_.reserve(num_workers);
   }
@@ -547,8 +569,8 @@ public:
     for (std::size_t k = 0; k < num_workers; ++k) {
       workers_.emplace_back([this, k, &start_time]() {
         auto estimator = this->estimator_constructor();
-        estimator->setup(new ceres::TrivialLoss); // new ceres::HuberLoss(1.));
-                                                  // // TODO expose this
+        estimator->setup(new ceres::TrivialLoss);  // new ceres::HuberLoss(1.));
+                                                   // // TODO expose this
         if (k == 0) {
           // set initial guess
           estimator->set_params(this->params);
@@ -593,9 +615,9 @@ public:
           std::cout << summary.FullReport() << std::endl;
           {
             std::unique_lock<std::mutex> lock(this->mutex_);
-            if (summary.final_cost < this->best_cost_) {
-              this->best_cost_ = summary.final_cost;
-              printf("FOUND NEW BEST COST: %.6f\n", summary.final_cost);
+            if (estimator->best_cost() < this->best_cost_) {
+              this->best_cost_ = estimator->best_cost();
+              printf("FOUND NEW BEST COST: %.6f\n", estimator->best_cost());
               for (int i = 0; i < kParameterDim; ++i) {
                 this->params[i] = estimator->parameters[i].value;
               }
@@ -641,7 +663,7 @@ public:
 
   double best_cost() const { return best_cost_; }
 
-private:
+ private:
   std::vector<std::thread> workers_;
   std::mutex mutex_;
   bool stop_{false};
@@ -652,4 +674,4 @@ private:
   std::mt19937 gen_{rd_()};
 };
 
-#endif // TINY_CERES_ESTIMATOR_H
+#endif  // TINY_CERES_ESTIMATOR_H

@@ -240,6 +240,18 @@ make -j
 make install
 ```
 
+### cxxopts
+
+```
+git clone git@github.com:jarro2783/cxxopts.git
+cd cxxopts
+mkdir build && cd build
+cmake ..
+make -j
+make install
+
+```
+
 ## Docker Instructions
 
 Build the Docker image
