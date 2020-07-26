@@ -29,6 +29,7 @@
 #include "tiny_double_utils.h"
 
 #define USE_MATPLOTLIB 1
+#undef USE_MATPLOTLIB
 
 #ifdef USE_MATPLOTLIB
 #include "third_party/matplotlib-cpp/matplotlibcpp.h"
@@ -62,7 +63,7 @@ enum ResidualMode { RES_MODE_1D, RES_MODE_STATE };
 
 template <int ParameterDim, int StateDim, ResidualMode ResMode = RES_MODE_1D>
 class TinyCeresEstimator : ceres::IterationCallback {
- public:
+public:
   static const int kParameterDim = ParameterDim;
   static const int kStateDim = StateDim;
   static const ResidualMode kResidualMode = ResMode;
@@ -130,10 +131,10 @@ class TinyCeresEstimator : ceres::IterationCallback {
     options.callbacks.push_back(this);
   }
 
- private:
+private:
   ceres::CostFunction *cost_function_{nullptr};
 
- public:
+public:
   virtual void rollout(const std::vector<ADScalar> &params,
                        std::vector<std::vector<ADScalar>> &output_states,
                        double &dt, std::size_t ref_id) const = 0;
@@ -238,12 +239,12 @@ class TinyCeresEstimator : ceres::IterationCallback {
     }
   }
 
-  const std::vector<std::array<double, kParameterDim>> &parameter_evolution()
-      const {
+  const std::vector<std::array<double, kParameterDim>> &
+  parameter_evolution() const {
     return param_evolution_;
   }
 
- private:
+private:
   ceres::Problem problem_;
   double *vars_{nullptr};
   std::vector<std::array<double, kParameterDim>> param_evolution_;
@@ -296,8 +297,7 @@ class TinyCeresEstimator : ceres::IterationCallback {
     }
 
     // Computes the cost (residual) for input parameters x.
-    template <typename T>
-    bool operator()(const T *const x, T *residual) const {
+    template <typename T> bool operator()(const T *const x, T *residual) const {
       // ref_indices[0] = 26; //92;
       // if (ref_indices.size() > 1) {
       //   // shuffle indices before minibatching
@@ -483,8 +483,8 @@ class TinyCeresEstimator : ceres::IterationCallback {
     }
   };
 
-  ceres::CallbackReturnType operator()(
-      const ceres::IterationSummary &summary) override {
+  ceres::CallbackReturnType
+  operator()(const ceres::IterationSummary &summary) override {
     param_evolution_.push_back(current_param_);
     return ceres::SOLVER_CONTINUE;
   }
@@ -498,12 +498,11 @@ class TinyCeresEstimator : ceres::IterationCallback {
  * McCarty & McGuire "Parallel Monotonic Basin Hopping for Low Thrust
  * Trajectory Optimization"
  */
-template <int ParameterDim, typename Estimator>
-class BasinHoppingEstimator {
+template <int ParameterDim, typename Estimator> class BasinHoppingEstimator {
   static const int kParameterDim = ParameterDim;
   typedef std::function<std::unique_ptr<Estimator>()> EstimatorConstructor;
 
- public:
+public:
   EstimatorConstructor estimator_constructor;
   std::array<double, kParameterDim> params;
   std::size_t num_workers;
@@ -534,8 +533,7 @@ class BasinHoppingEstimator {
       const EstimatorConstructor &estimator_constructor,
       const std::array<double, kParameterDim> &initial_guess,
       std::size_t num_workers = std::thread::hardware_concurrency())
-      : estimator_constructor(estimator_constructor),
-        params(initial_guess),
+      : estimator_constructor(estimator_constructor), params(initial_guess),
         num_workers(num_workers) {
     workers_.reserve(num_workers);
   }
@@ -549,8 +547,8 @@ class BasinHoppingEstimator {
     for (std::size_t k = 0; k < num_workers; ++k) {
       workers_.emplace_back([this, k, &start_time]() {
         auto estimator = this->estimator_constructor();
-        estimator->setup(new ceres::TrivialLoss);  // new ceres::HuberLoss(1.));
-                                                   // // TODO expose this
+        estimator->setup(new ceres::TrivialLoss); // new ceres::HuberLoss(1.));
+                                                  // // TODO expose this
         if (k == 0) {
           // set initial guess
           estimator->set_params(this->params);
@@ -643,7 +641,7 @@ class BasinHoppingEstimator {
 
   double best_cost() const { return best_cost_; }
 
- private:
+private:
   std::vector<std::thread> workers_;
   std::mutex mutex_;
   bool stop_{false};
@@ -654,4 +652,4 @@ class BasinHoppingEstimator {
   std::mt19937 gen_{rd_()};
 };
 
-#endif  // TINY_CERES_ESTIMATOR_H
+#endif // TINY_CERES_ESTIMATOR_H

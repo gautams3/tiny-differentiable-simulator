@@ -92,6 +92,7 @@ IF(WIN32)
 ENDIF()
 set(HAS_MESHCAT TRUE)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 if (Bullet_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -O3")
@@ -202,6 +203,9 @@ if (Bullet_FOUND)
 
     add_executable(gravity_compensation gravity_compensation.cpp ${TDS_HDRS})
     target_link_libraries(gravity_compensation pybullet_visualizer_api)
+
+    add_executable(experiment_neural_swimmer experiment_neural_swimmer.cpp ${TDS_HDRS})
+    target_link_libraries(experiment_neural_swimmer ${CERES_LIBRARIES} tinyxml2)
 
 if (HAS_MESHCAT)
     add_executable(laikago_meshcat_example laikago_meshcat_example.cpp ${TDS_HDRS})

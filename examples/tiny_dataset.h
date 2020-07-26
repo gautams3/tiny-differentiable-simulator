@@ -42,10 +42,16 @@ class TinyDataset {
   // Returns the total size of the dataset.
   std::size_t Size() const { return size_; }
 
-  // Linear index access, depends on storage order..
+  // Returns a pointer to raw data.
+  Scalar* Data() { return data_.data(); }
+
+  // Returns a pointer to raw data.
+  const Scalar* Data() const { return data_.data(); }
+
+  // Linear index access, depends on storage order.
   Scalar& operator[](std::size_t linear_index) { return data_[linear_index]; }
 
-  // Linear index access, depends on storage order..
+  // Linear index access, depends on storage order.
   const Scalar& operator[](std::size_t linear_index) const {
     return data_[linear_index];
   }

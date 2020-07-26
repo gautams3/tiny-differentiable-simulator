@@ -1,0 +1,252 @@
+<?xml version="1.0" ?>
+<robot name="swimmer10">
+  <link name="world"/>
+  <link name="xslide">
+    <inertial>
+      <mass value="0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+  </link>
+  <link name="yslide">
+    <inertial>
+      <mass value="0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+  </link>
+  <joint name="world_xslide" type="prismatic">
+    <axis xyz="1 0 0"/>
+    <limit lower="-1000" upper="1000"/>
+    <origin xyz="0 0 0"/>
+    <parent link="world"/>
+    <child link="xslide"/>
+  </joint>
+  <joint name="xslide_yslide" type="prismatic">
+    <axis xyz="0 1 0"/>
+    <limit lower="-1000" upper="1000"/>
+    <origin xyz="0 0 0"/>
+    <parent link="xslide"/>
+    <child link="yslide"/>
+  </joint>
+  <link name="link00">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link00_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="yslide_link00" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0 0"/>
+    <parent link="yslide"/>
+    <child link="link00"/>
+  </joint>
+  <link name="link01">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0.05 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link01_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0.05 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="link00_link01" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0.05 0"/>
+    <parent link="link00"/>
+    <child link="link01"/>
+  </joint>
+  <link name="link02">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0.05 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link02_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0.05 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="link01_link02" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0.1 0"/>
+    <parent link="link01"/>
+    <child link="link02"/>
+  </joint>
+  <link name="link03">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0.05 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link03_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0.05 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="link02_link03" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0.1 0"/>
+    <parent link="link02"/>
+    <child link="link03"/>
+  </joint>
+  <link name="link04">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0.05 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link04_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0.05 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="link03_link04" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0.1 0"/>
+    <parent link="link03"/>
+    <child link="link04"/>
+  </joint>
+  <link name="link05">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0.05 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link05_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0.05 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="link04_link05" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0.1 0"/>
+    <parent link="link04"/>
+    <child link="link05"/>
+  </joint>
+  <link name="link06">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0.05 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link06_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0.05 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="link05_link06" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0.1 0"/>
+    <parent link="link05"/>
+    <child link="link06"/>
+  </joint>
+  <link name="link07">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0.05 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link07_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0.05 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="link06_link07" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0.1 0"/>
+    <parent link="link06"/>
+    <child link="link07"/>
+  </joint>
+  <link name="link08">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0.05 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link08_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0.05 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="link07_link08" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0.1 0"/>
+    <parent link="link07"/>
+    <child link="link08"/>
+  </joint>
+  <link name="link09">
+    <visual>
+      <origin rpy="1.5707963267948966 0 0" xyz="0 0.05 0"/>
+      <geometry>
+        <capsule length="0.1" radius=".01"/>
+      </geometry>
+      <material name="link09_material">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin rpy="0 0 0" xyz="0 0.05 0"/>
+      <inertia ixx="0.0008666666666666667" ixy="0" ixz="0" iyy="3.366666666666667e-05" iyz="0" izz="0.0008336666666666669"/>
+    </inertial>
+  </link>
+  <joint name="link08_link09" type="continuous">
+    <axis xyz="0 0 1"/>
+    <origin xyz="0 0.1 0"/>
+    <parent link="link08"/>
+    <child link="link09"/>
+  </joint>
+</robot>
