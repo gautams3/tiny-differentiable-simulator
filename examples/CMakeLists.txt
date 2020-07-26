@@ -149,8 +149,8 @@ if (Bullet_FOUND)
             include_directories(${HighFive_INCLUDE_DIRS})
             add_executable(neural_push neural_push.cpp ${TDS_HDRS})
             target_link_libraries(neural_push pybullet_visualizer_api ${DL}
-                HighFive ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES} -fsanitize=thread)      
-	   target_compile_options(neural_push PRIVATE -fsanitize=thread)
+                HighFive ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES}) # -fsanitize=thread)      
+	        # target_compile_options(neural_push PRIVATE -fsanitize=thread)
         endif (HighFive_FOUND)
 
         add_executable(neural_heightfield neural_heightfield.cpp ${TDS_HDRS})

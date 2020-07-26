@@ -24,6 +24,7 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <atomic>
 
 #include "ceres_utils.h"
 #include "tiny_double_utils.h"
@@ -310,7 +311,7 @@ private:
 
     // Computes the cost (residual) for input parameters x.
     template <typename T> bool operator()(const T *const x, T *residual) const {
-      static int num_evaluations = 0;
+      static thread_local int num_evaluations = 0;
       ++num_evaluations;
       // ref_indices[0] = 26; //92;
       // if (ref_indices.size() > 1) {
