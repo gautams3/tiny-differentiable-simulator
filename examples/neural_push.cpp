@@ -23,12 +23,15 @@ typedef PyBulletVisualizerAPI VisualizerAPI;
 #define USE_NEURAL_AUGMENTATION true
 const int state_dim = 3;
 const ResidualMode res_mode = RES_MODE_1D;
+const bool assign_analytical_params = false;
+const std::size_t analytical_param_dim = 3;
 
 #if USE_NEURAL_AUGMENTATION
 // const int param_dim = 69;
-// const int param_dim = 45;
+// const int param_dim = 71;
+const int param_dim = 45;
 // const int param_dim = 105;
-const int param_dim = 143;
+// const int param_dim = 143;
 #else
 const int param_dim = 3;
 #endif
@@ -161,7 +164,7 @@ class PushEstimator
 #if USE_NEURAL_AUGMENTATION
     neural_augmentation.assign_estimation_parameters(parameters, 3); //, NN_INIT_ZERO);
     for (int i = 3; i < param_dim; ++i) {
-      parameters[i].value *= 0.001;
+      parameters[i].value *= 0.1;
       // parameters[i].value = 0.0;
       // if (i > 19) {
       //   parameters[i].value += 0.001; // nonzero bias
@@ -313,7 +316,7 @@ class PushEstimator
       for (std::size_t i = 0; i < params.size(); ++i) {
         iparams[i] = params[i].evaluate();
       }
-      neural_augmentation.template instantiate<IScalar, IUtils>(iparams);
+      neural_augmentation.template instantiate<IScalar, IUtils>(iparams, analytical_param_dim);
     }
 
     const auto &data = trajectories[ref_id];
@@ -325,9 +328,11 @@ class PushEstimator
     auto *tip = lab.tip;
     tip->initialize();
 
+if (assign_analytical_params) {
     lab.world_ground.default_friction = params[0];
     lab.contact_ground->mu_static = params[1];
     lab.contact_ground->v_transition = params[2];
+}
 
     auto *object = lab.object;
     object->initialize();
@@ -376,6 +381,27 @@ class PushEstimator
       // object->print_state();
 
       if (i % skip_steps == 0) {
+        // Scalar object_x = object->m_q[0];
+        // object_x.assign("in_object_x");
+        // Scalar object_y = object->m_q[1];
+        // object_y.assign("in_object_y");
+        // Scalar object_yaw = object->m_q[3];
+        // object_yaw.assign("in_object_yaw");
+
+
+        // Scalar out_object_x = object->m_q[0];
+        // out_object_x.assign("out_object_x");
+        // Scalar out_object_y = object->m_q[1];
+        // out_object_y.assign("out_object_y");
+        // Scalar out_object_yaw = object->m_q[3];
+        // out_object_yaw.assign("out_object_yaw");
+
+
+        // out_object_x.evaluate();
+        // out_object_y.evaluate();
+        // out_object_yaw.evaluate();
+        // output_states.push_back(
+        //     {out_object_x, out_object_y, out_object_yaw});
         output_states.push_back(
             {object->m_q[0], object->m_q[1], object->m_q[3]});
       }
@@ -479,17 +505,20 @@ int main(int argc, char *argv[]) {
   // frontend_estimator.options.line_search_direction_type =
   // ceres::LineSearchDirectionType::STEEPEST_DESCENT;
   // frontend_estimator.options.line_search_type = ceres::LineSearchType::WOLFE;
-  // frontend_estimator.options.minimizer_type =
-  // ceres::MinimizerType::LINE_SEARCH;
-  frontend_estimator.set_bounds = true; //true;
+  frontend_estimator.options.minimizer_type =
+  ceres::MinimizerType::LINE_SEARCH;
+  frontend_estimator.set_bounds = false; //true; //true;
   frontend_estimator.neural_augmentation.weight_limit = 100;
   frontend_estimator.neural_augmentation.bias_limit = 0.1;
   frontend_estimator.neural_augmentation.input_lasso_regularization = 0;
   frontend_estimator.neural_augmentation.upper_l2_regularization = 0;
-  frontend_estimator.neural_augmentation.default_hidden_layers = 2;
-  frontend_estimator.neural_augmentation.add_wiring(
-        std::vector<std::string>{"tau_0", "tau_1", "tau_3"},
-        std::vector<std::string>{"q_0", "q_1", "q_3"});
+  frontend_estimator.neural_augmentation.default_hidden_layers = 1;
+  // frontend_estimator.neural_augmentation.add_wiring(
+  //       std::vector<std::string>{"tau_0", "tau_1", "tau_3"},
+  //       std::vector<std::string>{"q_0", "q_1", "q_3"});
+  // frontend_estimator.neural_augmentation.add_wiring(
+  //       std::vector<std::string>{"out_object_x", "out_object_y", "out_object_yaw"},
+  //       std::vector<std::string>{"in_object_x", "in_object_y", "in_object_yaw"});
   frontend_estimator.neural_augmentation.add_wiring(
         std::vector<std::string>{"friction/fr_vec.x", "friction/fr_vec.y"},
         std::vector<std::string>{"friction/fn", "friction/point.x",
@@ -564,6 +593,8 @@ int main(int argc, char *argv[]) {
   //   printf("\t%s:  %.8f\n", p.name.c_str(), p.value);
   // }
   // return 0;
+  
+  // frontend_estimator.gradient_descent(0.001, 50);
 
   auto summary = frontend_estimator.solve();
   std::cout << summary.FullReport() << std::endl;

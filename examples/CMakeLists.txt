@@ -94,7 +94,7 @@ set(HAS_MESHCAT TRUE)
 
 
 if (Bullet_FOUND)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -O3")
     include_directories(${BULLET_INCLUDE_DIRS})
     add_library(pybullet_visualizer_api STATIC pybullet_visualizer_api.cpp)
     target_link_libraries(pybullet_visualizer_api BulletRoboticsGUI BulletExampleBrowserLib
@@ -134,6 +134,10 @@ if (Bullet_FOUND)
         add_definitions(-DNEURAL_SIM)
         add_executable(neural_discovery neural_discovery.cpp ${TDS_HDRS})
         target_link_libraries(neural_discovery pybullet_visualizer_api ${DL}
+                ${CERES_LIBRARIES})
+
+        add_executable(neural_wtf neural_wtf.cpp ${TDS_HDRS})
+        target_link_libraries(neural_wtf pybullet_visualizer_api python2.7 ${DL}
                 ${CERES_LIBRARIES})
 
         add_executable(neural_joint neural_joint.cpp ${TDS_HDRS})

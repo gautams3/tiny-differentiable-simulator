@@ -185,15 +185,46 @@ class TinyCeresEstimator : ceres::IterationCallback {
     cost_function_->Evaluate(params, cost, &gradient);
   }
 
+  void gradient_descent(double learning_rate, int iterations) {
+    double gradient[kParameterDim];
+    double cost;
+    param_evolution_.clear();
+    for (int i = 0; i < iterations; ++i) {
+      compute_loss(vars_, &cost, gradient);
+      printf("Gradient descent step %i - cost: %.6f\n", i, cost);
+      for (int j = 0; j < kParameterDim; ++j) {
+        current_param_[j] = vars_[j];
+        vars_[j] -= learning_rate * gradient[j];
+      }
+      param_evolution_.push_back(current_param_);
+    }
+    for (int i = 0; i < kParameterDim; ++i) {
+      parameters[i].value = vars_[i];
+    }
+  }
+
   ceres::Solver::Summary solve() {
     ceres::Solver::Summary summary;
     param_evolution_.clear();
+    best_cost_ = std::numeric_limits<double>::max();
     for (int i = 0; i < kParameterDim; ++i) {
       vars_[i] = parameters[i].value;
+      best_params_[i] = parameters[i].value;
     }
     ceres::Solve(options, &problem_, &summary);
-    for (int i = 0; i < kParameterDim; ++i) {
-      parameters[i].value = vars_[i];
+    if (summary.final_cost > best_cost_) {
+      printf(
+          "Ceres returned a parameter vector with a final cost of %.8f whereas "
+          "during the optimization a parameter vector with a lower cost of "
+          "%.8f was found. Returning the best parameter vector.\n",
+          summary.final_cost, best_cost_);
+      for (int i = 0; i < kParameterDim; ++i) {
+        parameters[i].value = best_params_[i];
+      }
+    } else {
+      for (int i = 0; i < kParameterDim; ++i) {
+        parameters[i].value = vars_[i];
+      }
     }
     return summary;
   }
@@ -217,6 +248,9 @@ class TinyCeresEstimator : ceres::IterationCallback {
   double *vars_{nullptr};
   std::vector<std::array<double, kParameterDim>> param_evolution_;
   mutable std::array<double, kParameterDim> current_param_;
+
+  mutable double best_cost_;
+  mutable std::array<double, kParameterDim> best_params_;
 
   struct CostFunctor {
     CeresEstimator *parent{nullptr};
@@ -289,6 +323,7 @@ class TinyCeresEstimator : ceres::IterationCallback {
         residual[i] = regularization;
       }
       int nonfinite = 0;
+        const std::vector<T> params(x, x + kParameterDim);
 
       std::string ref_id_str = "ref_id:";
 
@@ -297,7 +332,6 @@ class TinyCeresEstimator : ceres::IterationCallback {
         const std::size_t ref_id = ref_indices[traj_id];
 
         // first roll-out simulation given the current parameters
-        const std::vector<T> params(x, x + kParameterDim);
         std::vector<std::vector<T>> rollout_states;
         double &dt = parent->dt;
         parent->rollout(params, rollout_states, dt, ref_id);
@@ -369,21 +403,22 @@ class TinyCeresEstimator : ceres::IterationCallback {
             difference *= difference;
             double dd = Utils::getDouble(difference);
             if (std::isinf(dd) || std::isnan(dd)) {
-//               printf("!!d!! %f\t", dd);
-//               printf("target_states[t][i]=%f\t", target_states[t][i]);
-//               printf("rollout_state[i]=%f\t",
-//                      Utils::getDouble(rollout_state[i]));
-// #ifdef USE_MATPLOTLIB
-//               plot_trajectory(rollout_states);
-// #endif
+              //               printf("!!d!! %f\t", dd);
+              //               printf("target_states[t][i]=%f\t",
+              //               target_states[t][i]);
+              //               printf("rollout_state[i]=%f\t",
+              //                      Utils::getDouble(rollout_state[i]));
+              // #ifdef USE_MATPLOTLIB
+              //               plot_trajectory(rollout_states);
+              // #endif
               ++nonfinite;
               continue;
             } else if (std::abs(dd) > 1e10) {
               ++nonfinite;
               printf(" NONFINITE!!! ");
-// #ifdef USE_MATPLOTLIB
-//               plot_trajectory(rollout_states);
-// #endif
+              // #ifdef USE_MATPLOTLIB
+              //               plot_trajectory(rollout_states);
+              // #endif
               continue;
             }
             // printf("%.3f  ", Utils::getDouble(difference));
@@ -421,6 +456,18 @@ class TinyCeresEstimator : ceres::IterationCallback {
         }
         // std::cout << "  thread ID: " << std::this_thread::get_id();
         printf("\n");
+      }
+
+      if constexpr(kResidualMode == RES_MODE_1D) {
+        double res = Utils::getDouble(*residual);
+        if (res < parent->best_cost_) {
+          printf("Found new best cost %.6f < %.6f\n",
+          res, parent->best_cost_);
+          for (int ri = 0; ri < kParameterDim; ++ri) {
+            parent->best_params_[ri] = Utils::getDouble(params[ri]);
+          }
+          parent->best_cost_ = res;
+        }
       }
       // plot_trajectory(error_evolution);
       // plt::named_plot("difference", error_evolution);
