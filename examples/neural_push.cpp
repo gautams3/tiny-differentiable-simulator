@@ -3,7 +3,7 @@
 
 #include <chrono>
 #include <cxxopts.hpp>
-#include <filesystem>
+#include <experimental/filesystem>
 #include <iostream>
 #include <thread>
 
@@ -56,8 +56,7 @@ typedef ADScalar NAScalar;
 typedef ADUtils NAUtils;
 #endif
 
-template <typename Scalar, typename Utils>
-struct Laboratory {
+template <typename Scalar, typename Utils> struct Laboratory {
   // create duplicate world object to not get any automatic collision response
   // between object and tip (we create our own contact point for this
   // interaction)
@@ -129,7 +128,7 @@ struct Laboratory {
 
 class PushEstimator
     : public TinyCeresEstimator<param_dim, state_dim, res_mode> {
- public:
+public:
   typedef TinyCeresEstimator<param_dim, state_dim, res_mode> CeresEstimator;
   using CeresEstimator::kStateDim, CeresEstimator::kParameterDim;
   using CeresEstimator::parameters, CeresEstimator::dt;
@@ -165,7 +164,7 @@ class PushEstimator
 
 #if USE_NEURAL_AUGMENTATION
     neural_augmentation.assign_estimation_parameters(
-        parameters, analytical_param_dim);  //, NN_INIT_ZERO);
+        parameters, analytical_param_dim); //, NN_INIT_ZERO);
     for (int i = 3; i < param_dim; ++i) {
       parameters[i].value *= 0.1;
       // parameters[i].value = 0.0;
@@ -261,16 +260,17 @@ class PushEstimator
 #endif
   }
 
- private:
+private:
   template <typename Scalar, typename Utils>
-  static void add_laboratory(
-      const std::string &lab_name, const std::string &shape_urdf_filename,
-      const std::string &surface_urdf_filename,
-      const std::string &tip_urdf_filename,
-      const std::string &exterior_filename,
-      TinyUrdfCache<Scalar, Utils> &urdf_cache,
-      std::map<std::string, Laboratory<Scalar, Utils> *> *labs,
-      VisualizerAPI *sim, VisualizerAPI *sim2) {
+  static void
+  add_laboratory(const std::string &lab_name,
+                 const std::string &shape_urdf_filename,
+                 const std::string &surface_urdf_filename,
+                 const std::string &tip_urdf_filename,
+                 const std::string &exterior_filename,
+                 TinyUrdfCache<Scalar, Utils> &urdf_cache,
+                 std::map<std::string, Laboratory<Scalar, Utils> *> *labs,
+                 VisualizerAPI *sim, VisualizerAPI *sim2) {
     // only add a new "laboratory" for a novel shape-surface combination
     if (labs->find(lab_name) != labs->end()) {
       return;
@@ -281,8 +281,8 @@ class PushEstimator
   }
 
   template <typename Scalar, typename Utils>
-  constexpr Laboratory<Scalar, Utils> &get_lab(
-      const std::string &lab_name) const {
+  constexpr Laboratory<Scalar, Utils> &
+  get_lab(const std::string &lab_name) const {
     if constexpr (std::is_same_v<Scalar, NDScalar>) {
       return *(labs_double[lab_name]);
     } else {
@@ -293,8 +293,7 @@ class PushEstimator
   TinyUrdfCache<NDScalar, NDUtils> urdf_cache_double;
   TinyUrdfCache<NAScalar, NAUtils> urdf_cache_ad;
 
-  template <typename Scalar>
-  constexpr auto &get_cache() {
+  template <typename Scalar> constexpr auto &get_cache() {
     if constexpr (std::is_same_v<Scalar, NDScalar>) {
       return urdf_cache_double;
     } else {
@@ -302,7 +301,7 @@ class PushEstimator
     }
   }
 
- public:
+public:
   template <typename Scalar, typename Utils>
   void rollout(const std::vector<Scalar> &params,
                std::vector<std::vector<Scalar>> &output_states, double &dt,
@@ -342,7 +341,7 @@ class PushEstimator
     object->initialize();
     object->m_q[0] = Utils::scalar_from_double(data.object_x[0]);
     object->m_q[1] = Utils::scalar_from_double(data.object_y[0]);
-    object->m_q[2] = Utils::scalar_from_double(0.005);  // initial object height
+    object->m_q[2] = Utils::scalar_from_double(0.005); // initial object height
     object->m_q[3] = Utils::scalar_from_double(data.object_yaw[0]);
     object->forward_kinematics();
 
@@ -374,7 +373,7 @@ class PushEstimator
 
       // XXX friction between tip and object
       tip_contact.m_friction =
-          Utils::scalar_from_double(0.25);  // Utils::scalar_from_double(1);
+          Utils::scalar_from_double(0.25); // Utils::scalar_from_double(1);
       lab.tip_contact_model.erp = Utils::scalar_from_double(0.001);
       lab.tip_contact_model.cfm = Utils::scalar_from_double(0.000001);
 
@@ -472,7 +471,8 @@ int main(int argc, char *argv[]) {
 
   PushData data(push_filename);
 
-  if (argc > 1) object_filename = std::string(argv[1]);
+  if (argc > 1)
+    object_filename = std::string(argv[1]);
   bool floating_base = true;
 
   // Set NaN trap
@@ -488,9 +488,12 @@ int main(int argc, char *argv[]) {
 
   printf("connection_mode=%s\n", connection_mode.c_str());
   int mode = eCONNECT_GUI;
-  if (connection_mode == "direct") mode = eCONNECT_DIRECT;
-  if (connection_mode == "gui") mode = eCONNECT_GUI;
-  if (connection_mode == "shared_memory") mode = eCONNECT_SHARED_MEMORY;
+  if (connection_mode == "direct")
+    mode = eCONNECT_DIRECT;
+  if (connection_mode == "gui")
+    mode = eCONNECT_GUI;
+  if (connection_mode == "shared_memory")
+    mode = eCONNECT_SHARED_MEMORY;
 
   bool isConnected = sim->connect(mode);
   if (!isConnected) {
@@ -504,8 +507,10 @@ int main(int argc, char *argv[]) {
   // create estimator for single-thread optimization (without PBH) and
   // visualization
   PushEstimator frontend_estimator;
-  std::string path = std::filesystem::path(push_filename).parent_path();
-  for (const auto &entry : std::filesystem::directory_iterator(path)) {
+  std::string path =
+      std::experimental::filesystem::path(push_filename).parent_path();
+  for (const auto &entry :
+       std::experimental::filesystem::directory_iterator(path)) {
     if (entry.path().string().find("_a=0_") == std::string::npos) {
       // skip files with nonzero acceleration
       continue;
@@ -518,12 +523,12 @@ int main(int argc, char *argv[]) {
   }
   // frontend_estimator.add_training_dataset(push_filename, sim, sim2);
   frontend_estimator.use_finite_diff = false;
-  frontend_estimator.minibatch_size = num_files;  // 50;
+  frontend_estimator.minibatch_size = num_files; // 50;
   // frontend_estimator.options.line_search_direction_type =
   // ceres::LineSearchDirectionType::STEEPEST_DESCENT;
   // frontend_estimator.options.line_search_type = ceres::LineSearchType::WOLFE;
   frontend_estimator.options.minimizer_type = ceres::MinimizerType::LINE_SEARCH;
-  frontend_estimator.set_bounds = false;  // true; //true;
+  frontend_estimator.set_bounds = false; // true; //true;
   frontend_estimator.neural_augmentation.weight_limit = 0.05;
   frontend_estimator.neural_augmentation.bias_limit = 0.00001;
   frontend_estimator.neural_augmentation.input_lasso_regularization = 0;
@@ -582,7 +587,7 @@ int main(int argc, char *argv[]) {
   }
   BasinHoppingEstimator<param_dim, PushEstimator> bhe(construct_estimator,
                                                       initial_guess);
-  bhe.time_limit = 60 * 60 * 4;  // 4 hours
+  bhe.time_limit = 60 * 60 * 4; // 4 hours
   bhe.run();
 
   printf("Optimized parameters:");
@@ -644,7 +649,8 @@ int main(int argc, char *argv[]) {
   for (const auto &params : frontend_estimator.parameter_evolution()) {
     for (int i = 0; i < static_cast<int>(params.size()); ++i) {
       file << params[i];
-      if (i < static_cast<int>(params.size()) - 1) file << "\t";
+      if (i < static_cast<int>(params.size()) - 1)
+        file << "\t";
     }
     file << "\n";
   }
