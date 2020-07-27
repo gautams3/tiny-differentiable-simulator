@@ -21,7 +21,7 @@
     <default class="free">
       <joint limited="false" stiffness="0" armature="0"/>
     </default>
-    <motor gear="5e-4" ctrllimited="true" ctrlrange="-1 1"/>
+    <motor gear="1" ctrllimited="true" ctrlrange="-1 1"/>
   </default>
 
   <worldbody>

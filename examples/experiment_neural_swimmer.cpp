@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <cassert>
 #include <ceres/loss_function.h>
+#include <ceres/types.h>
+
+#include <cassert>
 #define NEURAL_SIM 1
 
 #include <fenv.h>
+
 #include <iostream>
 #include <string>
 #include <thread>
@@ -34,18 +37,32 @@
 #include "tiny_urdf_to_multi_body.h"
 #include "tiny_world.h"
 
-constexpr bool kUsePBH = true;
+constexpr bool kUsePBH = false;
+constexpr bool kMaximalState = false;
+
 constexpr int kLinks = 5;
 constexpr int kJoints = kLinks - 1;
 constexpr double kDT = 1. / 500.;
 constexpr int kTimeSteps = 201;
 constexpr int kParamDim = 83;
-constexpr int kStateDim = (3 + 3) * kLinks; // 3 pos + 3 vel per link
+constexpr int kStateDim = (3 + 3) * kLinks;  // 3 pos + 3 vel per link
 
+// Some info about how the dataset is laid out.
+constexpr std::size_t kTauOffset = 0;
+constexpr std::size_t kQOffset = kTauOffset + kJoints;
+constexpr std::size_t kPosOffset = kQOffset + kJoints;
+constexpr std::size_t kVelOffset = kPosOffset + 3 * kLinks;
+
+// Some info about our URDFs.
+constexpr std::size_t kUrdfJoint0Offset = 3;  // x, y, yaw come first
+constexpr std::size_t kUrdfLink0Offset = 2;   // xslide, yslide
+
+// Global neural augmentation tracker.
 NeuralAugmentation gAugmentation;
 
 // Cache for URDF Structures, especially in case we need to load multiple types.
-template <typename T, typename TUtils> struct UrdfCache {
+template <typename T, typename TUtils>
+struct UrdfCache {
   using UrdfStructures = TinyUrdfStructures<T, TUtils>;
   static thread_local inline std::map<std::string, UrdfStructures> cache;
 
@@ -83,19 +100,25 @@ struct DatasetCache {
       const bool status = reader.Open(real_filename);
       if (!status) {
         std::cerr << "Error reading dataset: " << reader.ErrorStatus() << "\n";
+        std::exit(1);
       }
       cache[dataset_filename] = reader.Read();
     }
     return cache[dataset_filename];
   }
 
-  static const DatasetAsVectors &
-  GetAsVectors(const std::string &dataset_filename) {
+  static const DatasetAsVectors &GetAsVectors(
+      const std::string &dataset_filename) {
     if (cache_as_vectors.find(dataset_filename) == cache_as_vectors.end()) {
       const Dataset &dataset = Get(dataset_filename);
-      const auto [ntraj, ntimesteps, nstate] = dataset.Shape();
+      const auto [ntraj, ntimesteps, nstatedataset] = dataset.Shape();
       std::vector<std::vector<double>> times;
       std::vector<std::vector<std::vector<double>>> states;
+
+      if (kPosOffset + kStateDim != nstatedataset) {
+        std::cerr << "ERROR: state dimension mismatch, crashing\n";
+        std::exit(1);
+      }
 
       times.resize(ntraj);
       states.resize(ntraj);
@@ -103,9 +126,9 @@ struct DatasetCache {
         // Leave the times as empty vectors, since the timesteps match.
         states[traj].resize(ntimesteps);
         for (std::size_t timestep = 0; timestep < ntimesteps; ++timestep) {
-          states[traj][timestep].resize(nstate);
-          for (std::size_t i = 0; i < nstate; ++i) {
-            std::array<std::size_t, 3> idx = {traj, timestep, i};
+          states[traj][timestep].resize(kStateDim);
+          for (std::size_t i = 0; i < kStateDim; ++i) {
+            std::array<std::size_t, 3> idx = {traj, timestep, kPosOffset + i};
             states[traj][timestep][i] = dataset[idx];
           }
         }
@@ -118,9 +141,9 @@ struct DatasetCache {
 
 // Load a urdf from structure cache.
 template <typename T, typename TUtils>
-TinyMultiBody<T, TUtils> *
-LoadURDF(TinyWorld<T, TUtils> *world,
-         const TinyUrdfStructures<T, TUtils> &urdf_structures) {
+TinyMultiBody<T, TUtils> *LoadURDF(
+    TinyWorld<T, TUtils> *world,
+    const TinyUrdfStructures<T, TUtils> &urdf_structures) {
   TinyMultiBody<T, TUtils> *system = world->create_multi_body();
   system->m_isFloating = false;
   TinyUrdfToMultiBody<T, TUtils>::convert_to_multi_body(urdf_structures, *world,
@@ -143,6 +166,7 @@ void RolloutSwimmer(const TinyUrdfStructures<T, TUtils> urdf_structures,
   TinyMultiBody<T, TUtils> *system = LoadURDF(&world, urdf_structures);
   *dt = kDT;
 
+  // Initialize the neural network from the parameters.
   if constexpr (is_neural_scalar<T, TUtils>::value) {
     if (!params.empty()) {
       using InnerT = typename T::InnerScalarType;
@@ -155,37 +179,58 @@ void RolloutSwimmer(const TinyUrdfStructures<T, TUtils> urdf_structures,
     }
   }
 
+  // Some sanity checking for the dataset.
   const std::size_t dataset_timesteps = dataset.Shape()[1];
   if (requested_timesteps > dataset_timesteps) {
     std::cerr << "ERROR! Requested more timesteps than in dataset.\n";
-    return;
+    std::exit(1);
   }
 
+  // Set the initial state from the data file.
+  // Global yaw.
+  const std::array<std::size_t, 3> idx = {traj_id, 0, kPosOffset + 2};
+  system->m_q[kUrdfJoint0Offset - 1] = TUtils::scalar_from_double(dataset[idx]);
+  // Full Q.
+  for (int joint = 0; joint < kJoints; ++joint) {
+    const std::array<std::size_t, 3> idx = {traj_id, 0, kQOffset + joint};
+    system->m_q[kUrdfJoint0Offset + joint] =
+        TUtils::scalar_from_double(dataset[idx]);
+  }
+  // Update forward kinematics.
+  system->forward_kinematics();
+
+  // Run the actual rollout.
   output->reserve(requested_timesteps);
   for (std::size_t timestep = 0; timestep < requested_timesteps; ++timestep) {
     // Set gravity.
     world.set_gravity(TinyVector3<T, TUtils>::zero());
 
-    // Apply force from the dataset.
-    for (std::size_t joint = 0; joint < kJoints; ++joint) {
-      const std::array<std::size_t, 3> idx = {traj_id, timestep, joint};
-      system->m_tau[3 + joint] = TUtils::scalar_from_double(dataset[idx]);
-    }
-
     // Save state to output.
     std::vector<T> state;
     state.reserve(kStateDim);
-    for (const TinyLink<T, TUtils> &link : system->m_links) {
-      state.push_back(link.m_X_world.m_translation[0]); // pos_x
-      state.push_back(link.m_X_world.m_translation[1]); // pos_y
+    for (std::size_t i = 0; i < kLinks; ++i) {
+      const TinyLink<T, TUtils> &link = system->m_links[kUrdfLink0Offset + i];
+      state.push_back(link.m_X_world.m_translation[0]);  // pos_x
+      state.push_back(link.m_X_world.m_translation[1]);  // pos_y
       state.push_back(
-          TUtils::atan2(link.m_X_world.m_rotation(0, 1),
-                        link.m_X_world.m_rotation(0, 0))); // pos_yaw
-      state.push_back(link.m_v[3]);                        // vel_x
-      state.push_back(link.m_v[4]);                        // vel_y
-      state.push_back(link.m_v[4]);                        // vel_yaw
+          TUtils::atan2(-link.m_X_world.m_rotation(0, 1),
+                        link.m_X_world.m_rotation(0, 0)));  // pos_yaw
+    }
+    for (std::size_t i = 0; i < kLinks; ++i) {
+      const TinyLink<T, TUtils> &link = system->m_links[kUrdfLink0Offset + i];
+      state.push_back(link.m_v[3]);  // vel_x
+      state.push_back(link.m_v[4]);  // vel_y
+      state.push_back(link.m_v[2]);  // vel_yaw
     }
     output->push_back(state);
+
+    // Apply force from the dataset.
+    for (std::size_t joint = 0; joint < kJoints; ++joint) {
+      const std::array<std::size_t, 3> idx = {traj_id, timestep,
+                                              kTauOffset + joint};
+      system->m_tau[kUrdfJoint0Offset + joint] =
+          TUtils::scalar_from_double(dataset[idx]);
+    }
 
     // Run dynamics.
     system->forward_dynamics(world.get_gravity());
@@ -197,7 +242,7 @@ void RolloutSwimmer(const TinyUrdfStructures<T, TUtils> urdf_structures,
 
 class SwimmerEstimator
     : public TinyCeresEstimator<kParamDim, kStateDim, RES_MODE_1D> {
-public:
+ public:
   typedef TinyCeresEstimator<kParamDim, kStateDim, RES_MODE_1D> CeresEstimator;
   using CeresEstimator::kStateDim, CeresEstimator::kParameterDim;
   using CeresEstimator::parameters;
@@ -209,14 +254,15 @@ public:
 
   SwimmerEstimator(const std::string &urdf_filename,
                    const std::string &dataset_filename)
-      : CeresEstimator(kDT), timesteps_(kTimeSteps),
-        urdf_filename_(urdf_filename), dataset_filename_(dataset_filename) {
+      : CeresEstimator(kDT),
+        timesteps_(kTimeSteps),
+        urdf_filename_(urdf_filename),
+        dataset_filename_(dataset_filename) {
     gAugmentation.assign_estimation_parameters(parameters);
   }
 
-  static std::function<std::unique_ptr<SwimmerEstimator>()>
-  Factory(const std::string &urdf_filename,
-          const std::string &dataset_filename) {
+  static std::function<std::unique_ptr<SwimmerEstimator>()> Factory(
+      const std::string &urdf_filename, const std::string &dataset_filename) {
     return [&urdf_filename, &dataset_filename]() {
       auto estimator =
           std::make_unique<SwimmerEstimator>(urdf_filename, dataset_filename);
@@ -225,6 +271,8 @@ public:
       estimator->target_times = target_times;
       estimator->target_trajectories = target_states;
       estimator->options.minimizer_progress_to_stdout = !kUsePBH;
+      estimator->options.minimizer_type = ceres::MinimizerType::LINE_SEARCH;
+      estimator->set_bounds = false;
       estimator->options.max_num_consecutive_invalid_steps = 100;
       estimator->divide_cost_by_time_factor = 10.;
       estimator->divide_cost_by_time_exponent = 1.2;
@@ -265,6 +313,51 @@ public:
   }
 };
 
+void WriteRollout(const std::string &output_prefix,
+                  const std::string &urdf_filename,
+                  const std::string &dataset_filename,
+                  const std::vector<double> &params) {
+  double rollout_dt;
+  std::vector<std::vector<double>> qs;
+  RolloutSwimmer(UrdfCache<double, DoubleUtils>::Get(urdf_filename), params,
+                 DatasetCache::Get(dataset_filename), 0, kTimeSteps,
+                 &rollout_dt, &qs);
+
+  const std::string &rollout_filename = output_prefix + "_rollout.csv";
+  const std::string &params_filename = output_prefix + "_params.txt";
+
+  std::cout << "\n\n";
+  std::cout << "Writing rollout to " << rollout_filename << ", " << qs.size()
+            << " timesteps\n";
+  {
+    std::ofstream f(rollout_filename);
+    for (const std::vector<double> &q : qs) {
+      bool first = true;
+      for (double qi : q) {
+        f << (first ? "" : ",") << qi;
+        first = false;
+      }
+      f << "\n";
+      std::cout << ".";
+      std::cout.flush();
+    }
+    f.flush();
+  }
+  std::cout << "\n";
+
+  std::cout << "Writing params to " << params_filename << "\n";
+  {
+    std::ofstream f(params_filename);
+    for (double param : params) {
+      f << param << "\n";
+      std::cout << ".";
+      std::cout.flush();
+    }
+    f.flush();
+  }
+  std::cout << "\n\n";
+}
+
 int main(int argc, char *argv[]) {
   // Filenames.
   const std::string urdf_filename = "swimmer/swimmer05/swimmer05.urdf";
@@ -284,8 +377,16 @@ int main(int argc, char *argv[]) {
     }
   }
   gAugmentation.add_wiring(outputs, inputs);
-  std::cout << "#params = " << gAugmentation.num_total_parameters() << "\n";
+  if (gAugmentation.num_total_parameters() != kParamDim) {
+    std::cerr << "ERROR: Param dim mismatch!\n";
+    std::exit(1);
+  }
 
+  // Write some sanity check rollout.
+  const std::vector<double> all_zero_params(kParamDim, 0.0);
+  WriteRollout("all_zero", urdf_filename, dataset_filename, all_zero_params);
+
+  // Estimator factory for PBH.
   auto estimator_factory =
       SwimmerEstimator::Factory(urdf_filename, dataset_filename);
   std::vector<double> best_params;
@@ -299,7 +400,7 @@ int main(int argc, char *argv[]) {
     }
     BasinHoppingEstimator<kParamDim, SwimmerEstimator> bhe(estimator_factory,
                                                            initial_guess);
-    bhe.time_limit = 60 * 60 * 4;
+    bhe.time_limit = 60 * 60;
     bhe.run();
 
     printf("Best cost: %f\n", bhe.best_cost());
@@ -317,6 +418,8 @@ int main(int argc, char *argv[]) {
     for (const EstimationParameter &param : estimator->parameters) {
       best_params.push_back(param.value);
     }
+
+    WriteRollout("optimized", urdf_filename, dataset_filename, best_params);
   }
 
   printf("Optimized parameters:");
