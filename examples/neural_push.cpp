@@ -637,6 +637,7 @@ int main(int argc, char *argv[]) {
 
   // frontend_estimator.compute_loss(frontend_estimator.vars(), &cost,
   // gradient);
+  // frontend_estimator.compute_loss(vars, &cost, gradient);
   // printf("Cost: %.6f\n", cost);
   // printf("Gradient:  ");
   // for (int i = 0; i < param_dim; ++i) {
