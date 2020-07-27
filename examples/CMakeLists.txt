@@ -137,6 +137,10 @@ if (Bullet_FOUND)
         target_link_libraries(neural_discovery pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES})
 
+        add_executable(neural_actuator neural_actuator.cpp ${TDS_HDRS})
+        target_link_libraries(neural_actuator pybullet_visualizer_api ${DL}
+                ${CERES_LIBRARIES})
+
         add_executable(neural_wtf neural_wtf.cpp ${TDS_HDRS})
         target_link_libraries(neural_wtf pybullet_visualizer_api python2.7 ${DL}
                 ${CERES_LIBRARIES})
