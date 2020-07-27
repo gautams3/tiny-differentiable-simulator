@@ -33,6 +33,36 @@ RUN \
     tmux \
     libcrossguid-dev
 
+
+# apt install python-pip2
+# apt install python-pip
+# apt install cmake
+# apt install uuid-dev
+# apt-get install libhdf5-dev
+# apt search crossguid
+# apt install libcrossguid-dev
+# apt search boost
+# apt install libboost-dev
+# apt install libboost-system
+# apt search boost-system
+# apt install libboost-system-dev
+# apt install libboost-filesystem-dev
+# apt install libboost-serialization-dev
+# apt search gcc
+# apt install g++
+# apt install gcc-9
+# apt install gcc-8
+# apt-get install manpages-dev
+# apt install software-properties-common
+# add-apt-repository ppa:ubuntu-toolchain-r/test
+# apt install gcc-7 g++-7 gcc-8 g++-8 gcc-9 g++-9
+# apt install clang-9
+# apt search numpy
+# apt install python-numpy
+# apt install -y cgdb
+# apt install -y vim-nox
+# apt install valgrind
+
 RUN mkdir -p /root/code
 
 # Copy tiny-differentiable-simulator folder
