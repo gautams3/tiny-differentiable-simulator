@@ -299,7 +299,7 @@ int main(int argc, char *argv[]) {
     }
     BasinHoppingEstimator<kParamDim, SwimmerEstimator> bhe(estimator_factory,
                                                            initial_guess);
-    bhe.time_limit = 600;
+    bhe.time_limit = 60 * 60 * 4;
     bhe.run();
 
     printf("Best cost: %f\n", bhe.best_cost());
