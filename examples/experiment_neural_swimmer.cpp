@@ -47,7 +47,7 @@ NeuralAugmentation gAugmentation;
 // Cache for URDF Structures, especially in case we need to load multiple types.
 template <typename T, typename TUtils> struct UrdfCache {
   using UrdfStructures = TinyUrdfStructures<T, TUtils>;
-  static inline std::map<std::string, UrdfStructures> cache;
+  static thread_local inline std::map<std::string, UrdfStructures> cache;
 
   // Load a structure from the cache, by filename.
   static const UrdfStructures &Get(const std::string &urdf_filename) {
@@ -69,8 +69,9 @@ struct DatasetCache {
       std::pair<std::vector<std::vector<double>>,
                 std::vector<std::vector<std::vector<double>>>>;
 
-  static inline std::map<std::string, Dataset> cache;
-  static inline std::map<std::string, DatasetAsVectors> cache_as_vectors;
+  static thread_local inline std::map<std::string, Dataset> cache;
+  static thread_local inline std::map<std::string, DatasetAsVectors>
+      cache_as_vectors;
 
   // Load a structure from the cache, by filename.
   static const Dataset &Get(const std::string &dataset_filename) {
@@ -265,9 +266,6 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-  // Set NaN trap
-  feenableexcept(FE_INVALID | FE_OVERFLOW);
-
   // Filenames.
   const std::string urdf_filename = "swimmer/swimmer05/swimmer05.urdf";
   const std::string dataset_filename = "swimmer/swimmer05.npy";
@@ -288,14 +286,43 @@ int main(int argc, char *argv[]) {
   gAugmentation.add_wiring(outputs, inputs);
   std::cout << "#params = " << gAugmentation.num_total_parameters() << "\n";
 
-  // Run estimator.
   auto estimator_factory =
       SwimmerEstimator::Factory(urdf_filename, dataset_filename);
-  std::unique_ptr<SwimmerEstimator> estimator = estimator_factory();
-  estimator->setup(new ceres::HuberLoss(1.));
-  auto summary = estimator->solve();
-  std::cout << summary.FullReport() << "\n";
-  std::cout << "Final cost:" << summary.final_cost << "\n";
+  std::vector<double> best_params;
+
+  // Run estimator.
+  if (kUsePBH) {
+    // If we use parallel basin hopping.
+    std::array<double, kParamDim> initial_guess;
+    for (int i = 0; i < kParamDim; ++i) {
+      initial_guess[i] = 0.0;
+    }
+    BasinHoppingEstimator<kParamDim, SwimmerEstimator> bhe(estimator_factory,
+                                                           initial_guess);
+    bhe.time_limit = 600;
+    bhe.run();
+
+    printf("Best cost: %f\n", bhe.best_cost());
+    best_params.insert(best_params.end(), bhe.params.begin(), bhe.params.end());
+    for (const double param : bhe.params) {
+      best_params.push_back(param);
+    }
+  } else {
+    // If we use don't parallel basin hopping.
+    std::unique_ptr<SwimmerEstimator> estimator = estimator_factory();
+    estimator->setup(new ceres::HuberLoss(1.));
+    auto summary = estimator->solve();
+    std::cout << summary.FullReport() << "\n";
+    std::cout << "Final cost:" << summary.final_cost << "\n";
+    for (const EstimationParameter &param : estimator->parameters) {
+      best_params.push_back(param.value);
+    }
+  }
+
+  printf("Optimized parameters:");
+  for (const double param : best_params) {
+    printf(" %.8f", param);
+  }
 
   return EXIT_SUCCESS;
 }

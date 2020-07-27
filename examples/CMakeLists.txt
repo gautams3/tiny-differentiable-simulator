@@ -205,9 +205,6 @@ if (Bullet_FOUND)
     add_executable(gravity_compensation gravity_compensation.cpp ${TDS_HDRS})
     target_link_libraries(gravity_compensation pybullet_visualizer_api)
 
-    add_executable(experiment_neural_swimmer experiment_neural_swimmer.cpp ${TDS_HDRS})
-    target_link_libraries(experiment_neural_swimmer ${CERES_LIBRARIES} tinyxml2)
-
 if (HAS_MESHCAT)
     add_executable(laikago_meshcat_example laikago_meshcat_example.cpp ${TDS_HDRS})
     target_link_libraries(laikago_meshcat_example pybullet_visualizer_api ${MESHCAT_LIBRARIES})
@@ -221,6 +218,14 @@ if (Torch_FOUND)
 endif (Torch_FOUND)
 
 endif (Bullet_FOUND)
+
+if (tinyxml2_FOUND)
+  include_directories(/usr/include/python3.8)
+  add_executable(experiment_neural_swimmer experiment_neural_swimmer.cpp ${TDS_HDRS})
+  target_compile_options(experiment_neural_swimmer PRIVATE -O3)
+  target_link_libraries(experiment_neural_swimmer ${CERES_LIBRARIES} tinyxml2)
+endif()
+
 
 
 if (HAS_MESHCAT AND tinyxml2_FOUND)    
