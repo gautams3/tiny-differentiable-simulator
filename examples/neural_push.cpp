@@ -21,12 +21,12 @@ typedef PyBulletVisualizerAPI VisualizerAPI;
 
 // whether to use Parallel Basin Hopping
 #define USE_PBH true
-#define USE_NEURAL_AUGMENTATION true
+#define USE_NEURAL_AUGMENTATION false
 const int state_dim = 3;
 const ResidualMode res_mode = RES_MODE_1D;
 const bool assign_analytical_params = true;
 const std::size_t analytical_param_dim = 3;
-const int num_files = 1;  // 100;
+const int num_files = 50;  // 100;
 
 #if USE_NEURAL_AUGMENTATION
 // const int param_dim = 69;
@@ -390,37 +390,42 @@ class PushEstimator
       // object->print_state();
 
       if (i % skip_steps == 0) {
-        Scalar object_x = object->m_q[0];
-        object_x.assign("in_object_x");
-        Scalar object_y = object->m_q[1];
-        object_y.assign("in_object_y");
-        Scalar object_yaw = object->m_q[3];
-        object_yaw.assign("in_object_yaw");
+        const Scalar &object_x = object->m_q[0];
+        const Scalar &object_y = object->m_q[1];
+        const Scalar &object_yaw = object->m_q[3];
 
         Scalar out_object_x = object->m_q[0];
-        out_object_x.assign("out_object_x");
         Scalar out_object_y = object->m_q[1];
-        out_object_y.assign("out_object_y");
         Scalar out_object_yaw = object->m_q[3];
-        out_object_yaw.assign("out_object_yaw");
 
-        out_object_x.evaluate();
-        out_object_y.evaluate();
-        out_object_yaw.evaluate();
+        if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+          object_x.assign("in_object_x");
+          object_y.assign("in_object_y");
+          object_yaw.assign("in_object_yaw");
+
+          out_object_x.assign("out_object_x");
+          out_object_y.assign("out_object_y");
+          out_object_yaw.assign("out_object_yaw");
+
+          out_object_x.evaluate();
+          out_object_y.evaluate();
+          out_object_yaw.evaluate();
+        }
+
         output_states.push_back({out_object_x, out_object_y, out_object_yaw});
 
         if (sim) {
-        object->m_q[0] = out_object_x;
-        object->m_q[1] = out_object_y;
-        object->m_q[3] = out_object_yaw;
-        object->forward_kinematics();
+          object->m_q[0] = out_object_x;
+          object->m_q[1] = out_object_y;
+          object->m_q[3] = out_object_yaw;
+          object->forward_kinematics();
 
-        // if constexpr (is_neural_scalar<Scalar, Utils>::value) {
-        //   if (i == 20) {Scalar::print_neural_networks();}
-        // }
+          // if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+          //   if (i == 20) {Scalar::print_neural_networks();}
+          // }
 
-        // output_states.push_back(
-        //     {object->m_q[0], object->m_q[1], object->m_q[3]});
+          // output_states.push_back(
+          //     {object->m_q[0], object->m_q[1], object->m_q[3]});
 
           TinyMultiBody<Scalar, Utils> *true_object = lab.true_object;
           true_object->m_q[0] = Utils::scalar_from_double(data.object_x[i]);
@@ -436,9 +441,9 @@ class PushEstimator
           PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(
               true_object, *sim);
           std::this_thread::sleep_for(std::chrono::duration<double>(sim_dt));
-        object->m_q[0] = object_x;
-        object->m_q[1] = object_y;
-        object->m_q[3] = object_yaw;
+          object->m_q[0] = object_x;
+          object->m_q[1] = object_y;
+          object->m_q[3] = object_yaw;
         }
       }
     }
@@ -553,7 +558,7 @@ int main(int argc, char *argv[]) {
   // frontend_estimator.neural_augmentation.add_wiring(
   //     std::vector<std::string>{"out_object_x", "out_object_y",
   //                              "out_object_yaw"},
-      // std::vector<std::string>{"in_object_x", "in_object_y", "in_object_yaw"});
+  // std::vector<std::string>{"in_object_x", "in_object_y", "in_object_yaw"});
   frontend_estimator.neural_augmentation.add_wiring(
       std::vector<std::string>{"friction/fr_vec.x", "friction/fr_vec.y"},
       std::vector<std::string>{"friction/fn", "friction/point.x",

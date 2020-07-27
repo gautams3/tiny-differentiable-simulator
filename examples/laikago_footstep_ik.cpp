@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "pybullet_urdf_import.h"
-#include "tiny_urdf_to_multi_body.h"
-
 #include <assert.h>
 #include <stdio.h>
 
@@ -22,13 +19,14 @@
 #include <thread>
 
 #include "Utils/b3Clock.h"
+#include "pybullet_urdf_import.h"
+#include "pybullet_visualizer_api.h"
 #include "tiny_double_utils.h"
+#include "tiny_file_utils.h"
 #include "tiny_inverse_kinematics.h"
 #include "tiny_mb_constraint_solver_spring.h"
 #include "tiny_pd_control.h"
-
-#include "pybullet_visualizer_api.h"
-#include "tiny_file_utils.h"
+#include "tiny_urdf_to_multi_body.h"
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
@@ -272,7 +270,7 @@ int main(int argc, char* argv[]) {
     }
   }
   world.default_friction = 1.;
-  auto* contact_model = 
+  auto* contact_model =
       new TinyMultiBodyConstraintSolverSpring<double, DoubleUtils>;
   world.m_mb_constraint_solver = contact_model;
   contact_model->spring_k = 80000;
@@ -314,10 +312,20 @@ int main(int argc, char* argv[]) {
   int sphere_target_bl = make_sphere(sim, 0.2f, 0.5f, 1);
 
   GaitGenerator gait(dt);
-  gait.step_length = 0.4;
-  gait.step_height = 0.35;
+  gait.step_length = 0.2;
+  gait.step_height = 0.2;
   gait.lift_ratio = 0.3;
-  gait.period_length = 1.5;
+  gait.period_length = 1.;
+
+  int step_length_id =
+      sim->addUserDebugParameter("step_length", 0.01, 3, gait.step_length);
+  int step_height_id =
+      sim->addUserDebugParameter("step_height", 0.01, 1, gait.step_height);
+  int lift_ratio_id =
+      sim->addUserDebugParameter("lift_ratio", 0.1, 0.7, gait.lift_ratio);
+  int period_length_id =
+      sim->addUserDebugParameter("period_length", 0.1, 3, gait.period_length);
+
   int walking_start = 500;  // step number when to start walking (first settle)
 
   auto* servo = new TinyServoActuator<double, DoubleUtils>(
@@ -327,8 +335,8 @@ int main(int argc, char* argv[]) {
   sim->setTimeStep(dt);
   double time = 0;
 
-        std::vector<double> control(mb->dof_actuated());
-        std::vector<double> old_tau(mb->dof_actuated());
+  std::vector<double> control(mb->dof_actuated());
+  std::vector<double> old_tau(mb->dof_actuated());
   for (int step = 0; sim->isConnected(); ++step) {
     sim->submitProfileTiming("loop");
     {
@@ -380,7 +388,7 @@ int main(int argc, char* argv[]) {
             target.position.m_z = 0;
           }
         } else if (step > walking_start) {
-        // if (time < 1.0)
+          // if (time < 1.0)
           gait.compute(time - walking_start * dt,
                        inverse_kinematics.targets[0].position,
                        inverse_kinematics.targets[1].position,
@@ -398,13 +406,18 @@ int main(int argc, char* argv[]) {
         }
       }
 
-
       {
         mb->forward_kinematics();
         servo->kp = sim->readUserDebugParameter(kp_id);
         servo->kd = sim->readUserDebugParameter(kd_id);
         servo->max_force = sim->readUserDebugParameter(force_id);
         servo->min_force = -servo->max_force;
+
+        gait.lift_ratio = sim->readUserDebugParameter(lift_ratio_id);
+        gait.step_height = sim->readUserDebugParameter(step_height_id);
+        gait.step_length = sim->readUserDebugParameter(step_length_id);
+        gait.period_length = sim->readUserDebugParameter(period_length_id);
+
         for (int i = 0; i < mb->dof_actuated(); ++i) {
           control[i] = q_target[i + 7];
         }
@@ -413,12 +426,11 @@ int main(int argc, char* argv[]) {
         //     mb->m_tau[i] = old_tau[i];
         //   }
         // } else {
-          mb->control(dt, control);
-          for (int i = 0; i < mb->dof_actuated(); ++i) {
-            old_tau[i] = mb->m_tau[i];
-          }
+        mb->control(dt, control);
+        for (int i = 0; i < mb->dof_actuated(); ++i) {
+          old_tau[i] = mb->m_tau[i];
+        }
         // }
-        
       }
 
       {
@@ -442,11 +454,10 @@ int main(int argc, char* argv[]) {
         // mb->print_state();
         world.step(dt);
         // mb->print_state();
-        
+
         sim->submitProfileTiming("");
         time += dt;
       }
-
 
       {
         sim->submitProfileTiming("integrate");
