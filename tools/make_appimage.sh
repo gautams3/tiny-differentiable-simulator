@@ -22,8 +22,9 @@ Exec=$binary_name" > $build_dir/app.desktop
 touch $build_dir/app.png
 
 ./tools/linuxdeploy-x86_64.AppImage \
+  --appimage-extract-and-run \
   -e $realbin \
   -d$build_dir/app.desktop \
   -iapp.png \
   --appdir=$app_dir
-./tools/appimagetool-x86_64.AppImage $app_dir
+./tools/appimagetool-x86_64.AppImage --appimage-extract-and-run $app_dir
