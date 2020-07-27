@@ -17,7 +17,41 @@ sudo apt-get install -y \
   libpython2.7-dev \
   libpython3.8-dev \
   python-matplotlib \
-  python-numpy
+  python-numpy \
+  libhdf5-dev
+
+if ! [[ -d cxxopts ]]; then
+  git clone https://github.com/jarro2783/cxxopts.git
+fi
+pushd cxxopts
+mkdir -p build
+pushd build
+cmake ..
+sudo make install
+popd
+popd
+
+if ! [[ -d HighFive ]]; then
+  git clone https://github.com/BlueBrain/HighFive.git
+fi
+pushd HighFive
+mkdir -p build
+pushd build
+cmake -DHIGHFIVE_USE_BOOST=OFF ..
+sudo make install
+popd
+popd
+
+if ! [[ -d bullet3 ]]; then
+  git clone https://github.com/bulletphysics/bullet3.git
+fi
+pushd bullet3
+./build_cmake_pybullet_double.sh
+pushd build_cmake
+sudo make install
+popd
+popd
+
 SHELL
 
 end
