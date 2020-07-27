@@ -270,7 +270,7 @@ int main(int argc, char *argv[]) {
 
   // Filenames.
   const std::string urdf_filename = "swimmer/swimmer05/swimmer05.urdf";
-  const std::string dataset_filename = "swimmer05.npy";
+  const std::string dataset_filename = "swimmer/swimmer05.npy";
 
   // Setup neural augmentation.
   std::vector<std::string> inputs;
