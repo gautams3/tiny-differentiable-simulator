@@ -2,7 +2,7 @@
 build/
 build_*/
 compile_commands.json
-.vscode
+# .vscode
 *.dot
 logs/
 .gdb_history
