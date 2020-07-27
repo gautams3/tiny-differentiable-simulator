@@ -24,14 +24,15 @@ typedef PyBulletVisualizerAPI VisualizerAPI;
 #define USE_NEURAL_AUGMENTATION true
 const int state_dim = 3;
 const ResidualMode res_mode = RES_MODE_1D;
-const bool assign_analytical_params = false;
+const bool assign_analytical_params = true;
 const std::size_t analytical_param_dim = 3;
-const int num_files = 100;
+const int num_files = 1;  // 100;
 
 #if USE_NEURAL_AUGMENTATION
 // const int param_dim = 69;
 // const int param_dim = 71;
 const int param_dim = 75;
+// const int param_dim = 15;
 // const int param_dim = 105;
 // const int param_dim = 143;
 #else
@@ -116,8 +117,8 @@ struct Laboratory {
       world_ground.m_mb_constraint_solver = contact_ground;
 
       // use some sensible initial settings
-      contact_ground->spring_k = Utils::scalar_from_double(1);
-      contact_ground->damper_d = Utils::scalar_from_double(0.1);
+      contact_ground->spring_k = Utils::scalar_from_double(5);
+      contact_ground->damper_d = Utils::scalar_from_double(0.2);
       contact_ground->mu_static = Utils::scalar_from_double(0.1);
       // contact_ground->friction_model = FRICTION_NONE;
       world_ground.default_friction = Utils::scalar_from_double(0.5);
@@ -143,9 +144,11 @@ class PushEstimator
   mutable std::map<std::string, Laboratory<NDScalar, NDUtils> *> labs_double;
   mutable std::map<std::string, Laboratory<NAScalar, NAUtils> *> labs_ad;
 
-  std::size_t skip_steps = 10;
+  std::size_t skip_steps = 1;
 
   NeuralAugmentation neural_augmentation;
+
+  VisualizerAPI *sim{nullptr};
 
   PushEstimator() : CeresEstimator(0.0) {}
 
@@ -167,7 +170,7 @@ class PushEstimator
     neural_augmentation.assign_estimation_parameters(
         parameters, analytical_param_dim);  //, NN_INIT_ZERO);
     for (int i = 3; i < param_dim; ++i) {
-      parameters[i].value *= 0.1;
+      parameters[i].value *= 0.01;
       // parameters[i].value = 0.0;
       // if (i > 19) {
       //   parameters[i].value += 0.001; // nonzero bias
@@ -185,6 +188,7 @@ class PushEstimator
                             VisualizerAPI *sim2) {
     PushData data(h5_filename);
     trajectories.push_back(data);
+    // target_times.push_back({});
     target_times.push_back(data.time);
     target_trajectories.push_back(data.states);
 
@@ -304,9 +308,10 @@ class PushEstimator
 
  public:
   template <typename Scalar, typename Utils>
-  void rollout(const std::vector<Scalar> &params,
-               std::vector<std::vector<Scalar>> &output_states, double &dt,
-               std::size_t ref_id, VisualizerAPI *sim = nullptr) const {
+  void rollout(
+      const std::vector<Scalar> &params,
+      std::vector<std::vector<Scalar>> &output_states, double &dt,
+      std::size_t ref_id) const {  //}, VisualizerAPI *sim = nullptr) const {
     // printf("Rollout with parameters:");
     // for (const Scalar &p : params) {
     //   printf("\t%.5f", Utils::getDouble(p));
@@ -385,48 +390,56 @@ class PushEstimator
       // object->print_state();
 
       if (i % skip_steps == 0) {
-        // Scalar object_x = object->m_q[0];
-        // object_x.assign("in_object_x");
-        // Scalar object_y = object->m_q[1];
-        // object_y.assign("in_object_y");
-        // Scalar object_yaw = object->m_q[3];
-        // object_yaw.assign("in_object_yaw");
+        Scalar object_x = object->m_q[0];
+        object_x.assign("in_object_x");
+        Scalar object_y = object->m_q[1];
+        object_y.assign("in_object_y");
+        Scalar object_yaw = object->m_q[3];
+        object_yaw.assign("in_object_yaw");
 
-        // Scalar out_object_x = object->m_q[0];
-        // out_object_x.assign("out_object_x");
-        // Scalar out_object_y = object->m_q[1];
-        // out_object_y.assign("out_object_y");
-        // Scalar out_object_yaw = object->m_q[3];
-        // out_object_yaw.assign("out_object_yaw");
+        Scalar out_object_x = object->m_q[0];
+        out_object_x.assign("out_object_x");
+        Scalar out_object_y = object->m_q[1];
+        out_object_y.assign("out_object_y");
+        Scalar out_object_yaw = object->m_q[3];
+        out_object_yaw.assign("out_object_yaw");
 
-        // out_object_x.evaluate();
-        // out_object_y.evaluate();
-        // out_object_yaw.evaluate();
-        // output_states.push_back(
-        //     {out_object_x, out_object_y, out_object_yaw});
+        out_object_x.evaluate();
+        out_object_y.evaluate();
+        out_object_yaw.evaluate();
+        output_states.push_back({out_object_x, out_object_y, out_object_yaw});
+
+        if (sim) {
+        object->m_q[0] = out_object_x;
+        object->m_q[1] = out_object_y;
+        object->m_q[3] = out_object_yaw;
+        object->forward_kinematics();
 
         // if constexpr (is_neural_scalar<Scalar, Utils>::value) {
         //   if (i == 20) {Scalar::print_neural_networks();}
         // }
 
-        output_states.push_back(
-            {object->m_q[0], object->m_q[1], object->m_q[3]});
-      }
+        // output_states.push_back(
+        //     {object->m_q[0], object->m_q[1], object->m_q[3]});
 
-      if (sim) {
-        TinyMultiBody<Scalar, Utils> *true_object = lab.true_object;
-        true_object->m_q[0] = Utils::scalar_from_double(data.object_x[i]);
-        true_object->m_q[1] = Utils::scalar_from_double(data.object_y[i]);
-        true_object->m_q[3] = Utils::scalar_from_double(data.object_yaw[i]);
-        true_object->forward_kinematics();
-        object->forward_kinematics();
+          TinyMultiBody<Scalar, Utils> *true_object = lab.true_object;
+          true_object->m_q[0] = Utils::scalar_from_double(data.object_x[i]);
+          true_object->m_q[1] = Utils::scalar_from_double(data.object_y[i]);
+          true_object->m_q[3] = Utils::scalar_from_double(data.object_yaw[i]);
+          true_object->forward_kinematics();
+          object->forward_kinematics();
 
-        PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(tip, *sim);
-        PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object,
-                                                                    *sim);
-        PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(true_object,
-                                                                    *sim);
-        std::this_thread::sleep_for(std::chrono::duration<double>(sim_dt));
+          PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(tip,
+                                                                      *sim);
+          PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object,
+                                                                      *sim);
+          PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(
+              true_object, *sim);
+          std::this_thread::sleep_for(std::chrono::duration<double>(sim_dt));
+        object->m_q[0] = object_x;
+        object->m_q[1] = object_y;
+        object->m_q[3] = object_yaw;
+        }
       }
     }
   }
@@ -504,7 +517,9 @@ int main(int argc, char *argv[]) {
   // create estimator for single-thread optimization (without PBH) and
   // visualization
   PushEstimator frontend_estimator;
-  std::string path = std::filesystem::path(push_filename).parent_path();
+  // std::string path = std::filesystem::path(push_filename).parent_path();
+  std::string path =
+      "/home/eric/tiny-differentiable-simulator/data/mit-push/abs/train";
   for (const auto &entry : std::filesystem::directory_iterator(path)) {
     if (entry.path().string().find("_a=0_") == std::string::npos) {
       // skip files with nonzero acceleration
@@ -519,6 +534,8 @@ int main(int argc, char *argv[]) {
   // frontend_estimator.add_training_dataset(push_filename, sim, sim2);
   frontend_estimator.use_finite_diff = false;
   frontend_estimator.minibatch_size = num_files;  // 50;
+
+  // frontend_estimator.sim = sim;
   // frontend_estimator.options.line_search_direction_type =
   // ceres::LineSearchDirectionType::STEEPEST_DESCENT;
   // frontend_estimator.options.line_search_type = ceres::LineSearchType::WOLFE;
@@ -529,13 +546,14 @@ int main(int argc, char *argv[]) {
   frontend_estimator.neural_augmentation.input_lasso_regularization = 0;
   frontend_estimator.neural_augmentation.upper_l2_regularization = 0;
   frontend_estimator.neural_augmentation.default_hidden_layers = 2;
+  frontend_estimator.options.max_num_iterations = 300;
   // frontend_estimator.neural_augmentation.add_wiring(
   //       std::vector<std::string>{"tau_0", "tau_1", "tau_3"},
   //       std::vector<std::string>{"q_0", "q_1", "q_3"});
   // frontend_estimator.neural_augmentation.add_wiring(
-  //       std::vector<std::string>{"out_object_x", "out_object_y",
-  //       "out_object_yaw"}, std::vector<std::string>{"in_object_x",
-  //       "in_object_y", "in_object_yaw"});
+  //     std::vector<std::string>{"out_object_x", "out_object_y",
+  //                              "out_object_yaw"},
+      // std::vector<std::string>{"in_object_x", "in_object_y", "in_object_yaw"});
   frontend_estimator.neural_augmentation.add_wiring(
       std::vector<std::string>{"friction/fr_vec.x", "friction/fr_vec.y"},
       std::vector<std::string>{"friction/fn", "friction/point.x",
@@ -548,7 +566,7 @@ int main(int argc, char *argv[]) {
         auto estimator = std::make_unique<PushEstimator>();
         estimator->options.minimizer_progress_to_stdout = !USE_PBH;
         estimator->options.max_num_consecutive_invalid_steps = 20;
-        estimator->options.max_num_iterations = 100;
+        // estimator->options.max_num_iterations = 100;
         // divide each cost term by integer time step ^ 2 to reduce gradient
         // explosion
         estimator->divide_cost_by_time_factor = 0.;
@@ -582,7 +600,7 @@ int main(int argc, char *argv[]) {
   }
   BasinHoppingEstimator<param_dim, PushEstimator> bhe(construct_estimator,
                                                       initial_guess);
-  bhe.time_limit = 60 * 60 * 4;  // 4 hours
+  bhe.time_limit = 60 * 20;  // 60 * 4;  // 4 hours
   bhe.run();
 
   printf("Optimized parameters:");
@@ -615,10 +633,10 @@ int main(int argc, char *argv[]) {
   //     0.0184809508};
 
   //     best_params = std::vector<double>(vars, vars+param_dim);
+  // frontend_estimator.compute_loss(vars, &cost, gradient);
 
   // frontend_estimator.compute_loss(frontend_estimator.vars(), &cost,
   // gradient);
-  // frontend_estimator.compute_loss(vars, &cost, gradient);
   // printf("Cost: %.6f\n", cost);
   // printf("Gradient:  ");
   // for (int i = 0; i < param_dim; ++i) {
@@ -630,11 +648,12 @@ int main(int argc, char *argv[]) {
   // }
   // return 0;
 
-  // frontend_estimator.gradient_descent(0.001, 50);
+  // frontend_estimator.gradient_descent(0.001, 20);
 
   auto summary = frontend_estimator.solve();
   std::cout << summary.FullReport() << std::endl;
   std::cout << "Final cost: " << summary.final_cost << "\n";
+  std::cout << "Best cost: " << frontend_estimator.best_cost() << "\n";
 
   for (const auto &p : frontend_estimator.parameters) {
     best_params.push_back(p.value);
@@ -663,6 +682,7 @@ int main(int argc, char *argv[]) {
   for (std::size_t i = 0; i < best_params.size(); ++i) {
     nparams[i] = NDUtils::scalar_from_double(best_params[i]);
   }
+  frontend_estimator.sim = sim;
   while (connection_mode == "gui") {
     std::size_t ref_id =
         std::size_t(rand()) % frontend_estimator.trajectories.size();
@@ -671,7 +691,7 @@ int main(int argc, char *argv[]) {
               << frontend_estimator.trajectories[ref_id].filename << "\n";
     std::vector<std::vector<NDScalar>> output_states;
     frontend_estimator.template rollout<NDScalar, NDUtils>(
-        nparams, output_states, data.dt, ref_id, sim);
+        nparams, output_states, data.dt, ref_id);  //, sim);
     std::this_thread::sleep_for(std::chrono::duration<double>(5.));
   }
 
