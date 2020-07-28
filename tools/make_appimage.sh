@@ -5,6 +5,10 @@ binary_name=$1
 build_dir="build_AppImage_${binary_name}"
 app_dir=${build_dir}/AppDir
 
+if [[ -d "$build_dir" ]]; then
+  rm -r $build_dir
+fi
+
 mkdir -p "$build_dir"
 pushd $build_dir
 cmake ..

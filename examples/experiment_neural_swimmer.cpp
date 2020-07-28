@@ -38,14 +38,15 @@
 #include "tiny_world.h"
 
 constexpr bool kUsePBH = false;
-constexpr bool kStopAfterSetup = true;
+constexpr bool kStopAfterSetup = false;
+constexpr bool kStateHasVel = true;
 
 constexpr int kLinks = 5;
 constexpr int kJoints = kLinks - 1;
 constexpr double kDT = 0.002;
 constexpr int kTimesteps = 201;
 constexpr int kParamDim = 83;
-constexpr int kStateDim = (3 + 3) * kLinks;  // 3 pos + 3 vel per link
+constexpr int kStateDim = (kStateHasVel ? 6 : 3) * kLinks;
 
 // Some info about how the dataset is laid out.
 constexpr std::size_t kControlTimesteps = 10;
@@ -115,11 +116,6 @@ struct DatasetCache {
       const auto [ntraj, ntimesteps, nstatedataset] = dataset.Shape();
       std::vector<std::vector<double>> times;
       std::vector<std::vector<std::vector<double>>> states;
-
-      if (kPosOffset + kStateDim != nstatedataset) {
-        std::cerr << "ERROR: state dimension mismatch, crashing\n";
-        std::exit(1);
-      }
 
       times.resize(ntraj);
       states.resize(ntraj);
@@ -219,11 +215,13 @@ void RolloutSwimmer(const TinyUrdfStructures<T, TUtils> urdf_structures,
           TUtils::atan2(-link.m_X_world.m_rotation(0, 1),
                         link.m_X_world.m_rotation(0, 0)));  // pos_yaw
     }
-    for (std::size_t i = 0; i < kLinks; ++i) {
-      const TinyLink<T, TUtils> &link = system->m_links[kUrdfLink0Offset + i];
-      state.push_back(link.m_v[3]);  // vel_x
-      state.push_back(link.m_v[4]);  // vel_y
-      state.push_back(link.m_v[2]);  // vel_yaw
+    if (kStateHasVel) {
+      for (std::size_t i = 0; i < kLinks; ++i) {
+        const TinyLink<T, TUtils> &link = system->m_links[kUrdfLink0Offset + i];
+        state.push_back(link.m_v[3]);  // vel_x
+        state.push_back(link.m_v[4]);  // vel_y
+        state.push_back(link.m_v[2]);  // vel_yaw
+      }
     }
     output->push_back(state);
 
@@ -410,7 +408,6 @@ int main(int argc, char *argv[]) {
   // Write some sanity check rollout.
   const std::vector<double> all_zero_params(kParamDim, 0.0);
   WriteRollout("all_zero", urdf_filename, dataset_filename, all_zero_params);
-  std::exit(0);
 
   // Setup neural augmentation.
   std::vector<std::string> inputs;
@@ -447,7 +444,7 @@ int main(int argc, char *argv[]) {
     }
     BasinHoppingEstimator<kParamDim, SwimmerEstimator> bhe(estimator_factory,
                                                            initial_guess);
-    bhe.time_limit = 60 * 60;
+    bhe.time_limit = 3 * 60 * 60;
     bhe.run();
 
     printf("Best cost: %f\n", bhe.best_cost());
@@ -462,13 +459,21 @@ int main(int argc, char *argv[]) {
 
     // Print an initial loss to make sure gradient isn't all zero.
     double cost;
+    double params[kParamDim];
     double gradient[kParamDim];
-    estimator->compute_loss(estimator->vars(), &cost, gradient);
-    std::cout << "\n\ninitial loss: " << cost << "\ninitial_gradient: ";
     for (std::size_t i = 0; i < kParamDim; ++i) {
-      std::cout << gradient[i] << "\t";
+      params[i] = 0;
+      gradient[i] = 0;
     }
-    std::cout << "\n\n";
+    estimator->compute_loss(params, &cost, gradient);
+    {
+      std::ofstream f("all_zero_loss_info.txt");
+      f << "\n\ninitial loss: " << cost << "\ninitial_gradient: ";
+      for (std::size_t i = 0; i < kParamDim; ++i) {
+        f << gradient[i] << "\t";
+      }
+      f << "\n\n";
+    }
 
     if (kStopAfterSetup) {
       std::cout << "\n\nStopping early as requested in kStopAfterSetup.\n\n";

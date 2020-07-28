@@ -49,40 +49,55 @@ def pybullet_physics():
     for joint in range(p.getNumJoints(swimmer)):
         p.setJointMotorControl2(swimmer, joint, p.VELOCITY_CONTROL, force=0)
 
+    traj = data[0, :, :]
+    torques = traj[:, :NJOINTS]
+    q0 = traj[0, NJOINTS:2 * NJOINTS]
+    for j, q in enumerate(q0):
+        p.resetJointState(swimmer, j + 3, q)
+    head_yaw = traj[0, 2 * NJOINTS + 2]
+    p.resetJointState(swimmer, 2, head_yaw)
+
     dt = 1 / 500
     p.setTimeStep(dt)  # From mjcf
     control_steps = 10  # per env
 
-    traj = data[0, :, :]
-    torques = traj[:, :NJOINTS]
+    with open("pybullet_rollout.csv", "w") as f:
+        for timestep in tqdm(range(totalsteps)):
+            applied_torques = []
+            for joint in range(NJOINTS):
+                urdfjoint = joint + 3  # x + y + yaw
+                torque = torques[timestep, joint]
+                applied_torques.append(torque)
+                print(urdfjoint, p.getNumJoints(swimmer))
+                p.setJointMotorControl2(swimmer,
+                                        urdfjoint,
+                                        p.TORQUE_CONTROL,
+                                        force=torque)
+                dynamics_info = p.getDynamicsInfo(swimmer, urdfjoint)
+                print(dynamics_info[2], dynamics_info[3], dynamics_info[4])
 
-    for timestep in tqdm(range(totalsteps)):
-        applied_torques = []
-        for joint in range(NJOINTS):
-            urdfjoint = joint + 3  # x + y + yaw
-            torque = torques[timestep, joint]
-            applied_torques.append(torque)
-            print(urdfjoint, p.getNumJoints(swimmer))
-            p.setJointMotorControl2(swimmer,
-                                    urdfjoint,
-                                    p.TORQUE_CONTROL,
-                                    force=torque)
-            dynamics_info = p.getDynamicsInfo(swimmer, urdfjoint)
-            print(dynamics_info[2], dynamics_info[3], dynamics_info[4])
+            state = []
+            for link in range(2, 2 + NLINKS):
+                link_state = p.getLinkState(swimmer, link)
+                state.append(link_state[0][0])
+                state.append(link_state[0][1])
+                mat = p.getMatrixFromQuaternion(link_state[1])
+                state.append(np.arctan2(-mat[0], mat[1]))
+            f.write(','.join(map(str, state)) + "\n")
 
-        for _ in range(control_steps):
-            p.stepSimulation()
+            for _ in range(control_steps):
+                p.stepSimulation()
 
-        joint_states = p.getJointStates(swimmer,
-                                        range(p.getNumJoints(swimmer)))
-        q = [s[0] for s in joint_states]
-        qd = [s[1] for s in joint_states]
+            joint_states = p.getJointStates(swimmer,
+                                            range(p.getNumJoints(swimmer)))
+            q = [s[0] for s in joint_states]
+            qd = [s[1] for s in joint_states]
 
-        print(f"{timestep:04d} tau: {applied_torques}")
-        print(f"{timestep:04d}   q: {q}")
-        print(f"{timestep:04d}  qd: {qd}")
+            print(f"{timestep:04d} tau: {applied_torques}")
+            print(f"{timestep:04d}   q: {q}")
+            print(f"{timestep:04d}  qd: {qd}")
 
-        time.sleep(args.slowdown / control_steps * dt)
+            time.sleep(args.slowdown / control_steps * dt)
 
     p.disconnect()
 
