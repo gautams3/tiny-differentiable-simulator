@@ -3,7 +3,7 @@
   <include file="./common/skybox.xml"/>
   <include file="./common/materials.xml"/>
 
-  <option timestep="0.002" density="3000" integrator="Euler">
+  <option timestep="0.002" density="0" integrator="Euler">
     <flag contact="disable"/>
   </option>
 

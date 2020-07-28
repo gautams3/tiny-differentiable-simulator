@@ -229,7 +229,7 @@ if (tinyxml2_FOUND)
   include_directories(/usr/include/python3.8)
   add_executable(experiment_neural_swimmer experiment_neural_swimmer.cpp ${TDS_HDRS})
   target_compile_options(experiment_neural_swimmer PRIVATE
-    #-O0 -g
+    -O0 -g
     #-fsanitize=address -fno-omit-frame-pointer
     #-fsanitize=memory -fno-omit-frame-pointer
     #-fsanitize=thread
