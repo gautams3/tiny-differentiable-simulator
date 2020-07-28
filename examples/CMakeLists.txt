@@ -154,7 +154,8 @@ if (Bullet_FOUND)
             add_executable(neural_push neural_push.cpp ${TDS_HDRS})
             target_compile_features(neural_push PRIVATE cxx_std_17)
             target_link_libraries(neural_push pybullet_visualizer_api ${DL}
-                HighFive ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES}) # -fsanitize=thread)      
+                HighFive ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES}
+                -lstdc++fs) # -fsanitize=thread)      
 	        # target_compile_options(neural_push PRIVATE -fsanitize=thread)
         endif (HighFive_FOUND)
 
@@ -227,8 +228,19 @@ endif (Bullet_FOUND)
 if (tinyxml2_FOUND)
   include_directories(/usr/include/python3.8)
   add_executable(experiment_neural_swimmer experiment_neural_swimmer.cpp ${TDS_HDRS})
-  target_compile_options(experiment_neural_swimmer PRIVATE -O3)
-  target_link_libraries(experiment_neural_swimmer ${CERES_LIBRARIES} tinyxml2)
+  target_compile_options(experiment_neural_swimmer PRIVATE
+    #-O0 -g
+    #-fsanitize=address -fno-omit-frame-pointer
+    #-fsanitize=memory -fno-omit-frame-pointer
+    #-fsanitize=thread
+  )
+  target_link_libraries(experiment_neural_swimmer
+    ${CERES_LIBRARIES}
+    tinyxml2
+    #-fsanitize=address
+    #-fsanitize=memory
+    #-fsanitize=thread
+  )
 endif()
 
 
