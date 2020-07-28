@@ -14,8 +14,20 @@
 #include "tiny_mb_constraint_solver_spring.h"
 #include "tiny_pd_control.h"
 #include "tiny_urdf_to_multi_body.h"
+#include "tiny_ceres_estimator.h"
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
+
+// whether to use Parallel Basin Hopping
+#define USE_PBH true
+#define USE_NEURAL_AUGMENTATION true
+#define RESIDUAL_PHYSICS true
+const int state_dim = 3;
+const ResidualMode res_mode = RES_MODE_1D;
+const bool assign_analytical_params = false;
+const std::size_t analytical_param_dim = 3;
+const int num_files = 50;  // 100;
+const int param_dim = 2;
 
 int make_sphere(VisualizerAPI* sim, float r = 1, float g = 0.6f, float b = 0,
                 float a = 0.8f) {
@@ -51,6 +63,173 @@ void update_position(VisualizerAPI* sim, int object_id,
   update_position(sim, object_id, Util::getDouble(pos.m_x),
                   Util::getDouble(pos.m_y), Util::getDouble(pos.m_z));
 }
+
+struct Estimator 
+    : public TinyCeresEstimator<param_dim, state_dim, res_mode> {
+  typedef TinyCeresEstimator<param_dim, state_dim, res_mode> CeresEstimator;
+  using CeresEstimator::kStateDim, CeresEstimator::kParameterDim;
+  using CeresEstimator::parameters, CeresEstimator::dt;
+  using typename CeresEstimator::ADScalar;
+
+  std::vector<double> initial_params;
+
+  // stores trajectories per surface-shape combination
+  std::vector<PushData> trajectories;
+
+  mutable std::map<std::string, Laboratory<NDScalar, NDUtils> *> labs_double;
+  mutable std::map<std::string, Laboratory<NAScalar, NAUtils> *> labs_ad;
+
+  template <typename Scalar, typename Utils>
+void rollout(
+      const std::vector<Scalar> &params,
+      std::vector<std::vector<Scalar>> &output_states, double &dt,
+      std::size_t ref_id) const {  //}, VisualizerAPI *sim = nullptr) const {
+    // printf("Rollout with parameters:");
+    // for (const Scalar &p : params) {
+    //   printf("\t%.5f", Utils::getDouble(p));
+    // }
+    // printf("\n");
+    if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+      typedef typename Scalar::InnerScalarType IScalar;
+      typedef typename Scalar::InnerUtilsType IUtils;
+      std::vector<IScalar> iparams(params.size());
+      for (std::size_t i = 0; i < params.size(); ++i) {
+        iparams[i] = params[i].evaluate();
+      }
+      neural_augmentation.template instantiate<IScalar, IUtils>(
+          iparams, analytical_param_dim);
+    }
+
+    const auto &data = trajectories[ref_id];
+    dt = data.dt * skip_steps;
+    this->dt = dt;
+
+    Laboratory<Scalar, Utils> &lab =
+        this->template get_lab<Scalar, Utils>(data.lab_name);
+    auto *tip = lab.tip;
+    tip->initialize();
+
+    if (assign_analytical_params) {
+      lab.world_ground.default_friction = params[0];
+      lab.contact_ground->mu_static = params[1];
+      lab.contact_ground->v_transition = params[2];
+    }
+
+    auto *object = lab.object;
+    object->initialize();
+    object->m_q[0] = Utils::scalar_from_double(data.object_x[0]);
+    object->m_q[1] = Utils::scalar_from_double(data.object_y[0]);
+    object->m_q[2] = Utils::scalar_from_double(0.005);  // initial object height
+    object->m_q[3] = Utils::scalar_from_double(data.object_yaw[0]);
+    object->forward_kinematics();
+
+    auto &world_ground = lab.world_ground;
+
+    double sim_dt = data.dt;
+    const Scalar sdt = Utils::scalar_from_double(sim_dt);
+
+    for (std::size_t i = 0; i < data.time.size(); ++i) {
+      tip->m_q[0] = Utils::scalar_from_double(data.tip_x[i]);
+      tip->m_q[1] = Utils::scalar_from_double(data.tip_y[i]);
+      if (i > 0) {
+        tip->m_qd[0] = Utils::scalar_from_double(
+            (data.tip_x[i] - data.tip_x[i - 1]) / sim_dt);
+        tip->m_qd[1] = Utils::scalar_from_double(
+            (data.tip_y[i] - data.tip_y[i - 1]) / sim_dt);
+      }
+      tip->forward_kinematics();
+
+      object->forward_dynamics(world_ground.get_gravity());
+      object->clear_forces();
+      object->integrate_q(sdt);
+
+      transform_points<Scalar, Utils>(lab.object_exterior,
+                                      lab.tf_object_exterior, object->m_q[0],
+                                      object->m_q[1], object->m_q[3]);
+      auto tip_contact =
+          compute_contact<Scalar, Utils>(tip, object, lab.tf_object_exterior);
+
+      // XXX friction between tip and object
+      tip_contact.m_friction =
+          Utils::scalar_from_double(0.25);  // Utils::scalar_from_double(1);
+      lab.tip_contact_model.erp = Utils::scalar_from_double(0.001);
+      lab.tip_contact_model.cfm = Utils::scalar_from_double(0.000001);
+
+      lab.tip_contact_model.resolveCollision({tip_contact}, sdt);
+
+      world_ground.step(sdt);
+      object->integrate(sdt);
+      // object->print_state();
+
+      if (i % skip_steps == 0) {
+        const Scalar &object_x = object->m_q[0];
+        const Scalar &object_y = object->m_q[1];
+        const Scalar &object_yaw = object->m_q[3];
+
+        Scalar out_object_x = object->m_q[0];
+        Scalar out_object_y = object->m_q[1];
+        Scalar out_object_yaw = object->m_q[3];
+
+#if RESIDUAL_PHYSICS
+        if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+          Scalar tip_force_x = Utils::scalar_from_double(data.force_x[i]);
+          Scalar tip_force_y = Utils::scalar_from_double(data.force_y[i]);
+          Scalar tip_force_yaw = Utils::scalar_from_double(data.force_yaw[i]);
+          tip_force_x.assign("tip_force_x");
+          tip_force_y.assign("tip_force_y");
+          tip_force_yaw.assign("tip_force_yaw");
+
+          object_x.assign("in_object_x");
+          object_y.assign("in_object_y");
+          object_yaw.assign("in_object_yaw");
+
+          out_object_x.assign("out_object_x");
+          out_object_y.assign("out_object_y");
+          out_object_yaw.assign("out_object_yaw");
+
+          out_object_x.evaluate();
+          out_object_y.evaluate();
+          out_object_yaw.evaluate();
+        }
+#endif
+
+        output_states.push_back({out_object_x, out_object_y, out_object_yaw});
+
+        if (sim) {
+          object->m_q[0] = out_object_x;
+          object->m_q[1] = out_object_y;
+          object->m_q[3] = out_object_yaw;
+          object->forward_kinematics();
+
+          // if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+          //   if (i == 20) {Scalar::print_neural_networks();}
+          // }
+
+          // output_states.push_back(
+          //     {object->m_q[0], object->m_q[1], object->m_q[3]});
+
+          TinyMultiBody<Scalar, Utils> *true_object = lab.true_object;
+          true_object->m_q[0] = Utils::scalar_from_double(data.object_x[i]);
+          true_object->m_q[1] = Utils::scalar_from_double(data.object_y[i]);
+          true_object->m_q[3] = Utils::scalar_from_double(data.object_yaw[i]);
+          true_object->forward_kinematics();
+          object->forward_kinematics();
+
+          PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(tip,
+                                                                      *sim);
+          PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object,
+                                                                      *sim);
+          PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(
+              true_object, *sim);
+          std::this_thread::sleep_for(std::chrono::duration<double>(sim_dt));
+          object->m_q[0] = object_x;
+          object->m_q[1] = object_y;
+          object->m_q[3] = object_yaw;
+        }
+      }
+    }
+  }
+};
 
 int main(int argc, char* argv[]) {
   double dt = 1. / 1000;

@@ -21,20 +21,20 @@ typedef PyBulletVisualizerAPI VisualizerAPI;
 
 // whether to use Parallel Basin Hopping
 #define USE_PBH true
-#define USE_NEURAL_AUGMENTATION false
+#define USE_NEURAL_AUGMENTATION true
+#define RESIDUAL_PHYSICS true
 const int state_dim = 3;
 const ResidualMode res_mode = RES_MODE_1D;
-const bool assign_analytical_params = true;
+const bool assign_analytical_params = false;
 const std::size_t analytical_param_dim = 3;
 const int num_files = 50;  // 100;
 
 #if USE_NEURAL_AUGMENTATION
-// const int param_dim = 69;
-// const int param_dim = 71;
+#if RESIDUAL_PHYSICS
+const int param_dim = 86;
+#else
 const int param_dim = 75;
-// const int param_dim = 15;
-// const int param_dim = 105;
-// const int param_dim = 143;
+#endif
 #else
 const int param_dim = 3;
 #endif
@@ -398,7 +398,15 @@ class PushEstimator
         Scalar out_object_y = object->m_q[1];
         Scalar out_object_yaw = object->m_q[3];
 
+#if RESIDUAL_PHYSICS
         if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+          Scalar tip_force_x = Utils::scalar_from_double(data.force_x[i]);
+          Scalar tip_force_y = Utils::scalar_from_double(data.force_y[i]);
+          Scalar tip_force_yaw = Utils::scalar_from_double(data.force_yaw[i]);
+          tip_force_x.assign("tip_force_x");
+          tip_force_y.assign("tip_force_y");
+          tip_force_yaw.assign("tip_force_yaw");
+
           object_x.assign("in_object_x");
           object_y.assign("in_object_y");
           object_yaw.assign("in_object_yaw");
@@ -411,6 +419,7 @@ class PushEstimator
           out_object_y.evaluate();
           out_object_yaw.evaluate();
         }
+#endif
 
         output_states.push_back({out_object_x, out_object_y, out_object_yaw});
 
@@ -552,18 +561,22 @@ int main(int argc, char *argv[]) {
   frontend_estimator.neural_augmentation.upper_l2_regularization = 0;
   frontend_estimator.neural_augmentation.default_hidden_layers = 2;
   frontend_estimator.options.max_num_iterations = 300;
-  // frontend_estimator.neural_augmentation.add_wiring(
-  //       std::vector<std::string>{"tau_0", "tau_1", "tau_3"},
-  //       std::vector<std::string>{"q_0", "q_1", "q_3"});
-  // frontend_estimator.neural_augmentation.add_wiring(
-  //     std::vector<std::string>{"out_object_x", "out_object_y",
-  //                              "out_object_yaw"},
-  // std::vector<std::string>{"in_object_x", "in_object_y", "in_object_yaw"});
+// frontend_estimator.neural_augmentation.add_wiring(
+//       std::vector<std::string>{"tau_0", "tau_1", "tau_3"},
+//       std::vector<std::string>{"q_0", "q_1", "q_3"});
+#if RESIDUAL_PHYSICS
+  frontend_estimator.neural_augmentation.add_wiring(
+      std::vector<std::string>{"out_object_x", "out_object_y",
+                               "out_object_yaw"},
+      std::vector<std::string>{"in_object_x", "in_object_y", "in_object_yaw",
+                               "tip_force_x", "tip_force_y", "tip_force_yaw"});
+#else
   frontend_estimator.neural_augmentation.add_wiring(
       std::vector<std::string>{"friction/fr_vec.x", "friction/fr_vec.y"},
       std::vector<std::string>{"friction/fn", "friction/point.x",
                                "friction/point.y", "friction/rel_vel.x",
                                "friction/rel_vel.y"});
+#endif
   frontend_estimator.setup();
 
   std::function<std::unique_ptr<PushEstimator>()> construct_estimator =
@@ -605,7 +618,7 @@ int main(int argc, char *argv[]) {
   }
   BasinHoppingEstimator<param_dim, PushEstimator> bhe(construct_estimator,
                                                       initial_guess);
-  bhe.time_limit = 60 * 20;  // 60 * 4;  // 4 hours
+  bhe.time_limit = 60 * 60 * 4;  // 4 hours
   bhe.run();
 
   printf("Optimized parameters:");
