@@ -2,19 +2,23 @@
 #include <stdio.h>
 
 #include <chrono>
+#include <cxxopts.hpp>
+#include <filesystem>
+#include <iostream>
 #include <thread>
 
-#include "Utils/b3Clock.h"
 #include "motion_import.h"
+#include "neural_augmentation.h"
 #include "pybullet_urdf_import.h"
 #include "pybullet_visualizer_api.h"
+#include "tiny_ceres_estimator.h"
 #include "tiny_double_utils.h"
 #include "tiny_file_utils.h"
 #include "tiny_inverse_kinematics.h"
 #include "tiny_mb_constraint_solver_spring.h"
 #include "tiny_pd_control.h"
+#include "tiny_system_constructor.h"
 #include "tiny_urdf_to_multi_body.h"
-#include "tiny_ceres_estimator.h"
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
@@ -28,17 +32,22 @@ const bool assign_analytical_params = false;
 const std::size_t analytical_param_dim = 3;
 const int num_files = 50;  // 100;
 const int param_dim = 2;
+constexpr double kDT = 1e-3;
 
-int make_sphere(VisualizerAPI* sim, float r = 1, float g = 0.6f, float b = 0,
-                float a = 0.8f) {
-  int sphere_id = sim->loadURDF("sphere_small.urdf");
-  b3RobotSimulatorChangeVisualShapeArgs vargs;
-  vargs.m_objectUniqueId = sphere_id;
-  vargs.m_hasRgbaColor = true;
-  vargs.m_rgbaColor = btVector4(r, g, b, a);
-  sim->changeVisualShape(vargs);
-  return sphere_id;
-}
+typedef ceres::Jet<double, param_dim> ADScalar;
+typedef CeresUtils<param_dim> ADUtils;
+
+#if USE_NEURAL_AUGMENTATION
+typedef NeuralScalar<double, DoubleUtils> NDScalar;
+typedef NeuralScalarUtils<double, DoubleUtils> NDUtils;
+typedef NeuralScalar<ADScalar, ADUtils> NAScalar;
+typedef NeuralScalarUtils<ADScalar, ADUtils> NAUtils;
+#else
+typedef double NDScalar;
+typedef DoubleUtils NDUtils;
+typedef ADScalar NAScalar;
+typedef ADUtils NAUtils;
+#endif
 
 void print(const std::vector<double>& v) {
   for (std::size_t i = 0; i < v.size(); ++i) {
@@ -50,40 +59,79 @@ void print(const std::vector<double>& v) {
   printf("\n");
 }
 
-void update_position(VisualizerAPI* sim, int object_id, double x, double y,
-                     double z) {
-  btVector3 pos(x, y, z);
-  btQuaternion orn;
-  sim->resetBasePositionAndOrientation(object_id, pos, orn);
-}
+template <typename Scalar, typename Utils>
+struct Laboratory {
+  TinyWorld<Scalar, Utils> world;
+  TinyMultiBody<Scalar, Utils>* mb;
+  TinyMultiBody<Scalar, Utils>* ground{nullptr};
 
-template <typename Scalar, typename Util>
-void update_position(VisualizerAPI* sim, int object_id,
-                     const TinyVector3<Scalar, Util>& pos) {
-  update_position(sim, object_id, Util::getDouble(pos.m_x),
-                  Util::getDouble(pos.m_y), Util::getDouble(pos.m_z));
-}
+  Laboratory(TinyUrdfCache<Scalar, Utils>& urdf_cache,
+             const std::string& plane_urdf_filename,
+             const std::string& laikago_urdf_filename, VisualizerAPI* sim,
+             VisualizerAPI* sim2) {
+    bool ignore_cache = true;
 
-struct Estimator 
-    : public TinyCeresEstimator<param_dim, state_dim, res_mode> {
+    bool is_floating = true;
+    mb = urdf_cache.construct(laikago_urdf_filename, world, sim2, sim,
+                              ignore_cache, is_floating);
+    ground = urdf_cache.construct(plane_urdf_filename, world, sim2, sim,
+                                  ignore_cache);
+
+    world.default_friction = Utils::one();
+    auto* contact_model =
+        new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
+    world.m_mb_constraint_solver = contact_model;
+    contact_model->spring_k = Utils::scalar_from_double(70000);
+    contact_model->damper_d = Utils::scalar_from_double(5000);
+  }
+};
+
+struct Estimator : public TinyCeresEstimator<param_dim, state_dim, res_mode> {
   typedef TinyCeresEstimator<param_dim, state_dim, res_mode> CeresEstimator;
   using CeresEstimator::kStateDim, CeresEstimator::kParameterDim;
-  using CeresEstimator::parameters, CeresEstimator::dt;
+  using CeresEstimator::parameters;
   using typename CeresEstimator::ADScalar;
 
   std::vector<double> initial_params;
 
-  // stores trajectories per surface-shape combination
-  std::vector<PushData> trajectories;
+  NeuralAugmentation neural_augmentation;
 
-  mutable std::map<std::string, Laboratory<NDScalar, NDUtils> *> labs_double;
-  mutable std::map<std::string, Laboratory<NAScalar, NAUtils> *> labs_ad;
+  TinyUrdfCache<NDScalar, NDUtils> urdf_cache_double;
+  TinyUrdfCache<NAScalar, NAUtils> urdf_cache_ad;
+
+  VisualizerAPI* sim{nullptr};
+
+  Motion reference;
+
+  mutable Laboratory<NDScalar, NDUtils> lab_double;
+  mutable Laboratory<NAScalar, NAUtils> lab_ad;
+
+  int num_time_steps = 8 / kDT;
+
+  Estimator(const std::string& plane_urdf_filename,
+            const std::string& laikago_urdf_filename, VisualizerAPI* sim,
+            VisualizerAPI* sim2)
+      : CeresEstimator(kDT),
+        lab_double(urdf_cache_double, plane_urdf_filename,
+                   laikago_urdf_filename, sim, sim2),
+        lab_ad(urdf_cache_ad, plane_urdf_filename, laikago_urdf_filename, sim,
+               sim2),
+        sim(sim) {}
 
   template <typename Scalar, typename Utils>
-void rollout(
-      const std::vector<Scalar> &params,
-      std::vector<std::vector<Scalar>> &output_states, double &dt,
-      std::size_t ref_id) const {  //}, VisualizerAPI *sim = nullptr) const {
+  constexpr Laboratory<Scalar, Utils>& get_lab(
+      const std::string& lab_name) const {
+    if constexpr (std::is_same_v<Scalar, NDScalar>) {
+      return lab_double;
+    } else {
+      return lab_ad;
+    }
+  }
+
+  template <typename Scalar, typename Utils>
+  void rollout(const std::vector<Scalar>& params,
+               std::vector<std::vector<Scalar>>& output_states, double&,
+               std::size_t ref_id) const {
     // printf("Rollout with parameters:");
     // for (const Scalar &p : params) {
     //   printf("\t%.5f", Utils::getDouble(p));
@@ -100,157 +148,191 @@ void rollout(
           iparams, analytical_param_dim);
     }
 
-    const auto &data = trajectories[ref_id];
-    dt = data.dt * skip_steps;
-    this->dt = dt;
+    const Scalar dt = Utils::scalar_from_double(kDT);
 
-    Laboratory<Scalar, Utils> &lab =
-        this->template get_lab<Scalar, Utils>(data.lab_name);
-    auto *tip = lab.tip;
-    tip->initialize();
+    Laboratory<Scalar, Utils>& lab = this->template get_lab<Scalar, Utils>();
+    TinyMultiBody<Scalar, Utils>* mb = lab.mb;
 
-    if (assign_analytical_params) {
-      lab.world_ground.default_friction = params[0];
-      lab.contact_ground->mu_static = params[1];
-      lab.contact_ground->v_transition = params[2];
+    double knee_angle = -0.5;
+    double abduction_angle = 0.2;
+    double initial_poses[] = {
+        abduction_angle, 0., knee_angle, abduction_angle, 0., knee_angle,
+        abduction_angle, 0., knee_angle, abduction_angle, 0., knee_angle,
+    };
+
+    // mb->m_q[5] = 3;
+    int start_index = 0;
+    start_index = 7;
+    mb->initialize();
+
+    mb->m_q[4] = Utils::zero();
+    mb->m_q[5] = Utils::zero();
+    mb->m_q[6] = Utils::scalar_from_double(0.55);
+
+    if (mb->m_q.size() >= 12) {
+      for (int cc = 0; cc < 12; cc++) {
+        mb->m_q[start_index + cc] =
+            Utils::scalar_from_double(initial_poses[cc]);
+      }
     }
 
-    auto *object = lab.object;
-    object->initialize();
-    object->m_q[0] = Utils::scalar_from_double(data.object_x[0]);
-    object->m_q[1] = Utils::scalar_from_double(data.object_y[0]);
-    object->m_q[2] = Utils::scalar_from_double(0.005);  // initial object height
-    object->m_q[3] = Utils::scalar_from_double(data.object_yaw[0]);
-    object->forward_kinematics();
+    printf("Initial state:\n");
+    mb->print_state();
 
-    auto &world_ground = lab.world_ground;
+    // step number when to start walking (first settle)
+    int walking_start = 500;
+    std::vector<Scalar> q_target = mb->m_q;
 
-    double sim_dt = data.dt;
-    const Scalar sdt = Utils::scalar_from_double(sim_dt);
+    if constexpr (std::is_same_v<Scalar, double>) {
+      // ground-truth actuator
+      auto* servo = new TinyServoActuator<double, DoubleUtils>(
+          mb->dof_actuated(), 150., 3., -500., 500.);
+      servo->kp = 180;
+      servo->kd = 3;
+      servo->max_force = 550;
+      servo->min_force = -550;
+      mb->m_actuator = servo;
+    }
 
-    for (std::size_t i = 0; i < data.time.size(); ++i) {
-      tip->m_q[0] = Utils::scalar_from_double(data.tip_x[i]);
-      tip->m_q[1] = Utils::scalar_from_double(data.tip_y[i]);
-      if (i > 0) {
-        tip->m_qd[0] = Utils::scalar_from_double(
-            (data.tip_x[i] - data.tip_x[i - 1]) / sim_dt);
-        tip->m_qd[1] = Utils::scalar_from_double(
-            (data.tip_y[i] - data.tip_y[i - 1]) / sim_dt);
+    Scalar time = Utils::zero();
+
+    std::vector<Scalar> control(mb->dof_actuated());
+    for (int step = 0; num_time_steps; ++step) {
+      mb->forward_kinematics();
+
+      if (step > walking_start) {
+        q_target = reference.calculate_frame(time);
       }
-      tip->forward_kinematics();
+      mb->forward_kinematics();
+      for (int i = 0; i < mb->dof_actuated(); ++i) {
+        control[i] = q_target[i + 7];
+      }
+      mb->forward_dynamics(world.get_gravity());
+      mb->clear_forces();
 
-      object->forward_dynamics(world_ground.get_gravity());
-      object->clear_forces();
-      object->integrate_q(sdt);
+      mb->integrate_q(dt);  //??
+      world.step(dt);
 
-      transform_points<Scalar, Utils>(lab.object_exterior,
-                                      lab.tf_object_exterior, object->m_q[0],
-                                      object->m_q[1], object->m_q[3]);
-      auto tip_contact =
-          compute_contact<Scalar, Utils>(tip, object, lab.tf_object_exterior);
+      time += dt;
 
-      // XXX friction between tip and object
-      tip_contact.m_friction =
-          Utils::scalar_from_double(0.25);  // Utils::scalar_from_double(1);
-      lab.tip_contact_model.erp = Utils::scalar_from_double(0.001);
-      lab.tip_contact_model.cfm = Utils::scalar_from_double(0.000001);
+      mb->integrate(dt);
 
-      lab.tip_contact_model.resolveCollision({tip_contact}, sdt);
+      if (sim) {
+        PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(mb, *sim);
+        std::this_thread::sleep_for(std::chrono::duration<double>(kDT));
+      }
+    }
 
-      world_ground.step(sdt);
-      object->integrate(sdt);
-      // object->print_state();
+    if (i % skip_steps == 0) {
+      const Scalar& object_x = object->m_q[0];
+      const Scalar& object_y = object->m_q[1];
+      const Scalar& object_yaw = object->m_q[3];
 
-      if (i % skip_steps == 0) {
-        const Scalar &object_x = object->m_q[0];
-        const Scalar &object_y = object->m_q[1];
-        const Scalar &object_yaw = object->m_q[3];
-
-        Scalar out_object_x = object->m_q[0];
-        Scalar out_object_y = object->m_q[1];
-        Scalar out_object_yaw = object->m_q[3];
+      Scalar out_object_x = object->m_q[0];
+      Scalar out_object_y = object->m_q[1];
+      Scalar out_object_yaw = object->m_q[3];
 
 #if RESIDUAL_PHYSICS
-        if constexpr (is_neural_scalar<Scalar, Utils>::value) {
-          Scalar tip_force_x = Utils::scalar_from_double(data.force_x[i]);
-          Scalar tip_force_y = Utils::scalar_from_double(data.force_y[i]);
-          Scalar tip_force_yaw = Utils::scalar_from_double(data.force_yaw[i]);
-          tip_force_x.assign("tip_force_x");
-          tip_force_y.assign("tip_force_y");
-          tip_force_yaw.assign("tip_force_yaw");
+      if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+        Scalar tip_force_x = Utils::scalar_from_double(data.force_x[i]);
+        Scalar tip_force_y = Utils::scalar_from_double(data.force_y[i]);
+        Scalar tip_force_yaw = Utils::scalar_from_double(data.force_yaw[i]);
+        tip_force_x.assign("tip_force_x");
+        tip_force_y.assign("tip_force_y");
+        tip_force_yaw.assign("tip_force_yaw");
 
-          object_x.assign("in_object_x");
-          object_y.assign("in_object_y");
-          object_yaw.assign("in_object_yaw");
+        object_x.assign("in_object_x");
+        object_y.assign("in_object_y");
+        object_yaw.assign("in_object_yaw");
 
-          out_object_x.assign("out_object_x");
-          out_object_y.assign("out_object_y");
-          out_object_yaw.assign("out_object_yaw");
+        out_object_x.assign("out_object_x");
+        out_object_y.assign("out_object_y");
+        out_object_yaw.assign("out_object_yaw");
 
-          out_object_x.evaluate();
-          out_object_y.evaluate();
-          out_object_yaw.evaluate();
-        }
+        out_object_x.evaluate();
+        out_object_y.evaluate();
+        out_object_yaw.evaluate();
+      }
 #endif
 
-        output_states.push_back({out_object_x, out_object_y, out_object_yaw});
+      output_states.push_back({out_object_x, out_object_y, out_object_yaw});
 
-        if (sim) {
-          object->m_q[0] = out_object_x;
-          object->m_q[1] = out_object_y;
-          object->m_q[3] = out_object_yaw;
-          object->forward_kinematics();
+      if (sim) {
+        object->m_q[0] = out_object_x;
+        object->m_q[1] = out_object_y;
+        object->m_q[3] = out_object_yaw;
+        object->forward_kinematics();
 
-          // if constexpr (is_neural_scalar<Scalar, Utils>::value) {
-          //   if (i == 20) {Scalar::print_neural_networks();}
-          // }
+        // if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+        //   if (i == 20) {Scalar::print_neural_networks();}
+        // }
 
-          // output_states.push_back(
-          //     {object->m_q[0], object->m_q[1], object->m_q[3]});
+        // output_states.push_back(
+        //     {object->m_q[0], object->m_q[1], object->m_q[3]});
 
-          TinyMultiBody<Scalar, Utils> *true_object = lab.true_object;
-          true_object->m_q[0] = Utils::scalar_from_double(data.object_x[i]);
-          true_object->m_q[1] = Utils::scalar_from_double(data.object_y[i]);
-          true_object->m_q[3] = Utils::scalar_from_double(data.object_yaw[i]);
-          true_object->forward_kinematics();
-          object->forward_kinematics();
+        TinyMultiBody<Scalar, Utils>* true_object = lab.true_object;
+        true_object->m_q[0] = Utils::scalar_from_double(data.object_x[i]);
+        true_object->m_q[1] = Utils::scalar_from_double(data.object_y[i]);
+        true_object->m_q[3] = Utils::scalar_from_double(data.object_yaw[i]);
+        true_object->forward_kinematics();
+        object->forward_kinematics();
 
-          PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(tip,
-                                                                      *sim);
-          PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(object,
-                                                                      *sim);
-          PyBulletUrdfImport<Scalar, Utils>::sync_graphics_transforms(
-              true_object, *sim);
-          std::this_thread::sleep_for(std::chrono::duration<double>(sim_dt));
-          object->m_q[0] = object_x;
-          object->m_q[1] = object_y;
-          object->m_q[3] = object_yaw;
-        }
+        object->m_q[0] = object_x;
+        object->m_q[1] = object_y;
+        object->m_q[3] = object_yaw;
       }
     }
+  }
+
+  void rollout(const std::vector<ADScalar>& params,
+               std::vector<std::vector<ADScalar>>& output_states, double& dt,
+               std::size_t ref_id) const override {
+    printf("rollout AD\n");
+#if USE_NEURAL_AUGMENTATION
+    typedef NeuralScalar<ADScalar, ADUtils> NScalar;
+    typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
+    auto n_params = NUtils::to_neural(params);
+    std::vector<std::vector<NScalar>> n_output_states;
+    this->template rollout<NScalar, NUtils>(n_params, n_output_states, dt,
+                                            ref_id);
+    for (const auto& state : n_output_states) {
+      output_states.push_back(NUtils::from_neural(state));
+    }
+#else
+    this->template rollout<ADScalar, ADUtils>(params, output_states, dt,
+                                              ref_id);
+#endif
+  }
+  void rollout(const std::vector<double>& params,
+               std::vector<std::vector<double>>& output_states, double& dt,
+               std::size_t ref_id) const override {
+    printf("rollout DOUBLE\n");
+#if USE_NEURAL_AUGMENTATION
+    typedef NeuralScalar<double, DoubleUtils> NScalar;
+    typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
+    auto n_params = NUtils::to_neural(params);
+    std::vector<std::vector<NScalar>> n_output_states;
+    this->template rollout<NScalar, NUtils>(n_params, n_output_states, dt,
+                                            ref_id);
+    for (const auto& state : n_output_states) {
+      output_states.push_back(NUtils::from_neural(state));
+    }
+#else
+    this->template rollout<double, DoubleUtils>(params, output_states, dt,
+                                                ref_id);
+#endif
   }
 };
 
 int main(int argc, char* argv[]) {
-  double dt = 1. / 1000;
+  google::InitGoogleLogging(argv[0]);
 
-  // btVector3 laikago_initial_pos(0, 0.2, 1.65);
-  btVector3 laikago_initial_pos = btVector3(0, 0, .55);
-  // btVector3 laikago_initial_pos(-3, 2, .65);
-  // btVector3 laikago_initial_pos(2, 0, .65);
-  btQuaternion laikago_initial_orn(0, 0, 0, 1);
-  // laikago_initial_orn.setEulerZYX(-0.1, 0.1, 0);
-  // laikago_initial_orn.setEulerZYX(0.7, 0, 0);
-  double initialXvel = 0;
-  btVector3 initialAngVel(0, 0, 0);
-  double knee_angle = -0.5;
-  double abduction_angle = 0.2;
-  double initial_poses[] = {
-      abduction_angle, 0., knee_angle, abduction_angle, 0., knee_angle,
-      abduction_angle, 0., knee_angle, abduction_angle, 0., knee_angle,
-  };
+  cxxopts::Options options("neural_push", "Learn contact friction model");
+  options.add_options()("connection_mode", "Connection mode",
+                        cxxopts::value<std::string>()->default_value("gui"));
 
-  std::string connection_mode = "gui";
+  auto cli_args = options.parse(argc, argv);
+  std::string connection_mode = cli_args["connection_mode"].as<std::string>();
 
   std::string laikago_filename;
   TinyFileUtils::find_file("laikago/laikago_toes_zup.urdf", laikago_filename);
@@ -275,260 +357,31 @@ int main(int argc, char* argv[]) {
   if (connection_mode == "direct") mode = eCONNECT_DIRECT;
   if (connection_mode == "shared_memory") mode = eCONNECT_SHARED_MEMORY;
 
-  bool isConnected = sim->connect(mode);
-  sim->setTimeOut(1e30);
-  sim2->setTimeOut(1e30);
-  sim->setAdditionalSearchPath(search_path.c_str());
-  int logId = sim->startStateLogging(STATE_LOGGING_PROFILE_TIMINGS,
-                                     "/tmp/laikago_timing.json");
+  // create estimator for single-thread optimization (without PBH) and
+  // visualization
+  Estimator frontend_estimator;
 
-  if (!isConnected || !isConnected2) {
-    printf("Cannot connect\n");
-    return -1;
-  }
+  frontend_estimator.use_finite_diff = false;
+  frontend_estimator.minibatch_size = num_files;  // 50;
 
-  sim->setTimeOut(1e30);
-  sim->resetSimulation();
+  frontend_estimator.sim = sim;
+  // frontend_estimator.options.line_search_direction_type =
+  // ceres::LineSearchDirectionType::STEEPEST_DESCENT;
+  // frontend_estimator.options.line_search_type = ceres::LineSearchType::WOLFE;
+  frontend_estimator.options.minimizer_type = ceres::MinimizerType::LINE_SEARCH;
+  frontend_estimator.set_bounds = false;  // true; //true;
+  frontend_estimator.neural_augmentation.weight_limit = 0.05;
+  frontend_estimator.neural_augmentation.bias_limit = 0.00001;
+  frontend_estimator.neural_augmentation.input_lasso_regularization = 0;
+  frontend_estimator.neural_augmentation.upper_l2_regularization = 0;
+  frontend_estimator.neural_augmentation.default_hidden_layers = 2;
+  frontend_estimator.options.max_num_iterations = 300;
 
-  b3Clock clock;
-
-  int rotateCamera = 0;
-
-  TinyWorld<double, DoubleUtils> world;
-  typedef ::TinyRigidBody<double, DoubleUtils> TinyRigidBodyDouble;
-  typedef ::TinyVector3<double, DoubleUtils> TinyVector3;
-  typedef ::TinySpatialTransform<double, DoubleUtils> TinySpatialTransform;
-
-  std::vector<TinyRigidBody<double, DoubleUtils>*> bodies;
-  std::vector<int> visuals;
-
-  std::vector<TinyMultiBody<double, DoubleUtils>*> mbbodies;
-  std::vector<int> paramUids;
-
-  int grav_id = sim->addUserDebugParameter("gravity", -10, 0, -9.8);
-  int kp_id = sim->addUserDebugParameter("kp", 0, 400, 180);
-  int kd_id = sim->addUserDebugParameter("kd", 0, 13, 3.);
-  int force_id = sim->addUserDebugParameter("max force", 0, 1500, 550);
-
-  Motion reference;
   std::string motion_filename;
   TinyFileUtils::find_file("laikago_dance_sidestep0.txt", motion_filename);
-  bool load_success = Motion::load_from_file(motion_filename, &reference);
-
-  {
-    TinyMultiBody<double, DoubleUtils>* mb = world.create_multi_body();
-    int robotId = sim->loadURDF(plane_filename);
-    TinyUrdfStructures<double, DoubleUtils> urdf_data;
-    PyBulletUrdfImport<double, DoubleUtils>::extract_urdf_structs(
-        urdf_data, robotId, *sim, *sim);
-    TinyUrdfToMultiBody<double, DoubleUtils>::convert_to_multi_body(urdf_data,
-                                                                    world, *mb);
-    mb->initialize();
-    sim->removeBody(robotId);
-  }
-
-  TinyMultiBody<double, DoubleUtils>* mb = world.create_multi_body();
-  {
-    b3RobotSimulatorLoadUrdfFileArgs args;
-    args.m_flags |= URDF_MERGE_FIXED_LINKS;
-    int robotId = sim->loadURDF(laikago_filename, args);
-
-    TinyUrdfStructures<double, DoubleUtils> urdf_data;
-    PyBulletUrdfImport<double, DoubleUtils>::extract_urdf_structs(
-        urdf_data, robotId, *sim, *sim);
-    TinyUrdfToMultiBody<double, DoubleUtils>::convert_to_multi_body(urdf_data,
-                                                                    world, *mb);
-
-    mbbodies.push_back(mb);
-    mb->m_isFloating = true;
-    mb->initialize();
-    sim->removeBody(robotId);
-    // mb->m_q[5] = 3;
-    int start_index = 0;
-    start_index = 7;
-    mb->m_q[0] = laikago_initial_orn[0];
-    mb->m_q[1] = laikago_initial_orn[1];
-    mb->m_q[2] = laikago_initial_orn[2];
-    mb->m_q[3] = laikago_initial_orn[3];
-
-    mb->m_q[4] = laikago_initial_pos[0];
-    mb->m_q[5] = laikago_initial_pos[1];
-    mb->m_q[6] = laikago_initial_pos[2];
-
-    mb->m_qd[0] = initialAngVel[0];
-    mb->m_qd[1] = initialAngVel[1];
-    mb->m_qd[2] = initialAngVel[2];
-    mb->m_qd[3] = initialXvel;
-    if (mb->m_q.size() >= 12) {
-      for (int cc = 0; cc < 12; cc++) {
-        mb->m_q[start_index + cc] = initial_poses[cc];
-      }
-    }
-  }
-  world.default_friction = 1.;
-  auto* contact_model =
-      new TinyMultiBodyConstraintSolverSpring<double, DoubleUtils>;
-  world.m_mb_constraint_solver = contact_model;
-  contact_model->spring_k = 70000;
-  contact_model->damper_d = 5000;
-
-  printf("Initial state:\n");
-  mb->print_state();
-
-  std::vector<double> q_target = mb->m_q;
-  // body indices of feet
-  const int foot_fr = 2;
-  const int foot_fl = 5;
-  const int foot_br = 8;
-  const int foot_bl = 11;
-  const TinyVector3 foot_offset(0, -0.24, -0.02);
-
-  int walking_start = 500;  // step number when to start walking (first settle)
-
-  auto* servo = new TinyServoActuator<double, DoubleUtils>(
-      mb->dof_actuated(), 150., 3., -500., 500.);
-  mb->m_actuator = servo;
-
-  sim->setTimeStep(dt);
-  double time = 0;
-
-  std::vector<double> control(mb->dof_actuated());
-  std::vector<double> old_tau(mb->dof_actuated());
-  for (int step = 0; sim->isConnected(); ++step) {
-    sim->submitProfileTiming("loop");
-    {
-      sim->submitProfileTiming("sleep_for");
-      std::this_thread::sleep_for(std::chrono::duration<double>(dt));
-      sim->submitProfileTiming("");
-    }
-    double gravZ = sim->readUserDebugParameter(grav_id);
-    sim->setGravity(btVector3(0, 0, gravZ));
-
-    {
-      double gravZ = sim->readUserDebugParameter(grav_id);
-      world.set_gravity(TinyVector3(0, 0, gravZ));
-      {
-        sim->submitProfileTiming("forward_kinematics");
-        mb->forward_kinematics();
-        sim->submitProfileTiming("");
-      }
-
-      {
-        TinySpatialTransform base_X_world;
-        std::vector<TinySpatialTransform> links_X_world;
-        mb->forward_kinematics_q(mb->m_q, &base_X_world, &links_X_world);
-
-        if (step > walking_start) {
-          q_target = reference.calculate_frame(time);
-        }
-      }
-
-      {
-        mb->forward_kinematics();
-        servo->kp = sim->readUserDebugParameter(kp_id);
-        servo->kd = sim->readUserDebugParameter(kd_id);
-        servo->max_force = sim->readUserDebugParameter(force_id);
-        servo->min_force = -servo->max_force;
-
-        for (int i = 0; i < mb->dof_actuated(); ++i) {
-          control[i] = q_target[i + 7];
-        }
-
-        // if (time > 3) {
-        //   for (int i = 0; i < mb->dof_actuated(); ++i) {
-        //     mb->m_tau[i] = old_tau[i];
-        //   }
-        // } else {
-        mb->control(dt, control);
-        for (int i = 0; i < mb->dof_actuated(); ++i) {
-          old_tau[i] = mb->m_tau[i];
-        }
-        // }
-      }
-
-      {
-        sim->submitProfileTiming("forwardDynamics");
-        mb->forward_dynamics(world.get_gravity());
-        sim->submitProfileTiming("");
-        mb->clear_forces();
-      }
-
-      {
-        sim->submitProfileTiming("integrate_q");
-        mb->integrate_q(dt);  //??
-        sim->submitProfileTiming("");
-      }
-
-      {
-        if (step % 1000 == 0) {
-          printf("Step %06d \t Time: %.3f\n", step, time);
-        }
-        sim->submitProfileTiming("world_step");
-        // mb->print_state();
-        world.step(dt);
-        // mb->print_state();
-
-        sim->submitProfileTiming("");
-        time += dt;
-      }
-
-      {
-        sim->submitProfileTiming("integrate");
-        mb->integrate(dt);
-        sim->submitProfileTiming("");
-      }
-      if (1) {
-        sim->submitProfileTiming("sync graphics");
-
-        // sync physics to visual transforms
-        {
-          for (int b = 0; b < mbbodies.size(); b++) {
-            const TinyMultiBody<double, DoubleUtils>* body = mbbodies[b];
-            PyBulletUrdfImport<double, DoubleUtils>::sync_graphics_transforms(
-                body, *sim);
-          }
-        }
-        sim->submitProfileTiming("");
-      }
-    }
-    {
-      sim->submitProfileTiming("get_keyboard_events");
-      b3KeyboardEventsData keyEvents;
-      sim->getKeyboardEvents(&keyEvents);
-      if (keyEvents.m_numKeyboardEvents) {
-        for (int i = 0; i < keyEvents.m_numKeyboardEvents; i++) {
-          b3KeyboardEvent& e = keyEvents.m_keyboardEvents[i];
-
-          if (e.m_keyCode == 'r' && e.m_keyState & eButtonTriggered) {
-            rotateCamera = 1 - rotateCamera;
-          }
-        }
-      }
-      sim->submitProfileTiming("");
-    }
-
-    if (rotateCamera) {
-      sim->submitProfileTiming("rotateCamera");
-      static double yaw = 0;
-      double distance = 1;
-      yaw += 0.1;
-      btVector3 basePos(0, 0, 0);
-      btQuaternion baseOrn(0, 0, 0, 1);
-      sim->resetDebugVisualizerCamera(distance, -20, yaw, basePos);
-      sim->submitProfileTiming("");
-    }
-    sim->submitProfileTiming("");
-  }
-
-  sim->stopStateLogging(logId);
-  printf("sim->disconnect\n");
-
-  sim->disconnect();
+  bool load_success =
+      Motion::load_from_file(motion_filename, &frontend_estimator.reference);
 
   printf("delete sim\n");
   delete sim;
-
-  printf("exit\n");
 }
-
-#pragma clang diagnostic pop
