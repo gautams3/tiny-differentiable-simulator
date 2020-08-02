@@ -52,7 +52,8 @@ enum TinyJointType {
 
 enum TinyIntegrationType { INT_EULER, INT_EULER_SYMPLECTIC };
 
-template <typename TinyScalar, typename TinyConstants> class TinyLink {
+template <typename TinyScalar, typename TinyConstants>
+class TinyLink {
   typedef ::TinySpatialTransform<TinyScalar, TinyConstants>
       TinySpatialTransform;
   typedef ::TinyVector3<TinyScalar, TinyConstants> TinyVector3;
@@ -62,53 +63,54 @@ template <typename TinyScalar, typename TinyConstants> class TinyLink {
   typedef ::TinySymmetricSpatialDyad<TinyScalar, TinyConstants>
       TinySymmetricSpatialDyad;
 
-public:
+ public:
   TinyLink() = default;
   TinyLink(TinyJointType joint_type, TinySpatialTransform &parent_link_to_joint,
            const TinySymmetricSpatialDyad &inertia)
       : m_joint_type(joint_type), m_X_T(parent_link_to_joint), m_I(inertia) {}
 
-  TinySpatialTransform m_X_T;       // parent_link_to_joint
-  TinySpatialTransform m_X_J;       // joint_to_child_link    //depends on q
-  TinySpatialTransform m_X_parent2; // parent_link_to_child_link
+  TinySpatialTransform m_X_T;        // parent_link_to_joint
+  TinySpatialTransform m_X_J;        // joint_to_child_link    //depends on q
+  TinySpatialTransform m_X_parent2;  // parent_link_to_child_link
 
   TinyJointType m_joint_type{JOINT_REVOLUTE_Z};
 
-  TinySpatialTransform m_X_world; // world_to_link
+  TinySpatialTransform m_X_world;  // world_to_link
   TinySpatialMotionVector
-      m_vJ;                    // local joint velocity (relative to parent link)
-  TinySpatialMotionVector m_v; // global joint velocity (relative to world)
-  TinySpatialMotionVector m_a; // acceleration (relative to world)
-  TinySpatialMotionVector m_c; // velocity product acceleration
+      m_vJ;  // local joint velocity (relative to parent link)
+  TinySpatialMotionVector m_v;  // global joint velocity (relative to world)
+  TinySpatialMotionVector m_a;  // acceleration (relative to world)
+  TinySpatialMotionVector m_c;  // velocity product acceleration
 
   TinySymmetricSpatialDyad
-      m_I; // local spatial inertia (constant) // TODO replace by its original
-           // terms (COM, gyration etc.)
-  TinySymmetricSpatialDyad m_IA; // spatial articulated inertia, IC in CRBA
+      m_I;  // local spatial inertia (constant) // TODO replace by its original
+            // terms (COM, gyration etc.)
+  TinySymmetricSpatialDyad m_IA;  // spatial articulated inertia, IC in CRBA
 
-  TinySpatialMotionVector m_pA; // bias forces or zero-acceleration forces
-  TinySpatialMotionVector m_S;  // motion subspace (spatial joint axis/matrix)
+  TinySpatialMotionVector m_pA;  // bias forces or zero-acceleration forces
+  TinySpatialMotionVector m_S;   // motion subspace (spatial joint axis/matrix)
 
-  TinySpatialMotionVector m_U; // temp var in ABA, page 130
-  TinyScalar m_d;              // temp var in ABA, page 130
-  TinyScalar m_u;              // temp var in ABA, page 130
-  TinySpatialMotionVector m_f; // temp var in RNEA, page 183
+  TinySpatialMotionVector m_U;  // temp var in ABA, page 130
+  TinyScalar m_d;               // temp var in ABA, page 130
+  TinyScalar m_u;               // temp var in ABA, page 130
+  TinySpatialMotionVector m_f;  // temp var in RNEA, page 183
 
-  TinySpatialMotionVector m_f_ext; // user-defined external force in world frame
+  TinySpatialMotionVector
+      m_f_ext;  // user-defined external force in world frame
 
   // These two variables are managed by TinyMultiBody and should not be changed.
-  int m_parent_index{-1}; // index of parent link in TinyMultiBody
-  int m_index{-1};        // index of this link in TinyMultiBody
+  int m_parent_index{-1};  // index of parent link in TinyMultiBody
+  int m_index{-1};         // index of this link in TinyMultiBody
 
   std::vector<const TinyGeometry<TinyScalar, TinyConstants> *>
       m_collision_geometries;
   std::vector<TinySpatialTransform>
-      m_X_collisions; // offset of collision geometries (relative to this link
-                      // frame)
+      m_X_collisions;  // offset of collision geometries (relative to this link
+                       // frame)
   std::vector<int> m_visual_uids1;
   std::vector<int> m_visual_uids2;
   std::vector<TinySpatialTransform>
-      m_X_visuals; // offset of geometry (relative to this link frame)
+      m_X_visuals;  // offset of geometry (relative to this link frame)
   std::string m_link_name;
   std::string m_joint_name;
   // index in MultiBody q / qd arrays
@@ -123,36 +125,36 @@ public:
     m_joint_type = type;
     m_S.set_zero();
     switch (m_joint_type) {
-    case JOINT_PRISMATIC_X:
-      m_S.m_bottomVec.setX(TinyConstants::one());
-      break;
-    case JOINT_PRISMATIC_Y:
-      m_S.m_bottomVec.setY(TinyConstants::one());
-      break;
-    case JOINT_PRISMATIC_Z:
-      m_S.m_bottomVec.setZ(TinyConstants::one());
-      break;
-    case JOINT_PRISMATIC_AXIS:
-      m_S.m_bottomVec = axis;
-      break;
-    case JOINT_REVOLUTE_X:
-      m_S.m_topVec.setX(TinyConstants::one());
-      break;
-    case JOINT_REVOLUTE_Y:
-      m_S.m_topVec.setY(TinyConstants::one());
-      break;
-    case JOINT_REVOLUTE_Z:
-      m_S.m_topVec.setZ(TinyConstants::one());
-      break;
-    case JOINT_REVOLUTE_AXIS:
-      m_S.m_topVec = axis;
-      break;
-    case JOINT_FIXED:
-      break;
-    default:
-      fprintf(stderr,
-              "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
-              __LINE__);
+      case JOINT_PRISMATIC_X:
+        m_S.m_bottomVec.setX(TinyConstants::one());
+        break;
+      case JOINT_PRISMATIC_Y:
+        m_S.m_bottomVec.setY(TinyConstants::one());
+        break;
+      case JOINT_PRISMATIC_Z:
+        m_S.m_bottomVec.setZ(TinyConstants::one());
+        break;
+      case JOINT_PRISMATIC_AXIS:
+        m_S.m_bottomVec = axis;
+        break;
+      case JOINT_REVOLUTE_X:
+        m_S.m_topVec.setX(TinyConstants::one());
+        break;
+      case JOINT_REVOLUTE_Y:
+        m_S.m_topVec.setY(TinyConstants::one());
+        break;
+      case JOINT_REVOLUTE_Z:
+        m_S.m_topVec.setZ(TinyConstants::one());
+        break;
+      case JOINT_REVOLUTE_AXIS:
+        m_S.m_topVec = axis;
+        break;
+      case JOINT_FIXED:
+        break;
+      default:
+        fprintf(stderr,
+                "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
+                __LINE__);
     }
   }
 
@@ -161,84 +163,84 @@ public:
     X_J->set_identity();
     X_parent->set_identity();
     switch (m_joint_type) {
-    case JOINT_PRISMATIC_X:
-      X_J->m_translation.setX(q);
-      break;
-    case JOINT_PRISMATIC_Y:
-      X_J->m_translation.setY(q);
-      break;
-    case JOINT_PRISMATIC_Z:
-      X_J->m_translation.setZ(q);
-      break;
-    case JOINT_PRISMATIC_AXIS: {
-      const TinyVector3 &axis = m_S.m_bottomVec;
-      X_J->m_translation = axis * q;
-      break;
-    }
-    case JOINT_REVOLUTE_X:
-      X_J->m_rotation.set_rotation_x(q);
-      break;
-    case JOINT_REVOLUTE_Y:
-      X_J->m_rotation.set_rotation_y(q);
-      break;
-    case JOINT_REVOLUTE_Z:
-      X_J->m_rotation.set_rotation_z(q);
-      break;
-    case JOINT_REVOLUTE_AXIS: {
-      const TinyVector3 &axis = m_S.m_topVec;
-      TinyQuaternion<TinyScalar, TinyConstants> orn;
-      orn.setRotation(axis, q);
-      X_J->m_rotation.setRotation(orn);
-      break;
-    }
-    case JOINT_FIXED:
-      // TinySpatialTransform is set to identity in its constructor already
-      // and never changes.
-      break;
-    default:
-      fprintf(stderr,
-              "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
-              __LINE__);
+      case JOINT_PRISMATIC_X:
+        X_J->m_translation.setX(q);
+        break;
+      case JOINT_PRISMATIC_Y:
+        X_J->m_translation.setY(q);
+        break;
+      case JOINT_PRISMATIC_Z:
+        X_J->m_translation.setZ(q);
+        break;
+      case JOINT_PRISMATIC_AXIS: {
+        const TinyVector3 &axis = m_S.m_bottomVec;
+        X_J->m_translation = axis * q;
+        break;
+      }
+      case JOINT_REVOLUTE_X:
+        X_J->m_rotation.set_rotation_x(q);
+        break;
+      case JOINT_REVOLUTE_Y:
+        X_J->m_rotation.set_rotation_y(q);
+        break;
+      case JOINT_REVOLUTE_Z:
+        X_J->m_rotation.set_rotation_z(q);
+        break;
+      case JOINT_REVOLUTE_AXIS: {
+        const TinyVector3 &axis = m_S.m_topVec;
+        TinyQuaternion<TinyScalar, TinyConstants> orn;
+        orn.setRotation(axis, q);
+        X_J->m_rotation.setRotation(orn);
+        break;
+      }
+      case JOINT_FIXED:
+        // TinySpatialTransform is set to identity in its constructor already
+        // and never changes.
+        break;
+      default:
+        fprintf(stderr,
+                "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
+                __LINE__);
     }
     *X_parent = m_X_T * (*X_J);
   }
 
   inline void jcalc(TinyScalar qd, TinySpatialMotionVector *v_J) const {
     switch (m_joint_type) {
-    case JOINT_PRISMATIC_X:
-      v_J->m_bottomVec.setX(qd);
-      break;
-    case JOINT_PRISMATIC_Y:
-      v_J->m_bottomVec.setY(qd);
-      break;
-    case JOINT_PRISMATIC_Z:
-      v_J->m_bottomVec.setZ(qd);
-      break;
-    case JOINT_PRISMATIC_AXIS: {
-      const TinyVector3 &axis = m_S.m_bottomVec;
-      v_J->m_bottomVec = axis * qd;
-      break;
-    }
-    case JOINT_REVOLUTE_X:
-      v_J->m_topVec.setX(qd);
-      break;
-    case JOINT_REVOLUTE_Y:
-      v_J->m_topVec.setY(qd);
-      break;
-    case JOINT_REVOLUTE_Z:
-      v_J->m_topVec.setZ(qd);
-      break;
-    case JOINT_REVOLUTE_AXIS: {
-      const TinyVector3 &axis = m_S.m_topVec;
-      v_J->m_topVec = axis * qd;
-      break;
-    }
-    case JOINT_FIXED:
-      break;
-    default:
-      fprintf(stderr,
-              "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
-              __LINE__);
+      case JOINT_PRISMATIC_X:
+        v_J->m_bottomVec.setX(qd);
+        break;
+      case JOINT_PRISMATIC_Y:
+        v_J->m_bottomVec.setY(qd);
+        break;
+      case JOINT_PRISMATIC_Z:
+        v_J->m_bottomVec.setZ(qd);
+        break;
+      case JOINT_PRISMATIC_AXIS: {
+        const TinyVector3 &axis = m_S.m_bottomVec;
+        v_J->m_bottomVec = axis * qd;
+        break;
+      }
+      case JOINT_REVOLUTE_X:
+        v_J->m_topVec.setX(qd);
+        break;
+      case JOINT_REVOLUTE_Y:
+        v_J->m_topVec.setY(qd);
+        break;
+      case JOINT_REVOLUTE_Z:
+        v_J->m_topVec.setZ(qd);
+        break;
+      case JOINT_REVOLUTE_AXIS: {
+        const TinyVector3 &axis = m_S.m_topVec;
+        v_J->m_topVec = axis * qd;
+        break;
+      }
+      case JOINT_FIXED:
+        break;
+      default:
+        fprintf(stderr,
+                "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
+                __LINE__);
     }
   }
 
@@ -251,7 +253,8 @@ public:
   }
 };
 
-template <typename TinyScalar, typename TinyConstants> class TinyMultiBody {
+template <typename TinyScalar, typename TinyConstants>
+class TinyMultiBody {
   typedef ::TinyLink<TinyScalar, TinyConstants> TinyLink;
   typedef ::TinySpatialMotionVector<TinyScalar, TinyConstants>
       TinySpatialMotionVector;
@@ -268,7 +271,7 @@ template <typename TinyScalar, typename TinyConstants> class TinyMultiBody {
   typedef ::TinyMatrixXxX<TinyScalar, TinyConstants> TinyMatrixXxX;
   typedef ::TinyActuator<TinyScalar, TinyConstants> TinyActuator;
 
-public:
+ public:
   std::vector<TinyLink> m_links;
 
   TinyIntegrationType m_integration_type{INT_EULER_SYMPLECTIC};
@@ -315,24 +318,24 @@ public:
   bool m_isFloating{false};
 
   // quantities related to floating base
-  TinySpatialMotionVector m_baseVelocity;            // v_0
-  TinySpatialMotionVector m_baseAcceleration;        // a_0
-  TinySpatialMotionVector m_baseAppliedForce;        // f_ext_0 in world frame
-  TinySpatialMotionVector m_baseForce;               // f_0 (used by RNEA)
-  TinySpatialMotionVector m_baseBiasForce;           // pA_0
-  TinySymmetricSpatialDyad m_baseInertia;            // I_0
-  TinySymmetricSpatialDyad m_baseArticulatedInertia; // IA_0
+  TinySpatialMotionVector m_baseVelocity;             // v_0
+  TinySpatialMotionVector m_baseAcceleration;         // a_0
+  TinySpatialMotionVector m_baseAppliedForce;         // f_ext_0 in world frame
+  TinySpatialMotionVector m_baseForce;                // f_0 (used by RNEA)
+  TinySpatialMotionVector m_baseBiasForce;            // pA_0
+  TinySymmetricSpatialDyad m_baseInertia;             // I_0
+  TinySymmetricSpatialDyad m_baseArticulatedInertia;  // IA_0
   TinySpatialTransform m_base_X_world;
   std::vector<int> m_visual_uids1;
   std::vector<int> m_visual_uids2;
   std::vector<TinySpatialTransform>
-      m_X_visuals; // offset of geometry (relative to the base frame)
+      m_X_visuals;  // offset of geometry (relative to the base frame)
 
   std::vector<const TinyGeometry<TinyScalar, TinyConstants> *>
       m_collision_geometries;
   std::vector<TinySpatialTransform>
-      m_X_collisions; // offset of collision geometries (relative to this link
-                      // frame)
+      m_X_collisions;  // offset of collision geometries (relative to this link
+                       // frame)
 
   std::vector<TinyScalar> m_q, m_qd, m_qdd, m_tau;
 
@@ -368,7 +371,7 @@ public:
     // make sure m_dof and the q / qd indices in the links are accurate
     int q_index = m_isFloating ? 7 : 0;
     int qd_index = m_isFloating ? 6 : 0;
-    m_dof = 0; // excludes floating-base DOF
+    m_dof = 0;  // excludes floating-base DOF
     for (TinyLink &link : m_links) {
       assert(link.m_index >= 0);
       link.m_q_index = q_index;
@@ -390,7 +393,7 @@ public:
       v = TinyConstants::zero();
     }
     if (m_isFloating) {
-      m_q[3] = TinyConstants::one(); // make sure orientation is valid
+      m_q[3] = TinyConstants::one();  // make sure orientation is valid
     }
     if (static_cast<int>(m_qd.size()) != dof_qd()) {
       m_qd.resize(dof_qd(), TinyConstants::zero());
@@ -425,17 +428,25 @@ public:
    */
   template <typename Scalar, typename Utils>
   TinyMultiBody(const TinyMultiBody<Scalar, Utils> &mb)
-      : m_links(mb.m_links), m_integration_type(mb.m_integration_type),
-        m_dof(mb.m_dof), m_actuator(mb.m_actuator),
-        m_control_indices(mb.m_control_indices), m_isFloating(mb.m_isFloating),
+      : m_links(mb.m_links),
+        m_integration_type(mb.m_integration_type),
+        m_dof(mb.m_dof),
+        m_actuator(mb.m_actuator),
+        m_control_indices(mb.m_control_indices),
+        m_isFloating(mb.m_isFloating),
         m_baseVelocity(mb.m_baseVelocity),
         m_baseAcceleration(mb.m_baseAcceleration),
-        m_baseAppliedForce(mb.m_baseAppliedForce), m_baseForce(mb.m_baseForce),
-        m_baseBiasForce(mb.m_baseBiasForce), m_baseInertia(mb.m_baseInertia),
+        m_baseAppliedForce(mb.m_baseAppliedForce),
+        m_baseForce(mb.m_baseForce),
+        m_baseBiasForce(mb.m_baseBiasForce),
+        m_baseInertia(mb.m_baseInertia),
         m_base_X_world(mb.m_base_X_world),
         m_collision_geometries(mb.m_collision_geometries),
-        m_X_collisions(mb.m_X_collisions), m_q(mb.m_q), m_qd(mb.m_qd),
-        m_qdd(mb.m_qdd), m_tau(mb.m_tau) {
+        m_X_collisions(mb.m_X_collisions),
+        m_q(mb.m_q),
+        m_qd(mb.m_qd),
+        m_qdd(mb.m_qdd),
+        m_tau(mb.m_tau) {
     // TODO implement type conversion
     static_assert(std::is_same<Scalar, TinyScalar>::value,
                   "Copy constructor for TinyMultiBody of different scalar type "
@@ -451,26 +462,22 @@ public:
   void print_state() const {
     printf("q: [");
     for (int i = 0; i < dof(); ++i) {
-      if (i > 0)
-        printf(" ");
+      if (i > 0) printf(" ");
       printf("%.2f", TinyConstants::getDouble(m_q[i]));
     }
     printf("] \tqd: [");
     for (int i = 0; i < dof_qd(); ++i) {
-      if (i > 0)
-        printf(" ");
+      if (i > 0) printf(" ");
       printf("%.2f", TinyConstants::getDouble(m_qd[i]));
     }
     printf("] \tqdd: [");
     for (int i = 0; i < dof_qd(); ++i) {
-      if (i > 0)
-        printf(" ");
+      if (i > 0) printf(" ");
       printf("%.2f", TinyConstants::getDouble(m_qdd[i]));
     }
     printf("] \ttau: [");
     for (int i = 0; i < m_dof; ++i) {
-      if (i > 0)
-        printf(" ");
+      if (i > 0) printf(" ");
       printf("%.2f", TinyConstants::getDouble(m_tau[i]));
     }
     printf("]\n");
@@ -498,8 +505,8 @@ public:
     }
   }
 
-  std::vector<const TinyGeometry<TinyScalar, TinyConstants> *> &
-  get_collision_geometries(int i) {
+  std::vector<const TinyGeometry<TinyScalar, TinyConstants> *>
+      &get_collision_geometries(int i) {
     if (i == -1) {
       return m_collision_geometries;
     } else {
@@ -547,10 +554,11 @@ public:
       link.m_qd_index = -2;
     }
 #ifdef DEBUG
-    printf("Attached link %i of type %s (parent: %i, index q: %i, index qd: "
-           "%i).\n",
-           link.m_index, joint_type_name(link.m_joint_type).c_str(),
-           link.m_parent_index, link.m_q_index, link.m_qd_index);
+    printf(
+        "Attached link %i of type %s (parent: %i, index q: %i, index qd: "
+        "%i).\n",
+        link.m_index, joint_type_name(link.m_joint_type).c_str(),
+        link.m_parent_index, link.m_q_index, link.m_qd_index);
 //    link.m_S.print("joint.S");
 #endif
     m_links.push_back(link);
@@ -581,10 +589,11 @@ public:
       link.m_qd_index = -2;
     }
 #ifdef DEBUG
-    printf("Attached link %i of type %s (parent: %i, index q: %i, index qd: "
-           "%i).\n",
-           link.m_index, joint_type_name(link.m_joint_type).c_str(),
-           link.m_parent_index, link.m_q_index, link.m_qd_index);
+    printf(
+        "Attached link %i of type %s (parent: %i, index q: %i, index qd: "
+        "%i).\n",
+        link.m_index, joint_type_name(link.m_joint_type).c_str(),
+        link.m_parent_index, link.m_q_index, link.m_qd_index);
 //    link.m_S.print("joint.S");
 #endif
     m_links.push_back(link);
@@ -592,8 +601,7 @@ public:
 
   inline TinyScalar get_q_for_link(const std::vector<TinyScalar> &q,
                                    int link_index) const {
-    if (q.empty())
-      return TinyConstants::zero();
+    if (q.empty()) return TinyConstants::zero();
     const TinyLink &link = m_links[link_index];
     return link.m_joint_type == JOINT_FIXED ? TinyConstants::zero()
                                             : q[link.m_q_index];
@@ -604,8 +612,7 @@ public:
 
   inline TinyScalar get_qd_for_link(const std::vector<TinyScalar> &qd,
                                     int link_index) const {
-    if (qd.empty())
-      return TinyConstants::zero();
+    if (qd.empty()) return TinyConstants::zero();
     const TinyLink &link = m_links[link_index];
     return link.m_joint_type == JOINT_FIXED ? TinyConstants::zero()
                                             : qd[link.m_qd_index];
@@ -624,8 +631,7 @@ public:
 
   inline TinyScalar get_tau_for_link(const std::vector<TinyScalar> &tau,
                                      int link_index) const {
-    if (tau.empty())
-      return TinyConstants::zero();
+    if (tau.empty()) return TinyConstants::zero();
     const TinyLink &link = m_links[link_index];
     int offset = m_isFloating ? -6 : 0;
     return link.m_joint_type == JOINT_FIXED ? TinyConstants::zero()
@@ -668,10 +674,8 @@ public:
     } else {
       *base_X_world = m_base_X_world;
     }
-    if (links_X_world)
-      links_X_world->resize(m_links.size());
-    if (links_X_base)
-      links_X_base->resize(m_links.size());
+    if (links_X_world) links_X_world->resize(m_links.size());
+    if (links_X_base) links_X_base->resize(m_links.size());
     TinySpatialTransform x_j;
     TinySpatialTransform x_parent;
     TinySpatialTransform ident;
@@ -696,10 +700,8 @@ public:
         }
       } else {
         // first link in fixed-base system
-        if (links_X_world)
-          (*links_X_world)[i] = *base_X_world * x_parent;
-        if (links_X_base)
-          (*links_X_base)[i] = x_parent;
+        if (links_X_world) (*links_X_world)[i] = *base_X_world * x_parent;
+        if (links_X_base) (*links_X_base)[i] = x_parent;
       }
     }
   }
@@ -737,8 +739,7 @@ public:
           m_links[i].m_X_parent2.apply_inverse_transpose(m_links[i].m_f);
     }
     m_baseBiasForce = m_baseForce;
-    if (pC_0)
-      *pC_0 = m_baseBiasForce;
+    if (pC_0) *pC_0 = m_baseBiasForce;
   }
 
   /**
@@ -768,8 +769,7 @@ public:
       }
       TinySpatialMotionVector Fi = Ic.mul_inv(m_links[i].m_S);
       int qd_i = m_links[i].m_qd_index;
-      if (m_links[i].m_joint_type == JOINT_FIXED)
-        continue;
+      if (m_links[i].m_joint_type == JOINT_FIXED) continue;
 
       (*M)(qd_i, qd_i) = m_links[i].m_S.dot(Fi);
 
@@ -777,8 +777,7 @@ public:
       while (m_links[j].m_parent_index != -1) {
         Fi = m_links[j].m_X_parent2.apply_transpose(Fi);
         j = m_links[j].m_parent_index;
-        if (m_links[j].m_joint_type == JOINT_FIXED)
-          continue;
+        if (m_links[j].m_joint_type == JOINT_FIXED) continue;
         int qd_j = m_links[j].m_qd_index;
         (*M)(qd_i, qd_j) = Fi.dot(m_links[j].m_S);
         (*M)(qd_j, qd_i) = (*M)(qd_i, qd_j);
@@ -921,8 +920,9 @@ public:
           // Inputs: Position.
           link.m_X_world.m_translation[0].assign("link/pos/x");
           link.m_X_world.m_translation[1].assign("link/pos/y");
-          TinyScalar link_pos_yaw = TinyConstants::atan2(
-              link.m_X_world.m_rotation(0, 1), link.m_X_world.m_rotation(0, 0));
+          TinyScalar link_pos_yaw =
+              TinyConstants::atan2(-link.m_X_world.m_rotation(0, 1),
+                                   link.m_X_world.m_rotation(0, 0));
           link_pos_yaw.assign("link/pos/yaw");
 
           // Inputs: Velocity.
@@ -989,10 +989,10 @@ public:
     assert(qdd.size() == dof_qd());
     assert(static_cast<int>(tau.size()) == m_dof);
 
-    TinySpatialMotionVector spatial_gravity(TinyVector3(TinyConstants::zero(),
-                                                        TinyConstants::zero(),
-                                                        TinyConstants::zero()),
-                                            gravity);
+    TinySpatialMotionVector spatial_gravity(
+        TinyVector3(TinyConstants::zero(), TinyConstants::zero(),
+                    TinyConstants::zero()),
+        gravity);
 
 #ifdef NEURAL_SIM
     for (int i = 0; i < dof(); ++i) {
@@ -1179,10 +1179,10 @@ public:
     // used for composite rigid body terms I^c, p^c to avoid introducing more
     // variables
 
-    TinySpatialMotionVector spatial_gravity(TinyVector3(TinyConstants::zero(),
-                                                        TinyConstants::zero(),
-                                                        TinyConstants::zero()),
-                                            gravity);
+    TinySpatialMotionVector spatial_gravity(
+        TinyVector3(TinyConstants::zero(), TinyConstants::zero(),
+                    TinyConstants::zero()),
+        gravity);
 
     m_baseAcceleration = spatial_gravity;
     forward_kinematics(q, qd, qdd);
@@ -1236,7 +1236,7 @@ public:
 
       if (link.m_joint_type != JOINT_FIXED) {
         tau[tau_index] = link.m_S.dot(
-            link.m_f); // link.m_S.dot(link.m_IA.mul_inv(link.m_a) + link.m_f);
+            link.m_f);  // link.m_S.dot(link.m_IA.mul_inv(link.m_a) + link.m_f);
         ++tau_index;
       }
     }
@@ -1407,8 +1407,7 @@ public:
           TinySpatialMotionVector xs = point_tf.apply(st);
           jac[body->m_qd_index] = xs.m_bottomVec;
         }
-        if (body->m_parent_index < 0)
-          break;
+        if (body->m_parent_index < 0) break;
         body = &m_links[body->m_parent_index];
       }
     }
@@ -1419,10 +1418,10 @@ public:
    * Estimate the point Jacobian using finite differences.
    * This function should only be called for testing purposes.
    */
-  TinyMatrix3xX
-  point_jacobian_fd(const std::vector<TinyScalar> &q, int link_index,
-                    const TinyVector3 &start_point,
-                    TinyScalar eps = TinyConstants::fraction(1, 1000)) const {
+  TinyMatrix3xX point_jacobian_fd(
+      const std::vector<TinyScalar> &q, int link_index,
+      const TinyVector3 &start_point,
+      TinyScalar eps = TinyConstants::fraction(1, 1000)) const {
     assert(q.size() == dof());
     assert(link_index < static_cast<int>(m_links.size()));
     TinyMatrix3xX jac(3, dof_qd());
@@ -1431,8 +1430,7 @@ public:
     TinySpatialTransform base_X_world;
     // compute world point transform for the initial joint angles
     forward_kinematics_q(q, &base_X_world, &links_X_world);
-    if (m_links.empty())
-      return jac;
+    if (m_links.empty()) return jac;
     // convert start point in world coordinates to link frame
     const TinyVector3 base_point =
         links_X_world[link_index].apply_inverse(start_point);
@@ -1523,4 +1521,4 @@ public:
   }
 };
 
-#endif // TINY_MULTIBODY_H
+#endif  // TINY_MULTIBODY_H
