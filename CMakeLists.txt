@@ -61,8 +61,8 @@ ADD_DEFINITIONS(-DSTATIC_LINK_SPD_PLUGIN)
 
 
 
-set(ENOKI_AUTODIFF ON)
-set(ENOKI_CUDA ON)
+set(ENOKI_AUTODIFF ON CACHE BOOL "Use enoki with autodiff" FORCE)
+set(ENOKI_CUDA ON CACHE BOOL "Use enoki with CUDA" FORCE)
 add_subdirectory(third_party/enoki)
 enoki_set_compile_flags()
 enoki_set_native_flags()

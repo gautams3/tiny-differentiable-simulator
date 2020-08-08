@@ -1,26 +1,171 @@
 #include <enoki/autodiff.h>
 #include <enoki/cuda.h>
+#include <enoki/dynamic.h>
 #include <enoki/quaternion.h>
 #include <enoki/special.h>  // for erf()
+#include <fenv.h>
+
+#define USE_MATPLOTLIB 1
+
+#ifdef USE_MATPLOTLIB
+#include "third_party/matplotlib-cpp/matplotlibcpp.h"
+namespace plt = matplotlibcpp;
+#endif
 
 #define TINY_INLINE ENOKI_INLINE
+
+template <typename Algebra>
+struct SpatialVector {
+  using Scalar = typename Algebra::Scalar;
+  using Vector3 = typename Algebra::Vector3;
+  using Vector6 = typename Algebra::Vector6;
+  using Matrix6 = typename Algebra::Matrix6;
+
+  Vector3 top{0.};
+  Vector3 bottom{0.};
+
+  SpatialVector(const Vector6 &vec)
+      : top(vec[0], vec[1], vec[2]), bottom(vec[3], vec[4], vec[5]) {}
+
+  operator Vector6() const {
+    return Vector6(top[0], top[1], top[2], bottom[0], bottom[1], bottom[2]);
+  }
+
+  TINY_INLINE Scalar &operator[](int i) {
+    if (i < 3)
+      return top[i];
+    else
+      return bottom[i - 3];
+  }
+  const TINY_INLINE Scalar &operator[](int i) const {
+    if (i < 3)
+      return top[i];
+    else
+      return bottom[i - 3];
+  }
+
+  TINY_INLINE void set_zero() {
+    top = 0.;
+    bottom = 0.;
+  }
+
+  TINY_INLINE SpatialVector &operator+=(const SpatialVector &vec) {
+    top += vec.top;
+    bottom += vec.bottom;
+    return *this;
+  }
+  TINY_INLINE SpatialVector &operator-=(const SpatialVector &vec) {
+    top -= vec.top;
+    bottom -= vec.bottom;
+    return *this;
+  }
+  TINY_INLINE SpatialVector &operator*=(const Scalar &s) {
+    top *= s;
+    bottom *= s;
+    return *this;
+  }
+
+  TINY_INLINE SpatialVector operator-(const SpatialVector &vec) const {
+    return SpatialVector(top - vec.top, bottom - vec.bottom);
+  }
+  TINY_INLINE SpatialVector operator+(const SpatialVector &vec) const {
+    return SpatialVector(top + vec.top, bottom + vec.bottom);
+  }
+  TINY_INLINE SpatialVector operator-() const {
+    return SpatialVector(-top, -bottom);
+  }
+  TINY_INLINE SpatialVector operator*(const Scalar &s) const {
+    return SpatialVector(s * top, s * bottom);
+  }
+
+  /**
+   * V1 = mv(w1, v1)
+   * V2 = mv(w2, v2)
+   * V1 x V2 = mv(w1 x w2, w1 x v2 + v1 x w2)
+   */
+  SpatialVector crossm(const SpatialVector &b) const {
+    SpatialVector out;
+    out.top = Algebra::cross(top, b.top);
+    out.bottom = Algebra::cross(top, b.bottom) + Algebra::cross(bottom, b.top);
+    return out;
+  }
+
+  /**
+   * V = mv(w, v)
+   * F = fv(n, f)
+   * V x* F = fv(w x n + v x f, w x f)
+   */
+  SpatialVector crossf(const SpatialVector &b) const {
+    SpatialVector out;
+    out.top = Algebra::cross(top, b.top) + Algebra::cross(bottom, b.bottom);
+    out.bottom = Algebra::cross(top, b.bottom);
+    return out;
+  }
+
+  friend std::ostream &operator<<(std::ostream &os, const SpatialVector &v) {
+    os << "[ " << v.top << "  " << v.bottom << " ]";
+    return os;
+  }
+
+  ENOKI_STRUCT(SpatialVector, top, bottom)
+};
+ENOKI_STRUCT_SUPPORT(SpatialVector, top, bottom)
 
 struct EnokiAlgebra {
   using Scalar = double;
   using Vector3 = enoki::Array<Scalar, 3>;
   using Vector6 = enoki::Array<Scalar, 6>;
+  using VectorX = std::vector<Scalar>;
   using Matrix3 = enoki::Matrix<Scalar, 3>;
   using Matrix6 = enoki::Matrix<Scalar, 6>;
   using Quaternion = enoki::Quaternion<Scalar>;
+  using SpatialVector = ::SpatialVector<EnokiAlgebra>;
 
   template <typename T>
   ENOKI_INLINE static auto transpose(const T &matrix) {
     return enoki::transpose(matrix);
   }
 
+  template <typename T>
+  ENOKI_INLINE static auto inverse(const T &matrix) {
+    return enoki::inverse(matrix);
+  }
+
+  template <typename T>
+  ENOKI_INLINE static auto inverse_transpose(const T &matrix) {
+    return enoki::inverse_transpose(matrix);
+  }
+
   template <typename T1, typename T2>
   ENOKI_INLINE static auto cross(const T1 &vector_a, const T2 &vector_b) {
     return enoki::cross(vector_a, vector_b);
+  }
+
+  ENOKI_INLINE static Scalar dot(const SpatialVector &a,
+                                 const SpatialVector &b) {
+    Scalar d = enoki::dot(a.top, b.top);
+    d += enoki::dot(a.bottom, b.bottom);
+    return d;
+  }
+
+  template <typename T1, typename T2>
+  ENOKI_INLINE static auto dot(const T1 &vector_a, const T2 &vector_b) {
+    return enoki::dot(vector_a, vector_b);
+  }
+
+  ENOKI_INLINE static Scalar norm(const SpatialVector &v) {
+    Vector6 v6 = v;
+    return enoki::norm(v6);
+  }
+
+  template <typename T>
+  ENOKI_INLINE static Scalar norm(const T &v) {
+    return enoki::norm(v);
+  }
+
+  template <typename T>
+  ENOKI_INLINE static auto normalize(T &v) {
+    return enoki::normalize(v);
   }
 
   /**
@@ -37,11 +182,14 @@ struct EnokiAlgebra {
 
   ENOKI_INLINE static Scalar zero() { return 0; }
   ENOKI_INLINE static Scalar one() { return 1; }
+  ENOKI_INLINE static Scalar half() { return 0.5; }
 
   ENOKI_INLINE static Vector3 zero3() { return Vector3(0); }
   ENOKI_INLINE static Vector3 unit3_x() { return Vector3(1, 0, 0); }
   ENOKI_INLINE static Vector3 unit3_y() { return Vector3(0, 1, 0); }
   ENOKI_INLINE static Vector3 unit3_z() { return Vector3(0, 0, 1); }
+
+  ENOKI_INLINE static Matrix3 zero33() { return Matrix3(0); }
 
   template <std::size_t Size1, std::size_t Size2>
   ENOKI_INLINE static void assign_block(
@@ -90,6 +238,30 @@ struct EnokiAlgebra {
     return Matrix3(c, -s, 0, s, c, 0, 0, 0, 1);
   }
 
+  ENOKI_INLINE static Vector3 rotate(const Quaternion &q, const Vector3 &v) {
+    return enoki::quat_to_matrix<Matrix3>(q) * v;
+  }
+
+  /**
+   * Computes the quaternion delta given current rotation q, angular velocity w,
+   * time step dt.
+   */
+  ENOKI_INLINE static Quaternion quat_velocity(const Quaternion &q,
+                                               const Vector3 &w,
+                                               const Scalar &dt) {
+    Quaternion delta(q[3] * w[0] + q[1] * w[2] - q[2] * w[1],
+                     q[3] * w[1] + q[2] * w[0] - q[0] * w[2],
+                     q[3] * w[2] + q[0] * w[1] - q[1] * w[0],
+                     -q[0] * w[0] - q[1] * w[1] - q[2] * w[2]);
+    delta *= 0.5 * dt;
+    return delta;
+  }
+
+  ENOKI_INLINE static const Scalar &quat_x(const Quaternion &q) { return q[0]; }
+  ENOKI_INLINE static const Scalar &quat_y(const Quaternion &q) { return q[1]; }
+  ENOKI_INLINE static const Scalar &quat_z(const Quaternion &q) { return q[2]; }
+  ENOKI_INLINE static const Scalar &quat_w(const Quaternion &q) { return q[3]; }
+
   template <std::size_t Size>
   ENOKI_INLINE static void set_zero(enoki::Matrix<Scalar, Size> &m) {
     m = 0;
@@ -108,55 +280,338 @@ struct EnokiAlgebra {
     std::cout << title << "\n" << object << std::endl;
   }
 
+  /**
+   * Computes 6x6 matrix by multiplying a and b^T.
+   */
+  template <std::size_t Size>
+  ENOKI_INLINE static enoki::Matrix<Scalar, Size> mul_transpose(
+      const enoki::Array<Scalar, Size> &a,
+      const enoki::Array<Scalar, Size> &b) {
+    enoki::Matrix<Scalar, Size> m(0.0);
+    for (std::size_t c = 0; c < Size; ++c) {
+      m.col(c) = a * b[c];
+    }
+    return m;
+  }
+  ENOKI_INLINE static Matrix6 mul_transpose(const SpatialVector &a,
+                                            const SpatialVector &b) {
+    Vector6 a6 = a, b6 = b;
+    return mul_transpose(a6, b6);
+  }
+
+  ENOKI_INLINE friend SpatialVector operator*(const Matrix6 &m,
+                                              const SpatialVector &v) {
+    Vector6 v6 = v;
+    return m * v6;
+  }
+
   EnokiAlgebra() = delete;
 };
 
 template <typename Algebra>
-struct SpatialVector {
+struct RigidBodyInertia {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
+  using Matrix3 = typename Algebra::Matrix3;
+  using Matrix6 = typename Algebra::Matrix6;
+  typedef ::SpatialVector<Algebra> SpatialVector;
 
-  Vector3 top{0.};
-  Vector3 bottom{0.};
+  /**
+   * Mass \f$m\f$.
+   */
+  Scalar mass{0};
 
-  TINY_INLINE Scalar &operator[](int i) {
-    if (i < 3)
-      return top[i];
-    else
-      return bottom[i - 3];
+  /**
+   * Center of mass, also denoted as \f$h\f$.
+   */
+  Vector3 com{0};
+
+  Matrix3 inertia{Algebra::diagonal3(1)};
+
+  RigidBodyInertia(const RigidBodyInertia<Algebra> &rbi) = default;
+
+  RigidBodyInertia(const Scalar &mass, const Scalar &Ixx, const Scalar &Iyx,
+                   const Scalar &Iyy, const Scalar &Izx, const Scalar &Izy,
+                   const Scalar &Izz)
+      : mass(mass) {
+    inertia = {{Ixx, Iyx, Izx}, {Iyx, Iyy, Izy}, {Izx, Izy, Izz}};
   }
-  const TINY_INLINE Scalar &operator[](int i) const {
-    if (i < 3)
-      return top[i];
-    else
-      return bottom[i - 3];
+
+  RigidBodyInertia(const Scalar &mass) : mass(mass) {}
+
+  RigidBodyInertia(const Scalar &mass, const Vector3 &com,
+                   const Matrix3 &inertia)
+      : mass(mass), com(com), inertia(inertia) {}
+
+  RigidBodyInertia(const Scalar &mass, const Vector3 &com, const Scalar &Ixx,
+                   const Scalar &Iyx, const Scalar &Iyy, const Scalar &Izx,
+                   const Scalar &Izy, const Scalar &Izz)
+      : mass(mass), com(com) {
+    inertia = {{Ixx, Iyx, Izx}, {Iyx, Iyy, Izy}, {Izx, Izy, Izz}};
   }
 
-  ENOKI_STRUCT(SpatialVector, top, bottom)
+  RigidBodyInertia(const Matrix6 &m)
+      : mass(m(3, 3)),
+        com{-m(1, 5), m(0, 5), -m(0, 4)},
+        inertia(m(0, 0), m(1, 0), m(2, 0), m(0, 1), m(1, 1), m(2, 1), m(0, 2),
+                m(1, 2), m(2, 2)) {}
+
+  void set_zero() {
+    mass = 0;
+    Algebra::set_zero(com);
+    Algebra::set_zero(inertia);
+  }
+
+  /**
+   * Represents spatial inertia matrix where the inertia coincide with the given
+   * center of mass.
+   * @param mass The mass.
+   * @param com The center of mass \f$C\f$.
+   * @param inertiaC Inertia matrix \f$I_C\f$ at the center of mass \f$C\f$.
+   * @return The spatial inertia data structure.
+   */
+  static RigidBodyInertia from_mass_com_i(const Scalar &mass,
+                                          const Vector3 &com,
+                                          const Matrix3 &inertiaC) {
+    const Matrix3 crossCom = Algebra::cross_matrix(com);
+    const Matrix3 I = inertiaC + crossCom * Algebra::transpose(crossCom) * mass;
+    return RigidBodyInertia(mass, com * mass, I(0, 0), I(1, 0), I(1, 1),
+                            I(2, 0), I(2, 1), I(2, 2));
+  }
+
+  /**
+   * Represents spatial inertia matrix where the inertia coincide with the given
+   * center of mass.
+   * @param mass The mass.
+   * @param com The center of mass \f$C\f$.
+   * @param gyrationRadii Radii of gyration at the center of mass (diagonal of
+   * inertia matrix).
+   * @return The spatial inertia data structure.
+   */
+  static RigidBodyInertia from_mass_com_xyz(const Scalar &mass,
+                                            const Vector3 &com,
+                                            const Vector3 &gyrationRadii) {
+    return RigidBodyInertia(mass, com * mass, gyrationRadii(0), 0,
+                            gyrationRadii(1), 0, 0, gyrationRadii(2));
+  }
+
+  Matrix6 matrix() const {
+    Matrix6 m;
+    Algebra::assign_block(m, inertia, 0, 0);
+    const auto crossCom = Algebra::cross_matrix(com);
+    Algebra::assign_block(m, crossCom, 0, 3);
+    Algebra::assign_block(m, -crossCom, 3, 0);
+    Algebra::assign_block(m, Algebra::diagonal3(mass), 3, 3);
+    return m;
+  }
+
+  Matrix6 inverse() const {
+    // Inverse of a symmetric block matrix
+    // according to (4.1) in
+    // http://msvlab.hre.ntou.edu.tw/grades/now/inte/Inverse%20&%20Border/border-LuTT.pdf
+    Matrix3 Ainv = Algebra::inverse(inertia);
+    Matrix3 B = Algebra::cross_matrix(com);
+    Matrix3 C = -B;
+    Matrix3 D = Algebra::diagonal3(mass);
+    Matrix3 Dinv = Algebra::diagonal3(1.0 / mass);
+    Matrix3 DCAB = Algebra::inverse(D - C * Ainv * B);
+    Matrix3 AinvBDCAB = Ainv * B * DCAB;
+
+    Matrix6 m;
+    Algebra::assign_block(m, Ainv + AinvBDCAB * C * Ainv, 0, 0);
+    Algebra::assign_block(m, -AinvBDCAB, 0, 3);
+    Algebra::assign_block(m, -DCAB * C * Ainv, 3, 0);
+    Algebra::assign_block(m, DCAB, 3, 3);
+    return m;
+  }
+
+  SpatialVector operator*(const SpatialVector &v) const {
+    SpatialVector result;
+    result.top = inertia * v.top + Algebra::cross(com, v.bottom);
+    result.bottom = mass * v.bottom - Algebra::cross(com, v.top);
+    return result;
+  }
+
+  RigidBodyInertia operator+(const RigidBodyInertia &rbi) const {
+    return Inertia(mass + rbi.mass, com + rbi.com, inertia + rbi.inertia);
+  }
+
+  RigidBodyInertia &operator+=(const RigidBodyInertia &rbi) {
+    mass += rbi.mass;
+    com += rbi.com;
+    inertia += rbi.inertia;
+    return *this;
+  }
+
+  RigidBodyInertia &operator=(const Matrix6 &m) {
+    mass = m(3, 3);
+    com = Vector3(-m(1, 5), m(0, 5), -m(0, 4));
+    Algebra::assign_block(inertia, m, 0, 0, 3, 3);
+    return *this;
+  }
+
+  ENOKI_STRUCT(RigidBodyInertia, mass, com, inertia)
 };
-ENOKI_STRUCT_SUPPORT(SpatialVector, top, bottom)
+ENOKI_STRUCT_SUPPORT(RigidBodyInertia, mass, com, inertia)
+
+/**
+ * The articulated body inertia matrix has the form
+ *   [  I   H ]
+ *   [ H^T  M ]
+ * where M and I are symmetric 3x3 matrices.
+ */
+template <typename Algebra>
+struct ArticulatedBodyInertia {
+  using Scalar = typename Algebra::Scalar;
+  using Vector3 = typename Algebra::Vector3;
+  using Matrix3 = typename Algebra::Matrix3;
+  using Matrix6 = typename Algebra::Matrix6;
+  typedef ::SpatialVector<Algebra> SpatialVector;
+  typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
+
+  Matrix3 I{Algebra::diagonal3(1.)};
+  Matrix3 H{Algebra::zero33()};
+  Matrix3 M{Algebra::diagonal3(1.)};
+
+  ArticulatedBodyInertia(const RigidBodyInertia &rbi)
+      : I(rbi.inertia),
+        H(Algebra::cross_matrix(rbi.com)),
+        M(Algebra::diagonal3(rbi.mass)) {}
+
+  ArticulatedBodyInertia &operator=(const RigidBodyInertia &rbi) {
+    I = rbi.inertia;
+    H = Algebra::cross_matrix(rbi.com);
+    M = Algebra::diagonal3(rbi.mass);
+    return *this;
+  }
+
+  Matrix6 matrix() const {
+    Matrix6 m;
+    Algebra::assign_block(m, I, 0, 0);
+    Algebra::assign_block(m, H, 0, 3);
+    Algebra::assign_block(m, Algebra::transpose(H), 3, 0);
+    Algebra::assign_block(m, M, 3, 3);
+    return m;
+  }
+
+  SpatialVector operator*(const SpatialVector &v) const {
+    SpatialVector result;
+    result.top = I * v.top + H * v.bottom;
+    result.bottom = M * v.bottom - Algebra::transpose(H) * v.top;
+    return result;
+  }
+
+  ArticulatedBodyInertia operator+(const ArticulatedBodyInertia &abi) const {
+    return ArticulatedBodyInertia(I + abi.I, H + abi.H, M + abi.M);
+  }
+
+  ArticulatedBodyInertia &operator+=(const ArticulatedBodyInertia &abi) {
+    I += abi.I;
+    H += abi.H;
+    M += abi.M;
+    return *this;
+  }
+
+  ArticulatedBodyInertia &operator+=(const Matrix6 &m) {
+    Matrix3 tmp;
+    Algebra::assign_block(tmp, m, 0, 0, 3, 3, 0, 0);
+    I += tmp;
+    Algebra::assign_block(tmp, m, 0, 0, 3, 3, 0, 3);
+    H += tmp;
+    Algebra::assign_block(tmp, m, 0, 0, 3, 3, 3, 3);
+    M += tmp;
+    return *this;
+  }
+
+  ArticulatedBodyInertia &operator-=(const ArticulatedBodyInertia &abi) {
+    I -= abi.I;
+    H -= abi.H;
+    M -= abi.M;
+    return *this;
+  }
+
+  ArticulatedBodyInertia &operator-=(const Matrix6 &m) {
+    Matrix3 tmp;
+    Algebra::assign_block(tmp, m, 0, 0, 3, 3, 0, 0);
+    I -= tmp;
+    Algebra::assign_block(tmp, m, 0, 0, 3, 3, 0, 3);
+    H -= tmp;
+    Algebra::assign_block(tmp, m, 0, 0, 3, 3, 3, 3);
+    M -= tmp;
+    return *this;
+  }
+
+  ArticulatedBodyInertia operator+(const Matrix6 &m) const {
+    ArticulatedBodyInertia abi(*this);
+    abi += m;
+    return abi;
+  }
+
+  ArticulatedBodyInertia operator-(const Matrix6 &m) const {
+    ArticulatedBodyInertia abi(*this);
+    abi -= m;
+    return abi;
+  }
+
+  ArticulatedBodyInertia &operator=(const Matrix6 &m) {
+    Algebra::assign_block(I, m, 0, 0, 3, 3, 0, 0);
+    Algebra::assign_block(H, m, 0, 0, 3, 3, 0, 3);
+    Algebra::assign_block(M, m, 0, 0, 3, 3, 3, 3);
+    return *this;
+  }
+
+  Matrix6 inverse() const {
+    // Inverse of a symmetric block matrix
+    // according to (4.1) in
+    // http://msvlab.hre.ntou.edu.tw/grades/now/inte/Inverse%20&%20Border/border-LuTT.pdf
+    Matrix3 Ainv = Algebra::inverse(I);
+    Matrix3 B = H;
+    Matrix3 C = -B;
+    Matrix3 DCAB = Algebra::inverse(M - C * Ainv * B);
+    Matrix3 AinvBDCAB = Ainv * B * DCAB;
+
+    Matrix6 m;
+    Algebra::assign_block(m, Ainv + AinvBDCAB * C * Ainv, 0, 0);
+    Algebra::assign_block(m, -AinvBDCAB, 0, 3);
+    Algebra::assign_block(m, -DCAB * C * Ainv, 3, 0);
+    Algebra::assign_block(m, DCAB, 3, 3);
+    return m;
+  }
+
+  ENOKI_STRUCT(ArticulatedBodyInertia, I, H, M)
+};
+ENOKI_STRUCT_SUPPORT(ArticulatedBodyInertia, I, H, M)
 
 template <typename Algebra>
 struct Transform {
+  using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
+  using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
+  using ArticulatedBodyInertia = ::ArticulatedBodyInertia<Algebra>;
+  using SpatialVector = ::SpatialVector<Algebra>;
 
   Vector3 translation{0.};
   Matrix3 rotation{Matrix3(1.)};
 
-  friend std::ostream &operator<<(std::ostream &os,
-                                  const Transform<Algebra> &tf) {
+  friend std::ostream &operator<<(std::ostream &os, const Transform &tf) {
     os << "[ translation: " << tf.translation << "  rotation: " << tf.rotation
        << " ]";
     return os;
   }
 
-  void set_identity() {
-    // set all vector entries to zero
-    translation = 0.;
+  TINY_INLINE void set_identity() {
+    Algebra::set_zero(translation);
     // set diagonal entries to one, others to zero
     rotation = Matrix3(1.);
   }
+
+  Transform(const Vector3 &translation) : translation(translation) {}
+  Transform(const Matrix3 &rotation) : rotation(rotation) {}
+  Transform(const Vector3 &translation, const Matrix3 &rotation)
+      : translation(translation), rotation(rotation) {}
+  Transform(const Scalar &trans_x, const Scalar &trans_y, const Scalar &trans_z)
+      : translation(trans_x, trans_y, trans_z) {}
 
   /**
    * X1*X2 = plx(E1*E2, r2 + E2T*r1)
@@ -168,14 +623,14 @@ struct Transform {
     return tr;
   }
 
-  Vector3 apply(const Vector3 &point) const {
+  TINY_INLINE Vector3 apply(const Vector3 &point) const {
     return rotation * point + translation;
   }
-  Vector3 apply_inverse(const Vector3 &point) const {
+  TINY_INLINE Vector3 apply_inverse(const Vector3 &point) const {
     return Algebra::transpose(rotation) * (point - translation);
   }
 
-  Transform get_inverse() const {
+  Transform inverse() const {
     Transform inv;
     inv.rotation = Algebra::transpose(rotation);
     inv.translation = inv.rotation * -translation;
@@ -186,18 +641,14 @@ struct Transform {
    * V = mv(w, v)
    * X*V = mv(E*w, E*(v - r x w))
    */
-  template <typename SpatialVector>
-  SpatialVector apply(const SpatialVector &inVec) const {
+  inline SpatialVector apply(const SpatialVector &inVec) const {
     SpatialVector outVec;
 
-    Vector3 rxw = inVec.Algebra::cross(inVec.top, translation);
+    Vector3 rxw = Algebra::cross(inVec.top, translation);
     Vector3 v_rxw = inVec.bottom + rxw;
 
-    Vector3 tmp3 = Algebra::transpose(rotation) * v_rxw;
-    Vector3 tmp4 = Algebra::transpose(rotation) * inVec.top;
-
-    outVec.top = tmp4;
-    outVec.bottom = tmp3;
+    outVec.top = Algebra::transpose(rotation) * inVec.top;
+    outVec.bottom = Algebra::transpose(rotation) * v_rxw;
 
     return outVec;
   }
@@ -206,8 +657,7 @@ struct Transform {
    * V = mv(w, v)
    * inv(X)*V = mv(ET*w, ET*v + r x (ET*w))
    */
-  template <typename SpatialVector>
-  SpatialVector apply_inverse(const SpatialVector &inVec) const {
+  inline SpatialVector apply_inverse(const SpatialVector &inVec) const {
     SpatialVector outVec;
     outVec.top = rotation * inVec.top;
     outVec.bottom =
@@ -219,12 +669,11 @@ struct Transform {
    * F = fv(n, f)
    * XT*F = fv(ETn + rxETf, ETf)
    */
-  template <typename SpatialVector>
-  SpatialVector apply_transpose(const SpatialVector &inVec) const {
+  inline SpatialVector apply_transpose(const SpatialVector &inVec) const {
     SpatialVector outVec;
     outVec.bottom = rotation * inVec.bottom;
     outVec.top = rotation * inVec.top;
-    outVec.top += cross_matrix(translation) * outVec.bottom;
+    outVec.top += Algebra::cross(translation, outVec.bottom);
 
     return outVec;
   }
@@ -233,8 +682,8 @@ struct Transform {
    * F = fv(n, f)
    * X^* F = fv(E(n - rxf), Ef)
    */
-  template <typename SpatialVector>
-  SpatialVector apply_inverse_transpose(const SpatialVector &inVec) const {
+  inline SpatialVector apply_inverse_transpose(
+      const SpatialVector &inVec) const {
     const Vector3 &n = inVec.top;
     const Vector3 &f = inVec.bottom;
     Matrix3 Et = Algebra::transpose(rotation);
@@ -242,6 +691,83 @@ struct Transform {
     outVec.top = Et * (n - Algebra::cross(translation, f));
     outVec.bottom = Et * f;
     return outVec;
+  }
+
+  /**
+   * Computes \f$ X^* I X^{-1} \f$.
+   */
+  inline RigidBodyInertia apply(const RigidBodyInertia &rbi) const {
+    RigidBodyInertia result(rbi.mass);
+    const Matrix3 rx = Algebra::cross_matrix(translation);
+    const Matrix3 Et = Algebra::transpose(rotation);
+    // E(I + rx hx + (h - mr)x rx) E^T
+    result.inertia =
+        Et *
+        (rbi.inertia + rx * Algebra::cross_matrix(rbi.com) +
+         Algebra::cross_matrix(rbi.com - rbi.mass * translation) * rx) *
+        rotation;
+    // E(h - mr)
+    result.com = Et * (rbi.com - rbi.mass * translation);
+    return result;
+  }
+
+  /**
+   * Computes \f$ X^T I X \f$.
+   */
+  inline RigidBodyInertia apply_transpose(const RigidBodyInertia &rbi) const {
+    RigidBodyInertia result(rbi.mass);
+    // E^T h + mr
+    const Matrix3 Et = Algebra::transpose(rotation);
+    const Vector3 Et_mr = rotation * rbi.com + rbi.mass * translation;
+    const Matrix3 crossTranslation = Algebra::cross_matrix(translation);
+    // E^T I E - rx(E^T h)x - (E^T h + mr)x rx
+    result.inertia = (rotation * rbi.inertia * Et -
+                      crossTranslation * Algebra::cross_matrix(rotation * rbi.com) -
+                      Algebra::cross_matrix(Et_mr) * crossTranslation);
+    // E^T h + mr
+    result.com = Et_mr;
+    return result;
+  }
+
+  /**
+   * Computes \f$ X^* I^A X^{-1} \f$.
+   */
+  inline ArticulatedBodyInertia apply(const ArticulatedBodyInertia &abi) const {
+    ArticulatedBodyInertia result;
+    const Matrix3 Et = Algebra::transpose(rotation);
+    const Matrix3 rx = Algebra::cross_matrix(translation);
+    // H - rx M
+    const Matrix3 HrxM = abi.H - rx * abi.M;
+    // E (I + rx H^T + (H - rx M) rx) E^T
+    result.I =
+        Et * (abi.I + rx * Algebra::transpose(abi.H) + HrxM * rx) * rotation;
+    // E (H - rx M) E^T
+    result.H = Et * HrxM * rotation;
+    // E M E^T
+    result.M = Et * abi.M * rotation;
+    return result;
+  }
+
+  /**
+   * Computes \f$ X^T I^A X \f$.
+   */
+  inline ArticulatedBodyInertia apply_transpose(
+      const ArticulatedBodyInertia &abi) const {
+    ArticulatedBodyInertia result;
+    const Matrix3 Et = Algebra::transpose(rotation);
+    const Matrix3 rx = Algebra::cross_matrix(translation);
+    // M' = E^T M E
+    const Matrix3 Mp = rotation * abi.M * Et;
+    result.M = Mp;
+    // H' = E^T H E
+    const Matrix3 Hp = rotation * abi.H * Et;
+    // H' + rx M'
+    const Matrix3 HrxM = Hp + rx * Mp;
+    // E^T I E - rx H'^T - (H' + rx M') rx
+    result.I = rotation * abi.I * Et - rx * Algebra::transpose(Hp) - HrxM * rx;
+    // H' + rx M'
+    result.H = HrxM;
+    return result;
   }
 
   ENOKI_STRUCT(Transform, translation, rotation)
@@ -262,197 +788,39 @@ enum JointType {
 };
 
 template <typename Algebra>
-struct Inertia {
-  using Scalar = typename Algebra::Scalar;
-  using Vector3 = typename Algebra::Vector3;
-  using Matrix3 = typename Algebra::Matrix3;
-  using Matrix6 = typename Algebra::Matrix6;
-  typedef ::Transform<Algebra> Transform;
-  typedef ::SpatialVector<Algebra> SpatialVector;
-
-  /**
-   * Mass \f$m\f$.
-   */
-  Scalar mass{0};
-
-  /**
-   * Center of mass, also denoted as \f$h\f$.
-   */
-  Vector3 com{0};
-
-  Matrix3 inertia{Algebra::diagonal3(1)};
-
-  Inertia(const Inertia<Algebra> &rbi) = default;
-
-  Inertia(const Scalar &mass, const Scalar &Ixx, const Scalar &Iyx,
-          const Scalar &Iyy, const Scalar &Izx, const Scalar &Izy,
-          const Scalar &Izz)
-      : mass(mass) {
-    inertia = {{Ixx, Iyx, Izx}, {Iyx, Iyy, Izy}, {Izx, Izy, Izz}};
-  }
-
-  Inertia(const Scalar &mass, const Vector3 &com, const Matrix3 &inertia)
-      : mass(mass), com(com), inertia(inertia) {}
-
-  Inertia(const Scalar &mass, const Vector3 &com, const Scalar &Ixx,
-          const Scalar &Iyx, const Scalar &Iyy, const Scalar &Izx,
-          const Scalar &Izy, const Scalar &Izz)
-      : mass(mass), com(com) {
-    inertia = {{Ixx, Iyx, Izx}, {Iyx, Iyy, Izy}, {Izx, Izy, Izz}};
-  }
-
-  Inertia(const Matrix6 &m)
-      : mass(m(3, 3)),
-        com{-m(1, 5), m(0, 5), -m(0, 4)},
-        inertia(m(0, 0), m(1, 0), m(2, 0), m(0, 1), m(1, 1), m(2, 1), m(0, 2),
-                m(1, 2), m(2, 2)) {}
-
-  void set_zero() {
-    mass = 0;
-    Algebra::set_zero(com);
-    Algebra::set_zero(inertia);
-  }
-
-  /**
-   * Represents spatial inertia matrix where the inertia coincide with the given
-   * center of mass.
-   * @param mass The mass.
-   * @param com The center of mass \f$C\f$.
-   * @param inertiaC Inertia matrix \f$I_C\f$ at the center of mass \f$C\f$.
-   * @return The spatial inertia data structure.
-   */
-  static Inertia from_mass_com_i(const Scalar &mass, const Vector3 &com,
-                                 const Matrix3 &inertiaC) {
-    const Matrix3 crossCom = Algebra::cross_matrix(com);
-    const Matrix3 I = inertiaC + crossCom * Algebra::transpose(crossCom) * mass;
-    return Inertia(mass, com * mass, I(0, 0), I(1, 0), I(1, 1), I(2, 0),
-                   I(2, 1), I(2, 2));
-  }
-
-  /**
-   * Represents spatial inertia matrix where the inertia coincide with the given
-   * center of mass.
-   * @param mass The mass.
-   * @param com The center of mass \f$C\f$.
-   * @param gyrationRadii Radii of gyration at the center of mass (diagonal of
-   * inertia matrix).
-   * @return The spatial inertia data structure.
-   */
-  static Inertia from_mass_com_xyz(const Scalar &mass, const Vector3 &com,
-                                   const Vector3 &gyrationRadii) {
-    return Inertia(mass, com * mass, gyrationRadii(0), 0, gyrationRadii(1), 0,
-                   0, gyrationRadii(2));
-  }
-
-  Matrix6 matrix() const {
-    Matrix6 m;
-    Algebra::assign_block(m, inertia, 0, 0);
-    const auto crossCom = Algebra::cross_matrix(com);
-    Algebra::assign_block(m, crossCom, 0, 3);
-    Algebra::assign_block(m, -crossCom, 3, 0);
-    Algebra::assign_block(m, Algebra::diagonal3(mass), 3, 3);
-
-    return m;
-  }
-
-  SpatialVector operator*(const SpatialVector &v) const {
-    SpatialVector result;
-    result.top = inertia * v.top + Algebra::cross(com, v.bottom);
-    result.bottom = mass * v.bottom - Algebra::cross(com, v.top);
-    return result;
-  }
-
-  Inertia operator+(const Inertia &rbi) const {
-    return Inertia(mass + rbi.mass, com + rbi.com, inertia + rbi.inertia);
-  }
-
-  Inertia &operator+=(const Inertia &rbi) {
-    mass += rbi.mass;
-    com += rbi.com;
-    inertia += rbi.inertia;
-    return *this;
-  }
-
-  Inertia &operator=(const Matrix6 &m) {
-    mass = m(3, 3);
-    com = Vector3(-m(1, 5), m(0, 5), -m(0, 4));
-    Algebra::assign_block(inertia, m, 0, 0, 3, 3);
-    return *this;
-  }
-
-  /**
-   * Computes \f$ X^* I X^{-1} \f$.
-   */
-  void transform(const Transform &transform) {
-    const Matrix3 rx = Algebra::cross_matrix(transform.translation);
-    // E(I + rx hx + (h - mr)x rx) E^T
-    inertia = transform.rotation *
-              (inertia + rx * Algebra::cross_matrix(com) +
-               Algebra::cross_matrix(com - mass * transform.translation) * rx) *
-              Algebra::transpose(transform.rotation);
-    // E(h - mr)
-    com = transform.rotation * (com - mass * transform.translation);
-  }
-
-  /**
-   * Computes \f$ X^T I X \f$.
-   */
-  void transform_transpose(const Transform &transform) {
-    // E^T h + mr
-    const Matrix3 E_T = Algebra::transpose(transform.rotation);
-    const Vector3 E_T_mr = E_T * com + mass * transform.translation;
-    const Matrix3 crossTranslation =
-        Algebra::cross_matrix(transform.translation);
-    // E^T I E - rx(E^T h)x - (E^T h + mr)x rx
-    inertia = (E_T * inertia * transform.rotation -
-               crossTranslation * Algebra::cross_matrix(E_T * com) -
-               Algebra::cross_matrix(E_T_mr) * crossTranslation);
-    // E^T h + mr
-    com = E_T_mr;
-  }
-
-  ENOKI_STRUCT(Inertia, mass, com, inertia)
-};
-ENOKI_STRUCT_SUPPORT(Inertia, mass, com, inertia)
-
-template <typename Algebra>
 class Link {
   typedef ::Transform<Algebra> Transform;
   typedef ::SpatialVector<Algebra> SpatialVector;
-  typedef ::Inertia<Algebra> Inertia;
+  typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
+  typedef ::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
 
  public:
-  Link() = default;
-  Link(JointType joint_type, Transform &parent_link_to_joint,
-       const Inertia &inertia)
-      : joint_type(joint_type), X_T(parent_link_to_joint), I(inertia) {}
-
-  Transform X_T;       // parent_link_to_joint
-  Transform X_J;       // joint_to_child_link    //depends on q
-  Transform X_parent;  // parent_link_to_child_link
-
   JointType joint_type{JOINT_REVOLUTE_Z};
 
-  Transform X_world;  // world_to_link
-  SpatialVector vJ;   // local joint velocity (relative to parent link)
-  SpatialVector v;    // global joint velocity (relative to world)
-  SpatialVector a;    // acceleration (relative to world)
-  SpatialVector c;    // velocity product acceleration
+  Transform X_T;               // parent_link_to_joint
+  mutable Transform X_J;       // joint_to_child_link    //depends on q
+  mutable Transform X_parent;  // parent_link_to_child_link
 
-  Inertia I;   // local spatial inertia (constant) // TODO replace
-               // by its original terms (COM, gyration etc.)
-  Inertia IA;  // spatial articulated inertia, IC in CRBA
+  mutable Transform X_world;  // world_to_link
+  mutable SpatialVector vJ;   // local joint velocity (relative to parent link)
+  mutable SpatialVector v;    // global joint velocity (relative to world)
+  mutable SpatialVector a;    // acceleration (relative to world)
+  mutable SpatialVector c;    // velocity product acceleration
 
-  SpatialVector pA;  // bias forces or zero-acceleration forces
-  SpatialVector S;   // motion subspace (spatial joint axis/matrix)
+  RigidBodyInertia rbi;  // local rigid-body spatial inertia (constant)
+  mutable ArticulatedBodyInertia
+      abi;  // spatial articulated inertia, IC in CRBA
 
-  SpatialVector U;  // temp var in ABA, page 130
-  Scalar d;         // temp var in ABA, page 130
-  Scalar u;         // temp var in ABA, page 130
-  SpatialVector f;  // temp var in RNEA, page 183
+  mutable SpatialVector pA;  // bias forces or zero-acceleration forces
+  SpatialVector S;           // motion subspace (spatial joint axis/matrix)
+
+  mutable SpatialVector U;  // temp var in ABA, page 130
+  mutable Scalar d;         // temp var in ABA, page 130
+  mutable Scalar u;         // temp var in ABA, page 130
+  mutable SpatialVector f;  // temp var in RNEA, page 183
 
   SpatialVector f_ext;  // user-defined external force in world frame
 
@@ -475,6 +843,13 @@ class Link {
 
   Scalar stiffness{0};
   Scalar damping{0};
+
+  Link() = default;
+  Link(JointType joint_type, const Transform &parent_link_to_joint,
+       const RigidBodyInertia &rbi)
+      : X_T(parent_link_to_joint), rbi(rbi) {
+    set_joint_type(joint_type);
+  }
 
   void set_joint_type(JointType type,
                       const Vector3 &axis = Algebra::unit3_x()) {
@@ -533,18 +908,18 @@ class Link {
         break;
       }
       case JOINT_REVOLUTE_X:
-        X_J->rotation.set_rotation_x(q);
+        X_J->rotation = Algebra::rotation_x_matrix(q);
         break;
       case JOINT_REVOLUTE_Y:
-        X_J->rotation.set_rotation_y(q);
+        X_J->rotation = Algebra::rotation_y_matrix(q);
         break;
       case JOINT_REVOLUTE_Z:
-        X_J->rotation.set_rotation_z(q);
+        X_J->rotation = Algebra::rotation_z_matrix(q);
         break;
       case JOINT_REVOLUTE_AXIS: {
         const Vector3 &axis = S.bottom;
         const auto quat = Algebra::axis_angle_quaternion(axis, q);
-        X_J->rotation.rotation = Algebra::quat_to_matrix(quat);
+        X_J->rotation = Algebra::quat_to_matrix(quat);
         break;
       }
       case JOINT_FIXED:
@@ -598,9 +973,9 @@ class Link {
     }
   }
 
-  inline void jcalc(const Scalar &q) { jcalc(q, &X_J, &X_parent); }
+  inline void jcalc(const Scalar &q) const { jcalc(q, &X_J, &X_parent); }
 
-  inline void jcalc(const Scalar &q, const Scalar &qd) {
+  inline void jcalc(const Scalar &q, const Scalar &qd) const {
     jcalc(q);
     jcalc(qd, &vJ);
   }
@@ -610,12 +985,15 @@ template <typename Algebra>
 class MultiBody {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
+  using VectorX = typename Algebra::VectorX;
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix6 = typename Algebra::Matrix6;
+  using Quaternion = typename Algebra::Quaternion;
   typedef ::Transform<Algebra> Transform;
   typedef ::SpatialVector<Algebra> SpatialVector;
   typedef ::Link<Algebra> Link;
-  typedef ::Inertia<Algebra> Inertia;
+  typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
+  typedef ::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
 
   /**
    * Number of degrees of freedom, excluding floating-base coordinates.
@@ -655,14 +1033,14 @@ class MultiBody {
   bool is_floating{false};
 
   // quantities related to floating base
-  SpatialVector base_velocity;       // v_0
-  SpatialVector base_acceleration;   // a_0
-  SpatialVector base_applied_force;  // f_ext_0 in world frame
-  SpatialVector base_force;          // f_0 (used by RNEA)
-  SpatialVector base_bias_force;     // pA_0
-  Inertia base_inertia;              // I_0
-  Inertia base_articulated_inertia;  // IA_0
-  Transform base_X_world;
+  mutable SpatialVector base_velocity;      // v_0
+  mutable SpatialVector base_acceleration;  // a_0
+  SpatialVector base_applied_force;         // f_ext_0 in world frame
+  mutable SpatialVector base_force;         // f_0 (used by RNEA)
+  mutable SpatialVector base_bias_force;    // pA_0
+  RigidBodyInertia base_rbi;                // I_0
+  mutable ArticulatedBodyInertia base_abi;  // IA_0
+  mutable Transform base_X_world;
 
   std::vector<int> visual_uids1;
   std::vector<int> visual_uids2;
@@ -674,7 +1052,7 @@ class MultiBody {
   // offset of collision geometries (relative to this link frame)
   std::vector<Transform> X_collisions;
 
-  std::vector<Scalar> q, qd, qdd, tau;
+  VectorX q, qd, qdd, tau;
 
   explicit MultiBody(bool isFloating = false) : is_floating(isFloating) {}
 
@@ -714,7 +1092,7 @@ class MultiBody {
     }
 
     if (static_cast<int>(q.size()) != dof()) {
-      q.resize(dof(), Algebra::zero());
+      q.resize(dof());
     }
     for (Scalar &v : q) {
       v = Algebra::zero();
@@ -723,19 +1101,19 @@ class MultiBody {
       q[3] = Algebra::one();  // make sure orientation is valid
     }
     if (static_cast<int>(qd.size()) != dof_qd()) {
-      qd.resize(dof_qd(), Algebra::zero());
+      qd.resize(dof_qd());
     }
     for (Scalar &v : qd) {
       v = Algebra::zero();
     }
     if (static_cast<int>(qdd.size()) != dof_qd()) {
-      qdd.resize(dof_qd(), Algebra::zero());
+      qdd.resize(dof_qd());
     }
     for (Scalar &v : qdd) {
       v = Algebra::zero();
     }
     if (static_cast<int>(tau.size()) != dof_actuated()) {
-      tau.resize(dof_actuated(), Algebra::zero());
+      tau.resize(dof_actuated());
     }
     for (Scalar &v : tau) {
       v = Algebra::zero();
@@ -765,7 +1143,7 @@ class MultiBody {
         base_applied_force(mb.base_applied_force),
         base_force(mb.base_force),
         base_bias_force(mb.base_bias_force),
-        base_inertia(mb.base_inertia),
+        base_rbi(mb.base_rbi),
         base_X_world(mb.base_X_world),
         // collision_geometries(mb.collision_geometries),
         X_collisions(mb.X_collisions),
@@ -774,11 +1152,11 @@ class MultiBody {
         qdd(mb.qdd),
         tau(mb.tau) {}
 
-  virtual ~MultiBody() {
-    // if (m_actuator) {
-    //   delete actuator;
-    // }
-  }
+  // virtual ~MultiBody() {
+  // if (m_actuator) {
+  //   delete actuator;
+  // }
+  // }
 
   void print_state() const {
     printf("q: [");
@@ -820,49 +1198,47 @@ class MultiBody {
   const Vector3 get_world_com(int link) const {
     const Transform &tf = get_world_transform(link);
     if (link == -1) {
-      return tf.apply(base_inertia.com);
+      return tf.apply(base_rbi.com);
     } else {
       return tf.apply(links[link].I.com);
     }
   }
 
-  inline Scalar get_q_for_link(const std::vector<Scalar> &q,
-                               int link_index) const {
+  TINY_INLINE Scalar get_q_for_link(const VectorX &q, int link_index) const {
     if (q.empty()) return Algebra::zero();
     const Link &link = links[link_index];
     return link.joint_type == JOINT_FIXED ? Algebra::zero() : q[link.q_index];
   }
-  inline Scalar get_q_for_link(int link_index) const {
+  TINY_INLINE Scalar get_q_for_link(int link_index) const {
     get_q_for_link(q, link_index);
   }
 
-  inline Scalar get_qd_for_link(const std::vector<Scalar> &qd,
-                                int link_index) const {
+  TINY_INLINE Scalar get_qd_for_link(const VectorX &qd, int link_index) const {
     if (qd.empty()) return Algebra::zero();
     const Link &link = links[link_index];
     return link.joint_type == JOINT_FIXED ? Algebra::zero() : qd[link.qd_index];
   }
-  inline Scalar get_qd_for_link(int link_index) const {
+  TINY_INLINE Scalar get_qd_for_link(int link_index) const {
     return get_qd_for_link(qd, link_index);
   }
 
-  inline Scalar get_qdd_for_link(const std::vector<Scalar> &qdd,
-                                 int link_index) const {
+  TINY_INLINE Scalar get_qdd_for_link(const VectorX &qdd,
+                                      int link_index) const {
     return get_qd_for_link(qdd, link_index);
   }
-  inline Scalar get_qdd_for_link(int link_index) const {
+  TINY_INLINE Scalar get_qdd_for_link(int link_index) const {
     return get_qdd_for_link(qdd, link_index);
   }
 
-  inline Scalar get_tau_for_link(const std::vector<Scalar> &tau,
-                                 int link_index) const {
+  TINY_INLINE Scalar get_tau_for_link(const VectorX &tau,
+                                      int link_index) const {
     if (tau.empty()) return Algebra::zero();
     const Link &link = links[link_index];
     int offset = is_floating ? -6 : 0;
     return link.joint_type == JOINT_FIXED ? Algebra::zero()
                                           : tau[link.qd_index + offset];
   }
-  inline Scalar get_tau_for_link(int link_index) const {
+  TINY_INLINE Scalar get_tau_for_link(int link_index) const {
     return get_tau_for_link(tau, link_index);
   }
 
@@ -889,13 +1265,11 @@ class MultiBody {
    * If no joint velocities qd are given, qd is assumed to be zero.
    * If no joint accelerations qdd are given, qdd is assumed to be zero.
    */
-  void forward_kinematics(
-      const std::vector<Scalar> &q,
-      const std::vector<Scalar> &qd = std::vector<Scalar>(),
-      const std::vector<Scalar> &qdd = std::vector<Scalar>()) {
-    assert(q.size() == dof());
-    assert(qd.empty() || qd.size() == dof_qd());
-    assert(qdd.empty() || qdd.size() == dof_qd());
+  void forward_kinematics(const VectorX &q, const VectorX &qd = VectorX(),
+                          const VectorX &qdd = VectorX()) const {
+    assert(static_cast<int>(q.size()) == dof());
+    assert(qd.empty() || static_cast<int>(qd.size()) == dof_qd());
+    assert(qdd.empty() || static_cast<int>(qdd.size()) == dof_qd());
 
     if (is_floating) {
       // update base-world transform from q, and update base velocity from qd
@@ -905,23 +1279,25 @@ class MultiBody {
         base_velocity.top = Vector3(qd[0], qd[1], qd[2]);
         base_velocity.bottom = Vector3(qd[3], qd[4], qd[5]);
       } else {
-        Algebra::set_zero(base_velocity);
+        base_velocity.set_zero();
       }
 
-      SpatialVector I0_mul_v0 = base_inertia.mul_org(base_velocity);
+      SpatialVector I0_mul_v0 = base_rbi * base_velocity;
       base_bias_force = base_velocity.crossf(I0_mul_v0) - base_applied_force;
 
-      base_articulated_inertia = base_inertia;
+      base_abi = base_rbi;
     }
 
-    for (int i = 0; i < links.size(); i++) {
-      Link &link = links[i];
+    for (int i = 0; i < static_cast<int>(links.size()); i++) {
+      const Link &link = links[i];
       int parent = link.parent_index;
 
       // update joint transforms, joint velocity (if available)
       Scalar q_val = get_q_for_link(q, i);
       Scalar qd_val = get_qd_for_link(qd, i);
       link.jcalc(q_val, qd_val);
+
+      // std::cout << "Link " << i << " transform: " << link.X_parent << std::endl;
 
       if (parent >= 0 || is_floating) {
         const Transform &parent_X_world =
@@ -938,8 +1314,8 @@ class MultiBody {
       SpatialVector v_x_vJ = link.v.crossm(link.vJ);
       link.c = v_x_vJ /*+link.c_J[i]*/;
 
-      link.IA = link.I;
-      SpatialVector I_mul_v = link.I.mul_inv(link.v);
+      link.abi = link.rbi;
+      SpatialVector I_mul_v = link.abi * link.v;
       SpatialVector f_ext = link.X_world.apply_inverse_transpose(link.f_ext);
 
       // #ifdef NEURAL_SIM
@@ -973,7 +1349,7 @@ class MultiBody {
 
       link.pA = link.v.crossf(I_mul_v) - f_ext;
 #ifdef DEBUG
-      Algebra::print("link.IA", link.IA);
+      Algebra::print("link.abi", link.abi);
       Algebra::print("I_mul_v", I_mul_v);
       Algebra::print("link.pA", link.pA);
 #endif
@@ -984,7 +1360,7 @@ class MultiBody {
       if (!qdd.empty()) {
         link.a += link.S * get_qdd_for_link(qdd, i);
       }
-      link.f = link.I.mul_inv(link.a) + link.pA;
+      link.f = link.abi * link.a + link.pA;
     }
   }
 
@@ -994,34 +1370,32 @@ class MultiBody {
    */
   void forward_kinematics() { forward_kinematics(q, qd); }
 
-  void forward_dynamics(const std::vector<Scalar> &q,
-                        const std::vector<Scalar> &qd,
-                        const std::vector<Scalar> &tau, const Vector3 &gravity,
-                        std::vector<Scalar> &qdd) {
-    assert(q.size() == dof());
-    assert(qd.size() == dof_qd());
-    assert(qdd.size() == dof_qd());
-    assert(static_cast<int>(tau.size()) == m_dof);
+  void forward_dynamics(const VectorX &q, const VectorX &qd, const VectorX &tau,
+                        const Vector3 &gravity, VectorX &qdd) const {
+    assert(static_cast<int>(q.size()) == dof());
+    assert(static_cast<int>(qd.size()) == dof_qd());
+    assert(static_cast<int>(qdd.size()) == dof_qd());
+    assert(static_cast<int>(tau.size()) == dof_actuated());
 
     SpatialVector spatial_gravity(
         Vector3(Algebra::zero(), Algebra::zero(), Algebra::zero()), gravity);
 
-#ifdef NEURAL_SIM
-    for (int i = 0; i < dof(); ++i) {
-      NEURAL_ASSIGN(q[i], "q_" + std::to_string(i));
-    }
-    for (int i = 0; i < dof_qd(); ++i) {
-      NEURAL_ASSIGN(qd[i], "qd_" + std::to_string(i));
-    }
-#endif
+    // #ifdef NEURAL_SIM
+    //     for (int i = 0; i < dof(); ++i) {
+    //       NEURAL_ASSIGN(q[i], "q_" + std::to_string(i));
+    //     }
+    //     for (int i = 0; i < dof_qd(); ++i) {
+    //       NEURAL_ASSIGN(qd[i], "qd_" + std::to_string(i));
+    //     }
+    // #endif
 
     forward_kinematics(q, qd);
 
-    for (int i = links.size() - 1; i >= 0; i--) {
-      Link &link = links[i];
+    for (int i = static_cast<int>(links.size()) - 1; i >= 0; i--) {
+      const Link &link = links[i];
       int parent = link.parent_index;
-      link.U = link.IA.mul_inv(link.S);
-      link.d = link.S.dot(link.U);
+      link.U = link.abi * link.S;
+      link.d = Algebra::dot(link.S, link.U);
       Scalar tau_val = get_tau_for_link(tau, i);
       // apply linear joint stiffness and damping
       // see Eqns. (2.76), (2.78) in Rigid Body Dynamics Notes
@@ -1031,11 +1405,11 @@ class MultiBody {
       tau_val -= link.stiffness * get_q_for_link(q, i);
       tau_val -= link.damping * get_qd_for_link(qd, i);
 
-#ifdef NEURAL_SIM
-      NEURAL_ASSIGN(tau_val, "tau_" + std::to_string(i));
-#endif
+      // #ifdef NEURAL_SIM
+      //       NEURAL_ASSIGN(tau_val, "tau_" + std::to_string(i));
+      // #endif
 
-      link.u = tau_val - link.S.dot(link.pA);
+      link.u = tau_val - Algebra::dot(link.S, link.pA);
 
 #ifdef DEBUG
       Algebra::print("m_U", link.U);
@@ -1052,61 +1426,59 @@ class MultiBody {
 #ifdef DEBUG
       printf("invd[%d]=%f\n", i, Algebra::to_double(invd));
 #endif
-      Inertia tmp = Inertia::vTimesvTranspose(link.U * invd, link.U);
+      Matrix6 u_dinv_ut = Algebra::mul_transpose(link.U * invd, link.U);
 
-      Inertia Ia = link.IA;
-      Ia -= tmp;
-      SpatialVector tmp2 = Ia.mul_inv(link.c);
-      SpatialVector pa = link.pA + tmp2 + link.U * (link.u * invd);
+      ArticulatedBodyInertia Ia = link.abi - u_dinv_ut;
+      SpatialVector Ia_c = Ia * link.c;
+      SpatialVector pa = link.pA + Ia_c + link.U * (link.u * invd);
 #ifdef DEBUG
-      Algebra::print("Ia-tmp", Ia);
-      Algebra::print("tmp2", tmp2);
+      Algebra::print("Ia", Ia);
+      Algebra::print("Ia*c", Ia_c);
       Algebra::print("pa", pa);
 #endif
 
-      SpatialVector dpA = link.X_parent.apply_transpose(pa);
+      SpatialVector delta_pA = link.X_parent.apply_transpose(pa);
 #ifdef DEBUG
-      Algebra::print("dpA", dpA);
+      Algebra::print("delta_pA", delta_pA);
 #endif
-      Inertia dI = Inertia::shift(Ia, link.X_parent);
+      ArticulatedBodyInertia delta_I = link.X_parent.apply(Ia);
       if (parent >= 0) {
-        links[parent].pA += dpA;
-        links[parent].IA += dI;
+        links[parent].pA += delta_pA;
+        links[parent].abi += delta_I;
 #ifdef DEBUG
         Algebra::print("pa update", links[parent].pA);
         Algebra::print("mIA", links[parent].I);
 #endif
       } else if (is_floating) {
-        base_bias_force += dpA;
-        base_articulated_inertia += dI;
+        base_bias_force += delta_pA;
+        base_abi += delta_I;
 #ifdef DEBUG
-        Algebra::print("base_articulated_inertia", base_articulated_inertia);
+        Algebra::print("base_abi", base_abi);
         Algebra::print("base_bias_force", base_bias_force);
-        Algebra::print("dI", dI);
-        Algebra::print("dpA", dpA);
+        Algebra::print("delta_I", delta_I);
+        Algebra::print("delta_pA", delta_pA);
 #endif
       }
     }
 
     if (is_floating) {
-#ifdef NEURAL_SIM
-      NEURAL_ASSIGN(base_bias_force[0], "base_bias_force_0");
-      NEURAL_ASSIGN(base_bias_force[1], "base_bias_force_1");
-      NEURAL_ASSIGN(base_bias_force[2], "base_bias_force_2");
-      NEURAL_ASSIGN(base_bias_force[3], "base_bias_force_3");
-      NEURAL_ASSIGN(base_bias_force[4], "base_bias_force_4");
-      NEURAL_ASSIGN(base_bias_force[5], "base_bias_force_5");
-#endif
+      // #ifdef NEURAL_SIM
+      //       NEURAL_ASSIGN(base_bias_force[0], "base_bias_force_0");
+      //       NEURAL_ASSIGN(base_bias_force[1], "base_bias_force_1");
+      //       NEURAL_ASSIGN(base_bias_force[2], "base_bias_force_2");
+      //       NEURAL_ASSIGN(base_bias_force[3], "base_bias_force_3");
+      //       NEURAL_ASSIGN(base_bias_force[4], "base_bias_force_4");
+      //       NEURAL_ASSIGN(base_bias_force[5], "base_bias_force_5");
+      // #endif
 
-      base_acceleration =
-          -base_articulated_inertia.inverse().mul_inv(base_bias_force);
+      base_acceleration = -base_abi.inverse() * base_bias_force;
 
     } else {
       base_acceleration = -spatial_gravity;
     }
 
-    for (int i = 0; i < links.size(); i++) {
-      Link &link = links[i];
+    for (int i = 0; i < static_cast<int>(links.size()); i++) {
+      const Link &link = links[i];
       int parent = link.parent_index;
       const Transform &X_parent = link.X_parent;
       const SpatialVector &parentAccel =
@@ -1114,7 +1486,7 @@ class MultiBody {
 #if DEBUG
       if (parent < 0) {
         printf("final loop for parent %i\n", parent);
-        Algebra::print("base_articulated_inertia", base_articulated_inertia);
+        Algebra::print("base_abi", base_abi);
         Algebra::print("base_bias_force", base_bias_force);
         Algebra::print("parentAccel", parentAccel);
       }
@@ -1133,11 +1505,11 @@ class MultiBody {
       {
         Scalar invd = link.joint_type == JOINT_FIXED ? Algebra::zero()
                                                      : Algebra::one() / link.d;
-        Scalar t1 = link.U.dot(link.a);
-        Scalar t2 = link.u - t1;
+        Scalar Ut_a = Algebra::dot(link.U, link.a);
+        Scalar u_Ut_a = link.u - Ut_a;
         Scalar qdd_val = Algebra::zero();
         if (link.qd_index >= 0) {
-          qdd_val = invd * t2;
+          qdd_val = invd * u_Ut_a;
           qdd[link.qd_index] = qdd_val;
         }
         link.a = link.a + link.S * qdd_val;
@@ -1157,11 +1529,123 @@ class MultiBody {
   void forward_dynamics(const Vector3 &gravity) {
     forward_dynamics(q, qd, tau, gravity, qdd);
   }
+
+  // attaches a new link, setting parent to the last link
+  void attach(Link &link, bool is_controllable = true) {
+    int parent_index = -1;
+    if (!links.empty()) parent_index = static_cast<int>(links.size()) - 1;
+    attach(link, parent_index, is_controllable);
+  }
+
+  void attach(Link &link, int parent_index, bool is_controllable = true) {
+    int sz = static_cast<int>(links.size());
+    assert(parent_index < sz);
+    link.index = sz;
+    link.parent_index = parent_index;
+    if (link.joint_type != JOINT_FIXED) {
+      assert(Algebra::norm(link.S) > Algebra::zero());
+      link.q_index = dof();
+      link.qd_index = dof_qd();
+      dof_++;
+      if (is_controllable) {
+        if (control_indices.empty()) {
+          control_indices.push_back(0);
+        } else {
+          control_indices.push_back(control_indices.back() + 1);
+        }
+      }
+    } else {
+      link.q_index = -2;
+      link.qd_index = -2;
+    }
+#ifdef DEBUG
+    printf(
+        "Attached link %i of type %s (parent: %i, index q: %i, index qd: "
+        "%i).\n",
+        link.rbindex, joint_type_name(link.joint_type).c_str(),
+        link.parent_index, link.q_index, link.qd_index);
+//    link.S.print("joint.S");
+#endif
+    links.push_back(link);
+  }
+
+  void integrate(VectorX &q, VectorX &qd, VectorX &qdd, const Scalar &dt) {
+    assert(static_cast<int>(q.size()) == dof());
+    assert(static_cast<int>(qd.size()) == dof_qd());
+    assert(static_cast<int>(qdd.size()) == dof_qd());
+
+    int q_offset, qd_offset;
+    if (is_floating) {
+      base_acceleration.top = Vector3(qdd[0], qdd[1], qdd[2]);
+      base_acceleration.bottom = Vector3(qdd[3], qdd[4], qdd[5]);
+
+      base_velocity.top = Vector3(qd[0], qd[1], qd[2]);
+      base_velocity.bottom = Vector3(qd[3], qd[4], qd[5]);
+
+      base_velocity += base_acceleration * dt;
+
+      Vector3 linear_velocity = base_velocity.bottom;
+      base_X_world.translation += linear_velocity * dt;
+
+      // update base orientation using Quaternion derivative
+      Vector3 angular_velocity = base_velocity.top;
+
+      Quaternion base_rot = Algebra::matrix_to_quat(base_X_world.rotation);
+      // update 4-dimensional q from 3-dimensional qd for the base rotation
+      // angular_velocity = Vector3(qd[0], qd[1], qd[2]);
+      base_rot += Algebra::quat_velocity(base_rot, angular_velocity, dt);
+      Algebra::normalize(base_rot);
+      base_X_world.rotation = Algebra::quat_to_matrix(base_rot);
+
+      q[0] = Algebra::quat_x(base_rot);
+      q[1] = Algebra::quat_y(base_rot);
+      q[2] = Algebra::quat_z(base_rot);
+      q[3] = Algebra::quat_w(base_rot);
+      q_offset = 4;
+      qd_offset = 3;
+    } else {
+      q_offset = 0;
+      qd_offset = 0;
+    }
+
+    for (int i = 0; i < dof_qd() - qd_offset; i++) {
+      int qindex = i + q_offset;
+      int qdindex = i + qd_offset;
+      qd[qdindex] += qdd[qdindex] * dt;
+      q[qindex] += qd[qdindex] * dt;
+    }
+  }
+
+  void integrate(const Scalar &dt) { integrate(q, qd, qdd, dt); }
 };
+
+#ifdef USE_MATPLOTLIB
+template <typename Algebra>
+static void plot_trajectory(
+    const std::vector<typename Algebra::VectorX> &states,
+    const std::string &title = "Figure") {
+  for (int i = 0; i < static_cast<int>(states[0].size()); ++i) {
+    std::vector<double> traj(states.size());
+    for (int t = 0; t < static_cast<int>(states.size()); ++t) {
+      traj[t] = Algebra::to_double(states[t][i]);
+    }
+    plt::named_plot("state[" + std::to_string(i) + "]", traj);
+  }
+  plt::legend();
+  plt::title(title);
+  plt::show();
+}
+#endif
 
 int main(int argc, char **argv) {
   {
     using Tf = Transform<EnokiAlgebra>;
+    using Vector3 = EnokiAlgebra::Vector3;
+    using RigidBodyInertia = ::RigidBodyInertia<EnokiAlgebra>;
+
+    // Set NaN trap
+    // feenableexcept(FE_INVALID | FE_OVERFLOW);
+
     Tf tf;
     tf.set_identity();
     std::cout << "tf: " << tf << std::endl;
@@ -1171,12 +1655,39 @@ int main(int argc, char **argv) {
 
     std::cout << "rot-x: " << EnokiAlgebra::rotation_x_matrix(0.3) << std::endl;
 
-    Inertia<EnokiAlgebra> abi;
-    std::cout << "ABI: " << abi.inertia << std::endl;
+    RigidBodyInertia rbi;
+    std::cout << "rbi.inertia: " << rbi.inertia << std::endl;
 
     EnokiAlgebra::Matrix6 mat6(0.);
     EnokiAlgebra::assign_block(mat6, EnokiAlgebra::Matrix3(3.14), 0, 2);
     std::cout << "mat6: " << mat6 << std::endl;
+
+    MultiBody<EnokiAlgebra> mb;
+
+    Link<EnokiAlgebra> link_a(JOINT_REVOLUTE_X, Tf(1., 0., 1.),
+                              RigidBodyInertia(1.));
+    Link<EnokiAlgebra> link_b(JOINT_REVOLUTE_X, Tf(1., 0., 1.),
+                              RigidBodyInertia(1.));
+    mb.attach(link_a);
+    mb.attach(link_b);
+    mb.initialize();
+
+    mb.q = {M_PI_2, 0.0};
+
+    mb.forward_kinematics();
+    Vector3 gravity(0., 0., -9.81);
+    mb.forward_dynamics(gravity);
+
+    std::vector<typename EnokiAlgebra::VectorX> traj;
+
+    for (int i = 0; i < 1000; ++i) {
+      traj.push_back(mb.q);
+      mb.integrate(0.01);
+      mb.forward_dynamics(gravity);
+      mb.print_state();
+    }
+
+    plot_trajectory<EnokiAlgebra>(traj);
   }
 
   return 0;

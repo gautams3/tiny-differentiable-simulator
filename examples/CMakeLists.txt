@@ -444,7 +444,7 @@ endfunction()
 
 enoki_test(enoki_hello_world enoki_hello_world.cpp)
 set_target_properties(enoki_hello_world_none PROPERTIES FOLDER autodiff)
-target_link_libraries(enoki_hello_world_none PRIVATE enoki-autodiff)
+target_link_libraries(enoki_hello_world_none PRIVATE enoki-autodiff ${PYTHON_LIBRARIES})
 if (ENOKI_CUDA)
   target_link_libraries(enoki_hello_world_none PRIVATE enoki-cuda cuda)
 endif()
