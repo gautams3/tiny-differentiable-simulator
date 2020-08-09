@@ -23,8 +23,6 @@ find_package(ct_optcon)
 find_package(Ceres)
 find_package(PkgConfig)
 
-find_package(Torch)
-
 add_definitions(-DBT_USE_DOUBLE_PRECISION)
 find_package(Bullet)
 
@@ -216,13 +214,6 @@ if (HAS_MESHCAT)
     target_link_libraries(laikago_meshcat_example pybullet_visualizer_api ${MESHCAT_LIBRARIES})
 endif (HAS_MESHCAT)
 
-if (Torch_FOUND)
-    include_directories(${TORCH_INCLUDE_DIRS})
-    message("Torch libraries: ${TORCH_LIBRARIES}")
-    add_executable(torch_example torch_example.cpp ${TDS_HDRS})
-    target_link_libraries(torch_example pybullet_visualizer_api ${TORCH_LIBRARIES})
-endif (Torch_FOUND)
-
 endif (Bullet_FOUND)
 
 if (tinyxml2_FOUND)
@@ -354,30 +345,30 @@ endif()
 
 enoki_set_compile_flags()
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR
-    CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR
-    CMAKE_CXX_COMPILER_ID MATCHES "Intel")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
-  if (NOT ${ENOKI_U_CMAKE_BUILD_TYPE} MATCHES DEBUG)
-    add_compile_options( -fvisibility=hidden)
-  endif()
-  add_compile_options(-Wall -Wextra -Wconversion)
-elseif(WIN32)
-  add_compile_options("/std:c++17")
-  add_compile_options("/bigobj")
-endif()
+# if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR
+#     CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR
+#     CMAKE_CXX_COMPILER_ID MATCHES "Intel")
+#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+#   if (NOT ${ENOKI_U_CMAKE_BUILD_TYPE} MATCHES DEBUG)
+#     add_compile_options( -fvisibility=hidden)
+#   endif()
+#   add_compile_options(-Wall -Wextra -Wconversion)
+# elseif(WIN32)
+#   add_compile_options("/std:c++17")
+#   add_compile_options("/bigobj")
+# endif()
 
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+# set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-add_custom_target(check
-        ${CMAKE_COMMAND} -E echo CWD=${CMAKE_BINARY_DIR}
-        COMMAND ${CMAKE_COMMAND} -E echo CMD=${CMAKE_CTEST_COMMAND} -C $<CONFIG>
-        COMMAND ${CMAKE_COMMAND} -E echo ----------------------------------
-        COMMAND ${CMAKE_COMMAND} -E env CTEST_OUTPUT_ON_FAILURE=1
-            ${CMAKE_CTEST_COMMAND} -C $<CONFIG>
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    DEPENDS ALL_BUILD USES_TERMINAL
-)
+# add_custom_target(check
+#         ${CMAKE_COMMAND} -E echo CWD=${CMAKE_BINARY_DIR}
+#         COMMAND ${CMAKE_COMMAND} -E echo CMD=${CMAKE_CTEST_COMMAND} -C $<CONFIG>
+#         COMMAND ${CMAKE_COMMAND} -E echo ----------------------------------
+#         COMMAND ${CMAKE_COMMAND} -E env CTEST_OUTPUT_ON_FAILURE=1
+#             ${CMAKE_CTEST_COMMAND} -C $<CONFIG>
+#     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+#     DEPENDS ALL_BUILD USES_TERMINAL
+# )
 
 function(enoki_test NAME SOURCE)
   add_executable(${NAME}_none ${SOURCE}  ${ENOKI_HEADERS})
@@ -444,7 +435,7 @@ endfunction()
 
 enoki_test(enoki_hello_world enoki_hello_world.cpp)
 set_target_properties(enoki_hello_world_none PROPERTIES FOLDER autodiff)
-target_link_libraries(enoki_hello_world_none PRIVATE enoki-autodiff ${PYTHON_LIBRARIES})
+target_link_libraries(enoki_hello_world_none PRIVATE enoki-autodiff opengl_window ${PYTHON_LIBRARIES})
 if (ENOKI_CUDA)
   target_link_libraries(enoki_hello_world_none PRIVATE enoki-cuda cuda)
 endif()

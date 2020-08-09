@@ -5,6 +5,13 @@
 #include <enoki/special.h>  // for erf()
 #include <fenv.h>
 
+#include <cassert>
+#include <chrono>
+#include <cstdio>
+#include <thread>
+
+#include "opengl_window/tiny_opengl3_app.h"
+
 #define USE_MATPLOTLIB 1
 
 #ifdef USE_MATPLOTLIB
@@ -357,7 +364,7 @@ struct RigidBodyInertia {
                 m(1, 2), m(2, 2)) {}
 
   void set_zero() {
-    mass = 0;
+    mass = Algebra::zero();
     Algebra::set_zero(com);
     Algebra::set_zero(inertia);
   }
@@ -646,9 +653,10 @@ struct Transform {
 
     Vector3 rxw = Algebra::cross(inVec.top, translation);
     Vector3 v_rxw = inVec.bottom + rxw;
+    Matrix3 Et = Algebra::transpose(rotation);
 
-    outVec.top = Algebra::transpose(rotation) * inVec.top;
-    outVec.bottom = Algebra::transpose(rotation) * v_rxw;
+    outVec.top = Et * inVec.top;
+    outVec.bottom = Et * v_rxw;
 
     return outVec;
   }
@@ -721,9 +729,10 @@ struct Transform {
     const Vector3 Et_mr = rotation * rbi.com + rbi.mass * translation;
     const Matrix3 crossTranslation = Algebra::cross_matrix(translation);
     // E^T I E - rx(E^T h)x - (E^T h + mr)x rx
-    result.inertia = (rotation * rbi.inertia * Et -
-                      crossTranslation * Algebra::cross_matrix(rotation * rbi.com) -
-                      Algebra::cross_matrix(Et_mr) * crossTranslation);
+    result.inertia =
+        (rotation * rbi.inertia * Et -
+         crossTranslation * Algebra::cross_matrix(rotation * rbi.com) -
+         Algebra::cross_matrix(Et_mr) * crossTranslation);
     // E^T h + mr
     result.com = Et_mr;
     return result;
@@ -811,8 +820,7 @@ class Link {
   mutable SpatialVector c;    // velocity product acceleration
 
   RigidBodyInertia rbi;  // local rigid-body spatial inertia (constant)
-  mutable ArticulatedBodyInertia
-      abi;  // spatial articulated inertia, IC in CRBA
+  mutable ArticulatedBodyInertia abi;  // spatial articulated inertia
 
   mutable SpatialVector pA;  // bias forces or zero-acceleration forces
   SpatialVector S;           // motion subspace (spatial joint axis/matrix)
@@ -831,12 +839,13 @@ class Link {
   // std::vector<const Geometry<Scalar, Constants> *> collision_geometries;
   // std::vector<Transform> X_collisions;  // offset of collision geometries
   // (relative to this link frame)
-  std::vector<int> visual_uids1;
-  std::vector<int> visual_uids2;
+  std::vector<int> visual_ids;
   std::vector<Transform>
       X_visuals;  // offset of geometry (relative to this link frame)
+
   std::string link_name;
   std::string joint_name;
+
   // index in MultiBody q / qd arrays
   int q_index{-2};
   int qd_index{-2};
@@ -1297,7 +1306,8 @@ class MultiBody {
       Scalar qd_val = get_qd_for_link(qd, i);
       link.jcalc(q_val, qd_val);
 
-      // std::cout << "Link " << i << " transform: " << link.X_parent << std::endl;
+      // std::cout << "Link " << i << " transform: " << link.X_parent <<
+      // std::endl;
 
       if (parent >= 0 || is_floating) {
         const Transform &parent_X_world =
@@ -1421,6 +1431,7 @@ class MultiBody {
       printf("%f\n", u);
 #endif
 
+      assert(link.joint_type == JOINT_FIXED || link.d > Algebra::zero());
       Scalar invd = link.joint_type == JOINT_FIXED ? Algebra::zero()
                                                    : Algebra::one() / link.d;
 #ifdef DEBUG
@@ -1621,9 +1632,8 @@ class MultiBody {
 
 #ifdef USE_MATPLOTLIB
 template <typename Algebra>
-static void plot_trajectory(
-    const std::vector<typename Algebra::VectorX> &states,
-    const std::string &title = "Figure") {
+void plot_trajectory(const std::vector<typename Algebra::VectorX> &states,
+                     const std::string &title = "Figure") {
   for (int i = 0; i < static_cast<int>(states[0].size()); ++i) {
     std::vector<double> traj(states.size());
     for (int t = 0; t < static_cast<int>(states.size()); ++t) {
@@ -1637,10 +1647,81 @@ static void plot_trajectory(
 }
 #endif
 
+template <typename Algebra>
+void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
+                          MultiBody<Algebra> &mb, double dt,
+                          const std::string &window_title = "Trajectory") {
+  typedef ::Transform<Algebra> Transform;
+  using Scalar = typename Algebra::Scalar;
+  using Vector3 = typename Algebra::Vector3;
+  using Matrix3 = typename Algebra::Matrix3;
+
+  TinyOpenGL3App app(window_title.c_str(), 1024, 768);
+  app.m_renderer->init();
+  app.set_up_axis(2);
+  app.m_renderer->get_active_camera()->set_camera_distance(4);
+  app.m_renderer->get_active_camera()->set_camera_pitch(-30);
+  app.m_renderer->get_active_camera()->set_camera_target_position(0, 0, 0);
+
+  for (std::size_t i = 0; i < mb.links.size(); ++i) {
+    int cube_shape = app.register_cube_shape(0.1f, 0.1f, 0.1f);
+    int cube_id = app.m_renderer->register_graphics_instance(cube_shape);
+    mb.links[i].visual_ids = {cube_id};
+    mb.links[i].X_visuals = {Transform(mb.links[i].rbi.com)};
+  }
+
+  for (const std::vector<double> &state : states) {
+    app.m_renderer->update_camera(2);
+    DrawGridData data;
+    data.upAxis = 2;
+    app.draw_grid(data);
+    for (int i = 0; i < mb.dof(); ++i) {
+      mb.q[i] = state[i];
+    }
+    mb.forward_kinematics();
+    // mb.print_state();
+
+    std::this_thread::sleep_for(std::chrono::duration<double>(dt));
+
+    TinyVector3f parent_pos(static_cast<float>(mb.base_X_world.translation[0]),
+                            static_cast<float>(mb.base_X_world.translation[1]),
+                            static_cast<float>(mb.base_X_world.translation[2]));
+    for (const auto &link : mb.links) {
+      TinyVector3f link_pos(static_cast<float>(link.X_world.translation[0]),
+                            static_cast<float>(link.X_world.translation[1]),
+                            static_cast<float>(link.X_world.translation[2]));
+
+      app.m_renderer->draw_line(link_pos, parent_pos,
+                                TinyVector3f(0.5, 0.5, 0.5), 2.f);
+      parent_pos = link_pos;
+      for (std::size_t j = 0; j < link.visual_ids.size(); ++j) {
+        Transform X_visual = link.X_world * link.X_visuals[j];
+        // sync transform
+        TinyVector3f geom_pos(static_cast<float>(X_visual.translation[0]),
+                              static_cast<float>(X_visual.translation[1]),
+                              static_cast<float>(X_visual.translation[2]));
+        auto quat = Algebra::matrix_to_quat(X_visual.rotation);
+        TinyQuaternionf geom_orn(static_cast<float>(Algebra::quat_x(quat)),
+                                 static_cast<float>(Algebra::quat_y(quat)),
+                                 static_cast<float>(Algebra::quat_z(quat)),
+                                 static_cast<float>(Algebra::quat_w(quat)));
+        app.m_renderer->write_single_instance_transform_to_cpu(
+            geom_pos, geom_orn, link.visual_ids[j]);
+        TinyVector3f color(0.1, 0.6, 0.8);
+        app.m_renderer->draw_line(link_pos, geom_pos, color, 2.f);
+      }
+    }
+    app.m_renderer->render_scene();
+    app.m_renderer->write_transforms();
+    app.swap_buffer();
+  }
+}
+
 int main(int argc, char **argv) {
   {
     using Tf = Transform<EnokiAlgebra>;
     using Vector3 = EnokiAlgebra::Vector3;
+    using Matrix3 = EnokiAlgebra::Matrix3;
     using RigidBodyInertia = ::RigidBodyInertia<EnokiAlgebra>;
 
     // Set NaN trap
@@ -1664,10 +1745,13 @@ int main(int argc, char **argv) {
 
     MultiBody<EnokiAlgebra> mb;
 
-    Link<EnokiAlgebra> link_a(JOINT_REVOLUTE_X, Tf(1., 0., 1.),
-                              RigidBodyInertia(1.));
-    Link<EnokiAlgebra> link_b(JOINT_REVOLUTE_X, Tf(1., 0., 1.),
-                              RigidBodyInertia(1.));
+    double mass = 1.;
+    Vector3 com(0., 0., 1.);
+    Matrix3 I = EnokiAlgebra::diagonal3(Vector3(1., 1., 1.));
+    Link<EnokiAlgebra> link_a(JOINT_REVOLUTE_X, Tf(0., 0., 1.),
+                              RigidBodyInertia(mass, com, I));
+    Link<EnokiAlgebra> link_b(JOINT_REVOLUTE_X, Tf(0., 0., 1.),
+                              RigidBodyInertia(mass, com, I));
     mb.attach(link_a);
     mb.attach(link_b);
     mb.initialize();
@@ -1680,14 +1764,16 @@ int main(int argc, char **argv) {
 
     std::vector<typename EnokiAlgebra::VectorX> traj;
 
+    double dt = 0.01;
     for (int i = 0; i < 1000; ++i) {
       traj.push_back(mb.q);
-      mb.integrate(0.01);
+      mb.integrate(dt);
       mb.forward_dynamics(gravity);
       mb.print_state();
     }
 
     plot_trajectory<EnokiAlgebra>(traj);
+    visualize_trajectory<EnokiAlgebra>(traj, mb, dt);
   }
 
   return 0;

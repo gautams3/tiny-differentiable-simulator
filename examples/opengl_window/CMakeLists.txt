@@ -1,3 +1,4 @@
+project(opengl_window)
 
 INCLUDE_DIRECTORIES(
     ../../third_party/glad
@@ -18,7 +19,7 @@ LIST(REMOVE_ITEM OpenGLWindowCommon_CPP ${OpenGLWindowWin32_CPP} )
 LIST(REMOVE_ITEM OpenGLWindowCommon_CPP ${OpenGLWindowLinux_CPP} )
 LIST(REMOVE_ITEM OpenGLWindowCommon_CPP tiny_x11_opengl_window.cpp )
 LIST(REMOVE_ITEM OpenGLWindowCommon_CPP tiny_mac_opengl_window.cpp )
-#MESSAGE (${OpenGLWindowCommon_CPP})
+MESSAGE (${OpenGLWindowCommon_CPP})
 
 IF (WIN32)
     SET(OpenGLWindow_SRCS ../../third_party/glad/gl.c ${OpenGLWindowWin32_CPP} ${OpenGLWindowCommon_CPP})
@@ -65,7 +66,7 @@ elseif (APPLE)
   MESSAGE(${COCOA})
 endif ()
 
-if (BUILD_SHARED_LIBS)
+# if (BUILD_SHARED_LIBS)
   #target_link_libraries(opengl_window )
   if (WIN32 OR APPLE)
    target_link_libraries(opengl_window ${OPENGL_gl_LIBRARY})
@@ -76,7 +77,7 @@ if (BUILD_SHARED_LIBS)
 	target_compile_definitions(opengl_window PUBLIC DYNAMIC_LOAD_X11_FUNCTIONS PRIVATE DYNAMIC_LOAD_X11_FUNCTIONS)
 
   endif()
-endif()
+# endif()
 
 IF(APPLE)
   FIND_PACKAGE(OpenGL)

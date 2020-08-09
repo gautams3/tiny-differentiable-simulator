@@ -17,6 +17,9 @@
 #ifndef TINY_PD_CONTROL
 #define TINY_PD_CONTROL
 
+#include <vector>
+#include <iostream>
+
 struct TinyPDController {
   /**
    * Compute joint torques tau given desired joint positions and velocities
