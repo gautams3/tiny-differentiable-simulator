@@ -134,13 +134,16 @@ struct TinyVector3 {
 
   inline TinyScalar length() const {
     TinyScalar res = (*this).dot(*this);
+    // avoid potential division by zero errors for autodiff backward pass
+    // of sqrt function
+    if (res == TinyConstants::zero()) return res;
     res = TinyConstants::sqrt1(res);
     return res;
   }
 
   inline TinyScalar length_squared() const {
-      TinyScalar res = (*this).dot(*this);
-      return res;
+    TinyScalar res = (*this).dot(*this);
+    return res;
   }
 
   inline void normalize() { *this = *this * (TinyConstants::one() / length()); }

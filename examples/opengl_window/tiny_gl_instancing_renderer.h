@@ -112,10 +112,10 @@ class TinyGLInstancingRenderer {
 
   /// position x,y,z, quaternion x,y,z,w, color r,g,b,a, scaling x,y,z
   virtual int register_graphics_instance(int shapeIndex,
-                                         const TinyVector3f& position,
-                                         const TinyQuaternionf& quaternion,
-                                         const TinyVector3f& color,
-                                         const TinyVector3f& scaling,
+                                         const TinyVector3f& position = TinyVector3f(0.f, 0.f, 0.f),
+                                         const TinyQuaternionf& quaternion = TinyQuaternionf(0, 0, 0, 1),
+                                         const TinyVector3f& color = TinyVector3f(.5f, .5f, .5f),
+                                         const TinyVector3f& scaling = TinyVector3f(1.f, 1.f, 1.f),
                                          float opacity = 1.f);
 
   void write_transforms();

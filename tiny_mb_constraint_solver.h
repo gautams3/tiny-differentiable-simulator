@@ -54,6 +54,14 @@ struct TinyMultiBodyConstraintSolver {
   double m_least_squares_residual_threshold{0};
   std::vector<int> m_limit_dependency;
 
+  // BAUMGARTE_ERROR_REDUCTION_PARAMETER
+  TinyScalar erp{TinyConstants::fraction(1, 100)};
+  // Constraint Force Mixing
+  TinyScalar cfm{TinyConstants::fraction(1, 100000)};
+
+  // Number of friction force directions
+  int num_friction_dir{1};
+
   /**
    * Projected Gauss-Seidel solver for a MLCP defined by coefficient matrix A
    * and vector b.
@@ -119,7 +127,7 @@ struct TinyMultiBodyConstraintSolver {
   // Args:
   // cps: contact points with distances < 0
   // dt : delta time (in seconds)
-  virtual void resolveCollision(std::vector<TinyContactPoint>& cps,
+  virtual void resolveCollision(const std::vector<TinyContactPoint>& cps,
                                 TinyScalar dt) {
     if (cps.empty()) return;
     const int n_c = static_cast<int>(cps.size());
@@ -155,10 +163,10 @@ struct TinyMultiBodyConstraintSolver {
       mb_b->submitProfileTiming("");
     }
     if (!is_positive_definite_a) {
-      printf("LCP: mass matrix a is not positive definite");
+      printf("LCP: mass matrix a is not positive definite\n");
     }
     if (!is_positive_definite_b) {
-      printf("LCP: mass matrix b is not positive definite");
+      printf("LCP: mass matrix b is not positive definite\n");
     }
     assert(is_positive_definite_a);
     assert(is_positive_definite_b);
@@ -175,18 +183,12 @@ struct TinyMultiBodyConstraintSolver {
     //  i    is for the contact normal
     //  c+i  is for the friction direction towards the lateral velocity
 
-    int num_friction_dir = 1;
     int dof_per_contact = 1 + num_friction_dir;
 
     TinyMatrixXxX jac_con(dof_per_contact * n_c, n_ab);
     jac_con.set_zero();
     TinyVectorX lcp_b(dof_per_contact * n_c);
     lcp_b.set_zero();
-
-    TinyScalar erp =
-        TinyConstants::fraction(1, 100);  // BAUMGARTE_ERROR_REDUCTION_PARAMETER
-    TinyScalar cfm =
-        TinyConstants::fraction(1, 100000);  // Constraint Force Mixing
 
     for (int i = 0; i < n_c; ++i) {
       const TinyContactPoint& cp = cps[i];
@@ -203,6 +205,9 @@ struct TinyMultiBodyConstraintSolver {
 
       TinyMatrix3xX jac_b =
           cp.m_multi_body_b->point_jacobian(cp.m_link_b, world_point_b);
+      // TinyMatrix3xX jac_b =
+      //     cp.m_multi_body_b->point_jacobian_fd(mb_b->m_q, cp.m_link_b,
+      //     world_point_b);
       // jac_b.print("jac_b");
       TinyVectorX jac_b_i = jac_b.mul_transpose(cp.m_world_normal_on_b);
       // jac_b_i.print("jac_b_i");
@@ -245,9 +250,10 @@ struct TinyMultiBodyConstraintSolver {
       // friction direction
       TinyVector3 lateral_rel_vel =
           rel_vel - normal_rel_vel * cp.m_world_normal_on_b;
-      //      lateral_rel_vel.print("lateral_rel_vel");
+      // lateral_rel_vel.print("lateral_rel_vel");
       const TinyScalar lateral = lateral_rel_vel.length();
-      //      printf("lateral_rel_vel.length(): %.6f\n", lateral);
+      // printf("lateral_rel_vel.length(): %.6f\n",
+      //        TinyConstants::getDouble(lateral));
 
       TinyVector3 fr_direction1, fr_direction2;
       //      cp.m_world_normal_on_b.print("contact normal");
@@ -285,7 +291,7 @@ struct TinyMultiBodyConstraintSolver {
       }
     }
 
-    //    jac_con.print("Constraint Jacobian");
+    // jac_con.print("Constraint Jacobian");
 
     TinyMatrixXxX jac_con_t = jac_con.transpose();
     TinyMatrixXxX lcp_A;
@@ -321,7 +327,7 @@ struct TinyMultiBodyConstraintSolver {
     m_limit_dependency.resize(dof_per_contact * n_c);
     for (int i = 0; i < n_c; ++i) {
       m_limit_dependency[i] = -1;
-      con_hi[i] = TinyConstants::fraction(1000, 1);
+      con_hi[i] = TinyConstants::fraction(100000, 1);
       // ||friction impulse|| <= mu * ||normal impulse||
       con_hi[n_c + i] = cps[i].m_friction;
       con_lo[n_c + i] = -cps[i].m_friction;
@@ -373,7 +379,7 @@ struct TinyMultiBodyConstraintSolver {
         //    imp.mul_transpose(p_b_fr);
         TinyVectorX fr_qd =
             mass_matrix_b_inv * jac_con_b_fr.mul_transpose(p_b_fr);
-        //        fr_qd.print("Friction 1 contribution on q delta for b");
+        // fr_qd.print("Friction 1 contribution on q delta for b");
         delta_qd_b += fr_qd;
       }
       if (num_friction_dir > 1) {
@@ -387,7 +393,7 @@ struct TinyMultiBodyConstraintSolver {
         TinyVectorX fr_qd =
             mass_matrix_b_inv * jac_con_b_fr.mul_transpose(p_b_fr);
         //        fr_qd.print("Friction 2 contribution on q delta for b");
-        delta_qd_b += fr_qd;
+        delta_qd_b -= fr_qd;
       }
 
       for (int i = 0; i < n_b; ++i) {

@@ -19,8 +19,10 @@
 
 #include <cassert>
 #include <cmath>
+#include <fstream>
 #include <random>
 #include <vector>
+#include <iostream>
 
 enum TinyNeuralNetworkActivation {
   NN_ACT_IDENTITY = -1,
@@ -84,6 +86,7 @@ class TinyNeuralNetworkSpecification {
     }
     return num;
   }
+  int num_units(int layer_id) const { return layers_[layer_id]; }
   int num_biases() const {
     int num = 0;
     for (std::size_t i = 0; i < layers_.size(); ++i) {
@@ -115,6 +118,7 @@ class TinyNeuralNetworkSpecification {
     std::random_device rd_;
     std::mt19937 gen_{rd_()};
 
+    std::size_t weight_i = 0;
     for (std::size_t i = 1; i < layers_.size(); ++i) {
       double std;
       switch (init_method) {
@@ -129,19 +133,19 @@ class TinyNeuralNetworkSpecification {
       }
       std::normal_distribution<double> d{0., std * std};
       for (int ci = 0; ci < layers_[i]; ++ci) {
-        for (int pi = 0; pi < layers_[i - 1]; ++pi) {
+        for (int pi = 0; pi < layers_[i - 1]; ++pi, ++weight_i) {
           if (init_method == NN_INIT_ZERO) {
-            weights[ci * layers_[i - 1] + pi] = TinyConstants::zero();
+            weights[weight_i] = TinyConstants::zero();
           } else {
-            weights[ci * layers_[i - 1] + pi] = TinyScalar(d(gen_));
+            weights[weight_i] = TinyScalar(d(gen_));
           }
         }
       }
     }
-    // printf("NN weights:  ");
-    // this->template print_states<TinyScalar, TinyConstants>(weights);
-    // printf("NN biases:  ");
-    // this->template print_states<TinyScalar, TinyConstants>(biases);
+    printf("NN weights:  ");
+    this->template print_states<TinyScalar, TinyConstants>(weights);
+    printf("NN biases:  ");
+    this->template print_states<TinyScalar, TinyConstants>(biases);
   }
 
   /**
@@ -178,8 +182,8 @@ class TinyNeuralNetworkSpecification {
         if (use_bias_[i]) {
           current[ci] += biases[bias_i++];
         }
-        for (int pi = 0; pi < layers_[i - 1]; ++pi) {
-          current[ci] += previous[pi] * weights[ci * layers_[i - 1] + pi];
+        for (int pi = 0; pi < layers_[i - 1]; ++pi, ++weight_i) {
+          current[ci] += previous[pi] * weights[weight_i];
         }
         switch (activations_[i - 1]) {
           case NN_ACT_TANH:
@@ -189,7 +193,7 @@ class TinyNeuralNetworkSpecification {
             current[ci] = TinyConstants::sin1(current[ci]);
             break;
           case NN_ACT_RELU:
-            current[ci] = TinyConstants::max(zero, current[ci]);
+            current[ci] = TinyConstants::max1(zero, current[ci]);
             break;
           case NN_ACT_SOFT_RELU:
             current[ci] =
@@ -217,6 +221,65 @@ class TinyNeuralNetworkSpecification {
     }
     output = current;
   }
+
+  template <typename Scalar, typename Utils>
+  void save_graphviz(const std::string& filename,
+                     const std::vector<std::string>& input_names = {},
+                     const std::vector<std::string>& output_names = {},
+                     const std::vector<Scalar>& weights = {},
+                     const std::vector<Scalar>& biases = {}) const {
+    std::ofstream file(filename);
+    file << "graph G {\n\t";
+    file << "rankdir=LR;\n\tsplines=false;\n\tedge[style=invis];\n\tranksep="
+            "1.4;\n\t";
+    file << "node[shape=circle,color=black,style=filled,fillcolor=gray];\n\t";
+    for (std::size_t i = 0; i < layers_.size(); ++i) {
+      file << "{\n\t\t";
+      for (int j = 0; j < layers_[i]; ++j) {
+        file << "n_" << i << "_" << j << " [label=";
+        if (i == 0 && j < input_names.size()) {
+          file << "\"" << input_names[j] << "\"";
+        } else if (i == static_cast<int>(layers_.size()) - 1 &&
+                   j < output_names.size()) {
+          file << "\"" << output_names[j] << "\"";
+        } else {
+          file << "\"\"";
+        }
+        file << "];\n\t\t";
+      }
+      file << "}\n\t";
+    }
+    file << "// prevent tilting\n\t";
+    for (std::size_t i = 2; i < layers_.size(); ++i) {
+      file << "n_" << i - 1 << "_0--n_" << i << "_0;\n\t";
+    }
+    file << "edge[style=solid, tailport=e, headport=w];\n\t";
+    double max_weight = 0;
+    if (!weights.empty()) {
+      max_weight = std::abs(Utils::getDouble(weights[0]));
+      for (const auto& w : weights) {
+        max_weight = std::max(max_weight, std::abs(Utils::getDouble(w)));
+      }
+    }
+    std::size_t weight_i = 0;
+    for (std::size_t i = 1; i < layers_.size(); ++i) {
+      for (int j = 0; j < layers_[i - 1]; ++j) {
+        for (int k = 0; k < layers_[i]; ++k, ++weight_i) {
+          file << "n_" << i - 1 << "_" << j << "--n_" << i << "_" << k;
+          if (!weights.empty()) {
+            file << "[penwidth="
+                 << std::to_string(
+                        std::abs(Utils::getDouble(weights[weight_i])) /
+                        max_weight * 3.0)
+                 << "]";
+          }
+          file << ";\n\t";
+        }
+      }
+    }
+    file << "}\n";
+    std::cout << "Saved neural network graphviz file at " << filename << ".\n";
+  }
 };
 
 /**
@@ -232,8 +295,8 @@ class TinyNeuralNetwork : public TinyNeuralNetworkSpecification {
   using TinyNeuralNetworkSpecification::compute;
   using TinyNeuralNetworkSpecification::initialize;
 
-  explicit TinyNeuralNetwork(int input_dim = 0)
-      : TinyNeuralNetworkSpecification(input_dim) {}
+  explicit TinyNeuralNetwork(int input_dim = 0, bool use_input_bias = true)
+      : TinyNeuralNetworkSpecification(input_dim, use_input_bias) {}
   TinyNeuralNetwork(int input_dim, const std::vector<int>& layer_sizes,
                     TinyNeuralNetworkActivation activation,
                     bool learn_bias = true)
@@ -267,6 +330,13 @@ class TinyNeuralNetwork : public TinyNeuralNetworkSpecification {
     this->template print_states<TinyScalar, TinyConstants>(weights);
     printf("NN biases:  ");
     this->template print_states<TinyScalar, TinyConstants>(biases);
+  }
+
+  void save_graphviz(const std::string& filename,
+                     const std::vector<std::string>& input_names = {},
+                     const std::vector<std::string>& output_names = {}) const {
+    dynamic_cast<TinyNeuralNetworkSpecification*>(this)->template save_graphviz<TinyScalar, TinyConstants>(
+        filename, input_names, output_names, weights, biases);
   }
 };
 
