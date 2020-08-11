@@ -47,7 +47,7 @@ struct TinySmoothConstraintSolver
         world_point_b - cp.m_rigid_body_b->m_world_pose.m_position;
     TinyScalar baumgarte_rel_vel = TinyConstants::zero();
 
-    //    if (cp.m_distance < TinyConstants::zero()) {
+    //    if (cp.m_distance < TinyConstants::zero()) {       // use leaky ReLU or ELU
     baumgarte_rel_vel = erp * cp.m_distance / dt;
     TinyVector3 vel_a = cp.m_rigid_body_a->get_velocity(rel_pos_a);
     TinyVector3 vel_b = cp.m_rigid_body_b->get_velocity(rel_pos_b);

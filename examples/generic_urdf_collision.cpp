@@ -37,7 +37,7 @@ void MyTinySubmitProfileTiming3(const std::string &profile_name) {
 }
 
 int main(int argc, char *argv[]) {
-  std::string connection_mode = "gui";
+  std::string connection_mode = "shared_memory";
 
   std::string urdf_filename;
   //"cheetah_link0_1.urdf"

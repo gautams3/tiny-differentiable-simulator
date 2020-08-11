@@ -1,3 +1,5 @@
+//for articulated rigid bodies (LCP on impulse level, compute impulses)
+// good for true physics
 /*
  * Copyright 2020 Google LLC
  *

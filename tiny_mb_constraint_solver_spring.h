@@ -1,3 +1,5 @@
+// for articulated rigid bodies. spring model (soft on accn()
+// good for optimization. softer and gives better gradients
 /*
  * Copyright 2020 Google LLC
  *
