@@ -26,7 +26,6 @@ struct SpatialVector {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Vector6 = typename Algebra::Vector6;
-  using Matrix6 = typename Algebra::Matrix6;
 
   Vector3 top{0.};
   Vector3 bottom{0.};
@@ -52,61 +51,8 @@ struct SpatialVector {
   }
 
   TINY_INLINE void set_zero() {
-    top = 0.;
-    bottom = 0.;
-  }
-
-  TINY_INLINE SpatialVector &operator+=(const SpatialVector &vec) {
-    top += vec.top;
-    bottom += vec.bottom;
-    return *this;
-  }
-  TINY_INLINE SpatialVector &operator-=(const SpatialVector &vec) {
-    top -= vec.top;
-    bottom -= vec.bottom;
-    return *this;
-  }
-  TINY_INLINE SpatialVector &operator*=(const Scalar &s) {
-    top *= s;
-    bottom *= s;
-    return *this;
-  }
-
-  TINY_INLINE SpatialVector operator-(const SpatialVector &vec) const {
-    return SpatialVector(top - vec.top, bottom - vec.bottom);
-  }
-  TINY_INLINE SpatialVector operator+(const SpatialVector &vec) const {
-    return SpatialVector(top + vec.top, bottom + vec.bottom);
-  }
-  TINY_INLINE SpatialVector operator-() const {
-    return SpatialVector(-top, -bottom);
-  }
-  TINY_INLINE SpatialVector operator*(const Scalar &s) const {
-    return SpatialVector(s * top, s * bottom);
-  }
-
-  /**
-   * V1 = mv(w1, v1)
-   * V2 = mv(w2, v2)
-   * V1 x V2 = mv(w1 x w2, w1 x v2 + v1 x w2)
-   */
-  SpatialVector crossm(const SpatialVector &b) const {
-    SpatialVector out;
-    out.top = Algebra::cross(top, b.top);
-    out.bottom = Algebra::cross(top, b.bottom) + Algebra::cross(bottom, b.top);
-    return out;
-  }
-
-  /**
-   * V = mv(w, v)
-   * F = fv(n, f)
-   * V x* F = fv(w x n + v x f, w x f)
-   */
-  SpatialVector crossf(const SpatialVector &b) const {
-    SpatialVector out;
-    out.top = Algebra::cross(top, b.top) + Algebra::cross(bottom, b.bottom);
-    out.bottom = Algebra::cross(top, b.bottom);
-    return out;
+    Algebra::set_zero(top);
+    Algebra::set_zero(bottom);
   }
 
   friend std::ostream &operator<<(std::ostream &os, const SpatialVector &v) {
@@ -118,6 +64,98 @@ struct SpatialVector {
 };
 ENOKI_STRUCT_SUPPORT(SpatialVector, top, bottom)
 
+template <typename Algebra>
+struct MotionVector : public SpatialVector<Algebra> {
+  using SpatialVector = ::SpatialVector<Algebra>;
+  using Scalar = typename Algebra::Scalar;
+  using SpatialVector::bottom;
+  using SpatialVector::SpatialVector;
+  using SpatialVector::top;
+
+  TINY_INLINE MotionVector operator-(const MotionVector &vec) const {
+    return MotionVector(top - vec.top, bottom - vec.bottom);
+  }
+  TINY_INLINE MotionVector operator+(const MotionVector &vec) const {
+    return MotionVector(top + vec.top, bottom + vec.bottom);
+  }
+
+  TINY_INLINE MotionVector &operator+=(const MotionVector &vec) {
+    top += vec.top;
+    bottom += vec.bottom;
+    return *this;
+  }
+  TINY_INLINE MotionVector &operator-=(const MotionVector &vec) {
+    top -= vec.top;
+    bottom -= vec.bottom;
+    return *this;
+  }
+
+  TINY_INLINE MotionVector &operator*=(const Scalar &s) {
+    top *= s;
+    bottom *= s;
+    return *this;
+  }
+
+  TINY_INLINE MotionVector operator-() const {
+    return MotionVector(-top, -bottom);
+  }
+  TINY_INLINE MotionVector operator*(const Scalar &s) const {
+    return MotionVector(s * top, s * bottom);
+  }
+};
+
+template <typename Algebra>
+struct ForceVector : public SpatialVector<Algebra> {
+  using SpatialVector = ::SpatialVector<Algebra>;
+  using Scalar = typename Algebra::Scalar;
+  using Vector6 = typename Algebra::Vector6;
+  using Matrix6 = typename Algebra::Matrix6;
+  using SpatialVector::bottom;
+  using SpatialVector::SpatialVector;
+  using SpatialVector::top;
+
+  TINY_INLINE ForceVector operator-(const ForceVector &vec) const {
+    return ForceVector(top - vec.top, bottom - vec.bottom);
+  }
+  TINY_INLINE ForceVector operator+(const ForceVector &vec) const {
+    return ForceVector(top + vec.top, bottom + vec.bottom);
+  }
+
+  TINY_INLINE ForceVector &operator+=(const ForceVector &vec) {
+    top += vec.top;
+    bottom += vec.bottom;
+    return *this;
+  }
+  TINY_INLINE ForceVector &operator-=(const ForceVector &vec) {
+    top -= vec.top;
+    bottom -= vec.bottom;
+    return *this;
+  }
+
+  TINY_INLINE ForceVector &operator*=(const Scalar &s) {
+    top *= s;
+    bottom *= s;
+    return *this;
+  }
+
+  TINY_INLINE ForceVector operator-() const {
+    return ForceVector(-top, -bottom);
+  }
+  TINY_INLINE ForceVector operator*(const Scalar &s) const {
+    return ForceVector(s * top, s * bottom);
+  }
+
+  /**
+   * This function only exists to multiply the inverse of the 6x6 inertia matrix
+   * (ABI) with the bias force vector of the MultiBody base.
+   */
+  TINY_INLINE friend MotionVector<Algebra> operator*(const Matrix6 &m,
+                                                     const ForceVector &v) {
+    Vector6 v6 = v;
+    return m * v6;
+  }
+};
+
 struct EnokiAlgebra {
   using Scalar = double;
   using Vector3 = enoki::Array<Scalar, 3>;
@@ -127,6 +165,8 @@ struct EnokiAlgebra {
   using Matrix6 = enoki::Matrix<Scalar, 6>;
   using Quaternion = enoki::Quaternion<Scalar>;
   using SpatialVector = ::SpatialVector<EnokiAlgebra>;
+  using MotionVector = ::MotionVector<EnokiAlgebra>;
+  using ForceVector = ::ForceVector<EnokiAlgebra>;
 
   template <typename T>
   ENOKI_INLINE static auto transpose(const T &matrix) {
@@ -148,11 +188,39 @@ struct EnokiAlgebra {
     return enoki::cross(vector_a, vector_b);
   }
 
-  ENOKI_INLINE static Scalar dot(const SpatialVector &a,
-                                 const SpatialVector &b) {
-    Scalar d = enoki::dot(a.top, b.top);
-    d += enoki::dot(a.bottom, b.bottom);
-    return d;
+  /**
+   * V1 = mv(w1, v1)
+   * V2 = mv(w2, v2)
+   * V1 x V2 = mv(w1 x w2, w1 x v2 + v1 x w2)
+   */
+  static inline MotionVector cross(const MotionVector &a,
+                                   const MotionVector &b) {
+    return MotionVector(
+        enoki::cross(a.top, b.top),
+        enoki::cross(a.top, b.bottom) + enoki::cross(a.bottom, b.top));
+  }
+
+  /**
+   * V = mv(w, v)
+   * F = fv(n, f)
+   * V x* F = fv(w x n + v x f, w x f)
+   */
+  static inline ForceVector cross(const MotionVector &a, const ForceVector &b) {
+    return ForceVector(
+        enoki::cross(a.top, b.top) + enoki::cross(a.bottom, b.bottom),
+        enoki::cross(a.top, b.bottom));
+  }
+
+  /**
+   * V = mv(w, v)
+   * F = mv(n, f)
+   * V.F = w.n + v.f
+   */
+  ENOKI_INLINE static Scalar dot(const MotionVector &a, const ForceVector &b) {
+    return enoki::dot(a.top, b.top) + enoki::dot(a.bottom, b.bottom);
+  }
+  ENOKI_INLINE static Scalar dot(const ForceVector &a, const MotionVector &b) {
+    return dot(b, a);
   }
 
   template <typename T1, typename T2>
@@ -182,6 +250,7 @@ struct EnokiAlgebra {
     return Matrix3(0., -v[2], v[1], v[2], 0., -v[0], -v[1], v[0], 0.);
   }
 
+  ENOKI_INLINE static Matrix3 zero33() { return Matrix3(0); }
   ENOKI_INLINE static Matrix3 diagonal3(const Vector3 &v) {
     return Matrix3(v[0], 0, 0, 0, v[1], 0, 0, 0, v[2]);
   }
@@ -195,8 +264,6 @@ struct EnokiAlgebra {
   ENOKI_INLINE static Vector3 unit3_x() { return Vector3(1, 0, 0); }
   ENOKI_INLINE static Vector3 unit3_y() { return Vector3(0, 1, 0); }
   ENOKI_INLINE static Vector3 unit3_z() { return Vector3(0, 0, 1); }
-
-  ENOKI_INLINE static Matrix3 zero33() { return Matrix3(0); }
 
   template <std::size_t Size1, std::size_t Size2>
   ENOKI_INLINE static void assign_block(
@@ -230,19 +297,19 @@ struct EnokiAlgebra {
   ENOKI_INLINE static Matrix3 rotation_x_matrix(const Scalar &angle) {
     Scalar c = enoki::cos(angle);
     Scalar s = enoki::sin(angle);
-    return Matrix3(1, 0, 0, 0, c, -s, 0, s, c);
+    return Matrix3(1, 0, 0, 0, c, s, 0, -s, c);
   }
 
   ENOKI_INLINE static Matrix3 rotation_y_matrix(const Scalar &angle) {
     Scalar c = enoki::cos(angle);
     Scalar s = enoki::sin(angle);
-    return Matrix3(c, 0, s, 0, 1, 0, -s, 0, c);
+    return Matrix3(c, 0, -s, 0, 1, 0, s, 0, c);
   }
 
   ENOKI_INLINE static Matrix3 rotation_z_matrix(const Scalar &angle) {
     Scalar c = enoki::cos(angle);
     Scalar s = enoki::sin(angle);
-    return Matrix3(c, -s, 0, s, c, 0, 0, 0, 1);
+    return Matrix3(c, s, 0, -s, c, 0, 0, 0, 1);
   }
 
   ENOKI_INLINE static Vector3 rotate(const Quaternion &q, const Vector3 &v) {
@@ -306,12 +373,6 @@ struct EnokiAlgebra {
     return mul_transpose(a6, b6);
   }
 
-  ENOKI_INLINE friend SpatialVector operator*(const Matrix6 &m,
-                                              const SpatialVector &v) {
-    Vector6 v6 = v;
-    return m * v6;
-  }
-
   EnokiAlgebra() = delete;
 };
 
@@ -321,7 +382,8 @@ struct RigidBodyInertia {
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix6 = typename Algebra::Matrix6;
-  typedef ::SpatialVector<Algebra> SpatialVector;
+  typedef ::MotionVector<Algebra> MotionVector;
+  typedef ::ForceVector<Algebra> ForceVector;
 
   /**
    * Mass \f$m\f$.
@@ -432,8 +494,12 @@ struct RigidBodyInertia {
     return m;
   }
 
-  SpatialVector operator*(const SpatialVector &v) const {
-    SpatialVector result;
+  /**
+   * V = mv(w, v)
+   * I*v = fv(Iw + hxv, mv - hxw)
+   */
+  ForceVector operator*(const MotionVector &v) const {
+    ForceVector result;
     result.top = inertia * v.top + Algebra::cross(com, v.bottom);
     result.bottom = mass * v.bottom - Algebra::cross(com, v.top);
     return result;
@@ -473,7 +539,8 @@ struct ArticulatedBodyInertia {
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix6 = typename Algebra::Matrix6;
-  typedef ::SpatialVector<Algebra> SpatialVector;
+  typedef ::MotionVector<Algebra> MotionVector;
+  typedef ::ForceVector<Algebra> ForceVector;
   typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
 
   Matrix3 I{Algebra::diagonal3(1.)};
@@ -501,10 +568,14 @@ struct ArticulatedBodyInertia {
     return m;
   }
 
-  SpatialVector operator*(const SpatialVector &v) const {
-    SpatialVector result;
+  /**
+   * V = mv(w, v)
+   * Ia*v = mv(Iw + Hv, Mv + H^T w)
+   */
+  ForceVector operator*(const MotionVector &v) const {
+    ForceVector result;
     result.top = I * v.top + H * v.bottom;
-    result.bottom = M * v.bottom - Algebra::transpose(H) * v.top;
+    result.bottom = M * v.bottom + Algebra::transpose(H) * v.top;
     return result;
   }
 
@@ -568,9 +639,10 @@ struct ArticulatedBodyInertia {
   }
 
   Matrix6 inverse() const {
-    // Inverse of a symmetric block matrix
-    // according to (4.1) in
-    // http://msvlab.hre.ntou.edu.tw/grades/now/inte/Inverse%20&%20Border/border-LuTT.pdf
+  // Inverse of a symmetric block matrix
+  // according to (4.1) in
+  //
+  http:  // msvlab.hre.ntou.edu.tw/grades/now/inte/Inverse%20&%20Border/border-LuTT.pdf
     Matrix3 Ainv = Algebra::inverse(I);
     Matrix3 B = H;
     Matrix3 C = -B;
@@ -585,6 +657,24 @@ struct ArticulatedBodyInertia {
     return m;
   }
 
+  // ArticulatedBodyInertia inverse() const {
+  //   // Inverse of a symmetric block matrix
+  //   // according to (4.1) in
+  //   //
+  //   http://msvlab.hre.ntou.edu.tw/grades/now/inte/Inverse%20&%20Border/border-LuTT.pdf
+  //   Matrix3 Ainv = Algebra::inverse(I);
+  //   Matrix3 B = H;
+  //   Matrix3 C = -B;
+  //   Matrix3 DCAB = Algebra::inverse(M - C * Ainv * B);
+  //   Matrix3 AinvBDCAB = Ainv * B * DCAB;
+
+  //   ArticulatedBodyInertia abi;
+  //   abi.I = Ainv + AinvBDCAB * C * Ainv;
+  //   abi.H = -AinvBDCAB;
+  //   abi.M = DCAB;
+  //   return abi;
+  // }
+
   ENOKI_STRUCT(ArticulatedBodyInertia, I, H, M)
 };
 ENOKI_STRUCT_SUPPORT(ArticulatedBodyInertia, I, H, M)
@@ -596,7 +686,8 @@ struct Transform {
   using Matrix3 = typename Algebra::Matrix3;
   using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
   using ArticulatedBodyInertia = ::ArticulatedBodyInertia<Algebra>;
-  using SpatialVector = ::SpatialVector<Algebra>;
+  typedef ::MotionVector<Algebra> MotionVector;
+  typedef ::ForceVector<Algebra> ForceVector;
 
   Vector3 translation{0.};
   Matrix3 rotation{Matrix3(1.)};
@@ -624,6 +715,8 @@ struct Transform {
    * X1*X2 = plx(E1*E2, r2 + E2T*r1)
    */
   Transform operator*(const Transform &t) const {
+    /// XXX this is different from Featherstone: we assume transforms are
+    /// right-associative
     Transform tr = *this;
     tr.translation += rotation * t.translation;
     tr.rotation *= t.rotation;
@@ -648,12 +741,12 @@ struct Transform {
    * V = mv(w, v)
    * X*V = mv(E*w, E*(v - r x w))
    */
-  inline SpatialVector apply(const SpatialVector &inVec) const {
-    SpatialVector outVec;
+  inline MotionVector apply(const MotionVector &inVec) const {
+    MotionVector outVec;
 
-    Vector3 rxw = Algebra::cross(inVec.top, translation);
-    Vector3 v_rxw = inVec.bottom + rxw;
-    Matrix3 Et = Algebra::transpose(rotation);
+    Vector3 rxw = Algebra::cross(translation, inVec.top);
+    Vector3 v_rxw = inVec.bottom - rxw;
+    Matrix3 Et = rotation;  // Algebra::transpose(rotation);
 
     outVec.top = Et * inVec.top;
     outVec.bottom = Et * v_rxw;
@@ -665,11 +758,11 @@ struct Transform {
    * V = mv(w, v)
    * inv(X)*V = mv(ET*w, ET*v + r x (ET*w))
    */
-  inline SpatialVector apply_inverse(const SpatialVector &inVec) const {
-    SpatialVector outVec;
-    outVec.top = rotation * inVec.top;
-    outVec.bottom =
-        rotation * inVec.bottom + Algebra::cross(translation, outVec.top);
+  inline MotionVector apply_inverse(const MotionVector &inVec) const {
+    MotionVector outVec;
+    Matrix3 Et = Algebra::transpose(rotation);
+    outVec.top = Et * inVec.top;
+    outVec.bottom = Et * inVec.bottom + Algebra::cross(translation, outVec.top);
     return outVec;
   }
 
@@ -677,10 +770,11 @@ struct Transform {
    * F = fv(n, f)
    * XT*F = fv(ETn + rxETf, ETf)
    */
-  inline SpatialVector apply_transpose(const SpatialVector &inVec) const {
-    SpatialVector outVec;
-    outVec.bottom = rotation * inVec.bottom;
-    outVec.top = rotation * inVec.top;
+  inline ForceVector apply(const ForceVector &inVec) const {
+    ForceVector outVec;
+    Matrix3 Et = Algebra::transpose(rotation);
+    outVec.bottom = Et * inVec.bottom;
+    outVec.top = Et * inVec.top;
     outVec.top += Algebra::cross(translation, outVec.bottom);
 
     return outVec;
@@ -690,12 +784,11 @@ struct Transform {
    * F = fv(n, f)
    * X^* F = fv(E(n - rxf), Ef)
    */
-  inline SpatialVector apply_inverse_transpose(
-      const SpatialVector &inVec) const {
+  inline ForceVector apply_inverse(const ForceVector &inVec) const {
     const Vector3 &n = inVec.top;
     const Vector3 &f = inVec.bottom;
-    Matrix3 Et = Algebra::transpose(rotation);
-    SpatialVector outVec;
+    Matrix3 Et = rotation;  // Algebra::transpose(rotation);
+    ForceVector outVec;
     outVec.top = Et * (n - Algebra::cross(translation, f));
     outVec.bottom = Et * f;
     return outVec;
@@ -707,15 +800,16 @@ struct Transform {
   inline RigidBodyInertia apply(const RigidBodyInertia &rbi) const {
     RigidBodyInertia result(rbi.mass);
     const Matrix3 rx = Algebra::cross_matrix(translation);
+    const Matrix3 E = rotation;
     const Matrix3 Et = Algebra::transpose(rotation);
     // E(I + rx hx + (h - mr)x rx) E^T
     result.inertia =
-        Et *
+        E *
         (rbi.inertia + rx * Algebra::cross_matrix(rbi.com) +
          Algebra::cross_matrix(rbi.com - rbi.mass * translation) * rx) *
-        rotation;
+        Et;
     // E(h - mr)
-    result.com = Et * (rbi.com - rbi.mass * translation);
+    result.com = E * (rbi.com - rbi.mass * translation);
     return result;
   }
 
@@ -724,17 +818,17 @@ struct Transform {
    */
   inline RigidBodyInertia apply_transpose(const RigidBodyInertia &rbi) const {
     RigidBodyInertia result(rbi.mass);
-    // E^T h + mr
+    const Matrix3 E = rotation;
     const Matrix3 Et = Algebra::transpose(rotation);
-    const Vector3 Et_mr = rotation * rbi.com + rbi.mass * translation;
-    const Matrix3 crossTranslation = Algebra::cross_matrix(translation);
+    // E^T h + mr
+    const Vector3 Eth_mr = Et * rbi.com + rbi.mass * translation;
+    const Matrix3 rx = Algebra::cross_matrix(translation);
     // E^T I E - rx(E^T h)x - (E^T h + mr)x rx
     result.inertia =
-        (rotation * rbi.inertia * Et -
-         crossTranslation * Algebra::cross_matrix(rotation * rbi.com) -
-         Algebra::cross_matrix(Et_mr) * crossTranslation);
+        (Et * rbi.inertia * E - rx * Algebra::cross_matrix(Et * rbi.com) -
+         Algebra::cross_matrix(Eth_mr) * rx);
     // E^T h + mr
-    result.com = Et_mr;
+    result.com = Eth_mr;
     return result;
   }
 
@@ -743,17 +837,17 @@ struct Transform {
    */
   inline ArticulatedBodyInertia apply(const ArticulatedBodyInertia &abi) const {
     ArticulatedBodyInertia result;
+    const Matrix3 &E = rotation;
     const Matrix3 Et = Algebra::transpose(rotation);
     const Matrix3 rx = Algebra::cross_matrix(translation);
     // H - rx M
     const Matrix3 HrxM = abi.H - rx * abi.M;
     // E (I + rx H^T + (H - rx M) rx) E^T
-    result.I =
-        Et * (abi.I + rx * Algebra::transpose(abi.H) + HrxM * rx) * rotation;
+    result.I = E * (abi.I + rx * Algebra::transpose(abi.H) + HrxM * rx) * Et;
     // E (H - rx M) E^T
-    result.H = Et * HrxM * rotation;
+    result.H = E * HrxM * Et;
     // E M E^T
-    result.M = Et * abi.M * rotation;
+    result.M = E * abi.M * Et;
     return result;
   }
 
@@ -763,17 +857,18 @@ struct Transform {
   inline ArticulatedBodyInertia apply_transpose(
       const ArticulatedBodyInertia &abi) const {
     ArticulatedBodyInertia result;
+    const Matrix3 E = rotation;
     const Matrix3 Et = Algebra::transpose(rotation);
     const Matrix3 rx = Algebra::cross_matrix(translation);
     // M' = E^T M E
-    const Matrix3 Mp = rotation * abi.M * Et;
+    const Matrix3 Mp = Et * abi.M * E;
     result.M = Mp;
     // H' = E^T H E
-    const Matrix3 Hp = rotation * abi.H * Et;
+    const Matrix3 Hp = Et * abi.H * E;
     // H' + rx M'
     const Matrix3 HrxM = Hp + rx * Mp;
     // E^T I E - rx H'^T - (H' + rx M') rx
-    result.I = rotation * abi.I * Et - rx * Algebra::transpose(Hp) - HrxM * rx;
+    result.I = Et * abi.I * E - rx * Algebra::transpose(Hp) - HrxM * rx;
     // H' + rx M'
     result.H = HrxM;
     return result;
@@ -799,7 +894,8 @@ enum JointType {
 template <typename Algebra>
 class Link {
   typedef ::Transform<Algebra> Transform;
-  typedef ::SpatialVector<Algebra> SpatialVector;
+  typedef ::MotionVector<Algebra> MotionVector;
+  typedef ::ForceVector<Algebra> ForceVector;
   typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
   typedef ::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
   using Scalar = typename Algebra::Scalar;
@@ -814,23 +910,23 @@ class Link {
   mutable Transform X_parent;  // parent_link_to_child_link
 
   mutable Transform X_world;  // world_to_link
-  mutable SpatialVector vJ;   // local joint velocity (relative to parent link)
-  mutable SpatialVector v;    // global joint velocity (relative to world)
-  mutable SpatialVector a;    // acceleration (relative to world)
-  mutable SpatialVector c;    // velocity product acceleration
+  mutable MotionVector vJ;    // local joint velocity (relative to parent link)
+  mutable MotionVector v;     // global joint velocity (relative to world)
+  mutable MotionVector a;     // acceleration (relative to world)
+  mutable MotionVector c;     // velocity product acceleration
 
   RigidBodyInertia rbi;  // local rigid-body spatial inertia (constant)
   mutable ArticulatedBodyInertia abi;  // spatial articulated inertia
 
-  mutable SpatialVector pA;  // bias forces or zero-acceleration forces
-  SpatialVector S;           // motion subspace (spatial joint axis/matrix)
+  mutable ForceVector pA;  // bias forces or zero-acceleration forces
+  MotionVector S;          // motion subspace (spatial joint axis/matrix)
 
-  mutable SpatialVector U;  // temp var in ABA, page 130
-  mutable Scalar d;         // temp var in ABA, page 130
-  mutable Scalar u;         // temp var in ABA, page 130
-  mutable SpatialVector f;  // temp var in RNEA, page 183
+  mutable ForceVector U;  // temp var in ABA, page 130
+  mutable Scalar d;       // temp var in ABA, page 130
+  mutable Scalar u;       // temp var in ABA, page 130
+  mutable ForceVector f;  // temp var in RNEA, page 183
 
-  SpatialVector f_ext;  // user-defined external force in world frame
+  ForceVector f_ext;  // user-defined external force in world frame
 
   // These two variables are managed by MultiBody and should not be changed.
   int parent_index{-1};  // index of parent link in MultiBody
@@ -943,7 +1039,7 @@ class Link {
     *X_parent = X_T * (*X_J);
   }
 
-  inline void jcalc(const Scalar &qd, SpatialVector *v_J) const {
+  inline void jcalc(const Scalar &qd, MotionVector *v_J) const {
     switch (joint_type) {
       case JOINT_PRISMATIC_X:
         v_J->bottom[0] = qd;
@@ -999,7 +1095,8 @@ class MultiBody {
   using Matrix6 = typename Algebra::Matrix6;
   using Quaternion = typename Algebra::Quaternion;
   typedef ::Transform<Algebra> Transform;
-  typedef ::SpatialVector<Algebra> SpatialVector;
+  typedef ::MotionVector<Algebra> MotionVector;
+  typedef ::ForceVector<Algebra> ForceVector;
   typedef ::Link<Algebra> Link;
   typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
   typedef ::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
@@ -1042,11 +1139,11 @@ class MultiBody {
   bool is_floating{false};
 
   // quantities related to floating base
-  mutable SpatialVector base_velocity;      // v_0
-  mutable SpatialVector base_acceleration;  // a_0
-  SpatialVector base_applied_force;         // f_ext_0 in world frame
-  mutable SpatialVector base_force;         // f_0 (used by RNEA)
-  mutable SpatialVector base_bias_force;    // pA_0
+  mutable MotionVector base_velocity;       // v_0
+  mutable MotionVector base_acceleration;   // a_0
+  ForceVector base_applied_force;           // f_ext_0 in world frame
+  mutable ForceVector base_force;           // f_0 (used by RNEA)
+  mutable ForceVector base_bias_force;      // pA_0
   RigidBodyInertia base_rbi;                // I_0
   mutable ArticulatedBodyInertia base_abi;  // IA_0
   mutable Transform base_X_world;
@@ -1291,8 +1388,9 @@ class MultiBody {
         base_velocity.set_zero();
       }
 
-      SpatialVector I0_mul_v0 = base_rbi * base_velocity;
-      base_bias_force = base_velocity.crossf(I0_mul_v0) - base_applied_force;
+      ForceVector I0_mul_v0 = base_rbi * base_velocity;
+      base_bias_force =
+          Algebra::cross(base_velocity, I0_mul_v0) - base_applied_force;
 
       base_abi = base_rbi;
     }
@@ -1313,20 +1411,20 @@ class MultiBody {
         const Transform &parent_X_world =
             parent >= 0 ? links[parent].X_world : base_X_world;
         link.X_world = parent_X_world * link.X_parent;
-        const SpatialVector &parentVelocity =
+        const MotionVector &parentVelocity =
             parent >= 0 ? links[parent].v : base_velocity;
-        SpatialVector xv = link.X_parent.apply(parentVelocity);
+        MotionVector xv = link.X_parent.apply(parentVelocity);
         link.v = xv + link.vJ;
       } else {
         link.X_world = base_X_world * link.X_parent;
         link.v = link.vJ;
       }
-      SpatialVector v_x_vJ = link.v.crossm(link.vJ);
+      MotionVector v_x_vJ = Algebra::cross(link.v, link.vJ);
       link.c = v_x_vJ /*+link.c_J[i]*/;
 
       link.abi = link.rbi;
-      SpatialVector I_mul_v = link.abi * link.v;
-      SpatialVector f_ext = link.X_world.apply_inverse_transpose(link.f_ext);
+      ForceVector I_mul_v = link.abi * link.v;
+      ForceVector f_ext = link.X_world.apply_inverse(link.f_ext);
 
       // #ifdef NEURAL_SIM
       //       if (i >= 3) {
@@ -1357,20 +1455,20 @@ class MultiBody {
       //       }
       // #endif
 
-      link.pA = link.v.crossf(I_mul_v) - f_ext;
+      link.pA = Algebra::cross(link.v, I_mul_v) - f_ext;
 #ifdef DEBUG
       Algebra::print("link.abi", link.abi);
       Algebra::print("I_mul_v", I_mul_v);
       Algebra::print("link.pA", link.pA);
 #endif
       // compute helper temporary variables for floating-base RNEA
-      const SpatialVector &parent_a =
-          parent >= 0 ? links[parent].a : base_acceleration;
-      link.a = link.X_parent.apply(parent_a) + v_x_vJ;
-      if (!qdd.empty()) {
-        link.a += link.S * get_qdd_for_link(qdd, i);
-      }
-      link.f = link.abi * link.a + link.pA;
+      // const SpatialVector &parent_a =
+      //     parent >= 0 ? links[parent].a : base_acceleration;
+      // link.a = link.X_parent.apply(parent_a) + v_x_vJ;
+      // if (!qdd.empty()) {
+      //   link.a += link.S * get_qdd_for_link(qdd, i);
+      // }
+      // link.f = link.abi * link.a + link.pA;
     }
   }
 
@@ -1387,8 +1485,8 @@ class MultiBody {
     assert(static_cast<int>(qdd.size()) == dof_qd());
     assert(static_cast<int>(tau.size()) == dof_actuated());
 
-    SpatialVector spatial_gravity(
-        Vector3(Algebra::zero(), Algebra::zero(), Algebra::zero()), gravity);
+    MotionVector spatial_gravity;
+    spatial_gravity.bottom = gravity;
 
     // #ifdef NEURAL_SIM
     //     for (int i = 0; i < dof(); ++i) {
@@ -1405,6 +1503,9 @@ class MultiBody {
       const Link &link = links[i];
       int parent = link.parent_index;
       link.U = link.abi * link.S;
+      // std::cout << "link.abi.matrix() * link.S:\n" << link.abi.matrix() *
+      // link.S << std::endl; std::cout << "link.abi * link.S:\n" << link.abi *
+      // link.S << std::endl; std::cout << "\n\n";
       link.d = Algebra::dot(link.S, link.U);
       Scalar tau_val = get_tau_for_link(tau, i);
       // apply linear joint stiffness and damping
@@ -1440,15 +1541,15 @@ class MultiBody {
       Matrix6 u_dinv_ut = Algebra::mul_transpose(link.U * invd, link.U);
 
       ArticulatedBodyInertia Ia = link.abi - u_dinv_ut;
-      SpatialVector Ia_c = Ia * link.c;
-      SpatialVector pa = link.pA + Ia_c + link.U * (link.u * invd);
+      ForceVector Ia_c = Ia * link.c;
+      ForceVector pa = link.pA + Ia_c + link.U * (link.u * invd);
 #ifdef DEBUG
       Algebra::print("Ia", Ia);
       Algebra::print("Ia*c", Ia_c);
       Algebra::print("pa", pa);
 #endif
 
-      SpatialVector delta_pA = link.X_parent.apply_transpose(pa);
+      ForceVector delta_pA = link.X_parent.apply(pa);
 #ifdef DEBUG
       Algebra::print("delta_pA", delta_pA);
 #endif
@@ -1482,7 +1583,7 @@ class MultiBody {
       //       NEURAL_ASSIGN(base_bias_force[5], "base_bias_force_5");
       // #endif
 
-      base_acceleration = -base_abi.inverse() * base_bias_force;
+      base_acceleration = -(base_abi.inverse() * base_bias_force);
 
     } else {
       base_acceleration = -spatial_gravity;
@@ -1492,18 +1593,18 @@ class MultiBody {
       const Link &link = links[i];
       int parent = link.parent_index;
       const Transform &X_parent = link.X_parent;
-      const SpatialVector &parentAccel =
+      const MotionVector &a_parent =
           (parent >= 0) ? links[parent].a : base_acceleration;
 #if DEBUG
       if (parent < 0) {
         printf("final loop for parent %i\n", parent);
         Algebra::print("base_abi", base_abi);
         Algebra::print("base_bias_force", base_bias_force);
-        Algebra::print("parentAccel", parentAccel);
+        Algebra::print("a_parent", a_parent);
       }
 #endif
 
-      SpatialVector xpa = X_parent.apply(parentAccel);
+      MotionVector xpa = X_parent.apply(a_parent);
       link.a = xpa + link.c;
 #if DEBUG
       Algebra::print("xpa", xpa);
@@ -1743,14 +1844,30 @@ int main(int argc, char **argv) {
     EnokiAlgebra::assign_block(mat6, EnokiAlgebra::Matrix3(3.14), 0, 2);
     std::cout << "mat6: " << mat6 << std::endl;
 
+    double angle = M_PI_2;
+    std::cout << "rotx(0):\n"
+              << EnokiAlgebra::rotation_x_matrix(angle) << std::endl;
+
+    // ArticulatedBodyInertia<EnokiAlgebra> abi;
+    // abi.I = Matrix3(1.);
+    // abi.H = Matrix3(2.);
+    // abi.M = Matrix3(3.);
+    // std::cout << "abi:\n" << abi.matrix() << std::endl;
+    // ArticulatedBodyInertia<EnokiAlgebra> abi_sum = abi + abi.matrix();
+    // std::cout << "abi+abi:\n" << abi_sum.matrix() << std::endl;
+    // ArticulatedBodyInertia<EnokiAlgebra> abi_sub = abi - abi.matrix();
+    // std::cout << "abi-abi:\n" << abi_sub.matrix() << std::endl;
+
+    //   return 0;
+
     MultiBody<EnokiAlgebra> mb;
 
     double mass = 1.;
     Vector3 com(0., 0., 1.);
     Matrix3 I = EnokiAlgebra::diagonal3(Vector3(1., 1., 1.));
-    Link<EnokiAlgebra> link_a(JOINT_REVOLUTE_X, Tf(0., 0., 1.),
+    Link<EnokiAlgebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
                               RigidBodyInertia(mass, com, I));
-    Link<EnokiAlgebra> link_b(JOINT_REVOLUTE_X, Tf(0., 0., 1.),
+    Link<EnokiAlgebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
                               RigidBodyInertia(mass, com, I));
     mb.attach(link_a);
     mb.attach(link_b);
@@ -1765,14 +1882,14 @@ int main(int argc, char **argv) {
     std::vector<typename EnokiAlgebra::VectorX> traj;
 
     double dt = 0.01;
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 10000; ++i) {
       traj.push_back(mb.q);
       mb.integrate(dt);
       mb.forward_dynamics(gravity);
       mb.print_state();
     }
 
-    plot_trajectory<EnokiAlgebra>(traj);
+    // plot_trajectory<EnokiAlgebra>(traj);
     visualize_trajectory<EnokiAlgebra>(traj, mb, dt);
   }
 
