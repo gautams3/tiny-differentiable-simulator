@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef TINY_URDF_PARSER_H
-#define TINY_URDF_PARSER_H
+#pragma once
 
 #include <tinyxml2.h>
 
@@ -51,28 +50,30 @@ struct StdLogger : public TinyLogger {
   }
 };
 
-template <typename TinyScalar, typename TinyConstants>
+template <typename Algebra>
 struct TinyUrdfParser {
-  typedef ::TinyUrdfStructures<TinyScalar, TinyConstants> TinyUrdfStructures;
-  typedef ::TinyUrdfLink<TinyScalar, TinyConstants> TinyUrdfLink;
-  typedef ::TinyUrdfJoint<TinyScalar, TinyConstants> TinyUrdfJoint;
-  typedef ::TinyUrdfInertial<TinyScalar, TinyConstants> TinyUrdfInertial;
-  typedef ::TinyVector3<TinyScalar, TinyConstants> TinyVector3;
-  typedef ::TinyUrdfVisual<TinyScalar, TinyConstants> TinyUrdfVisual;
-  typedef ::TinyUrdfCollision<TinyScalar, TinyConstants> TinyUrdfCollision;
-  typedef ::TinyUrdfGeometry<TinyScalar, TinyConstants> TinyUrdfGeometry;
+  using Scalar = typename Algebra::Scalar;
+  using Vector3 = typename Algebra::Vector3;
 
-  static bool parse_vector3(TinyVector3& vec3, const std::string& vector_str,
+  typedef ::TinyUrdfStructures<Algebra> TinyUrdfStructures;
+  typedef ::TinyUrdfLink<Algebra> TinyUrdfLink;
+  typedef ::TinyUrdfJoint<Algebra> TinyUrdfJoint;
+  typedef ::TinyUrdfInertial<Algebra> TinyUrdfInertial;
+  typedef ::TinyUrdfVisual<Algebra> TinyUrdfVisual;
+  typedef ::TinyUrdfCollision<Algebra> TinyUrdfCollision;
+  typedef ::TinyUrdfGeometry<Algebra> TinyUrdfGeometry;
+
+  static bool parse_vector3(Vector3& vec3, const std::string& vector_str,
                             TinyLogger& logger) {
     vec3.set_zero();
-    std::vector<TinyScalar> scalars;
+    std::vector<Scalar> scalars;
     std::istringstream iss(vector_str);
     std::vector<std::string> pieces((std::istream_iterator<std::string>(iss)),
                                     std::istream_iterator<std::string>());
 
     for (int i = 0; i < pieces.size(); ++i) {
       if (!pieces[i].empty()) {
-        scalars.push_back(TinyConstants::scalar_from_string(pieces[i].c_str()));
+        scalars.push_back(Algebra::scalar_from_string(pieces[i].c_str()));
       }
     }
     if (scalars.size() < 3) {
@@ -83,7 +84,7 @@ struct TinyUrdfParser {
     return true;
   }
 
-  static bool parse_transform(TinyVector3& xyz, TinyVector3& rpy,
+  static bool parse_transform(Vector3& xyz, Vector3& rpy,
                               const tinyxml2::XMLElement* xml,
                               TinyLogger& logger) {
     xyz.set_zero();
@@ -107,7 +108,7 @@ struct TinyUrdfParser {
                             TinyLogger& logger) {
     urdf_inertial.origin_xyz.set_zero();
     urdf_inertial.origin_rpy.set_zero();
-    urdf_inertial.mass = TinyConstants::zero();
+    urdf_inertial.mass = Algebra::zero();
     // Origin
     const tinyxml2::XMLElement* o = config->FirstChildElement("origin");
     if (o) {
@@ -127,7 +128,7 @@ struct TinyUrdfParser {
       return false;
     }
     urdf_inertial.mass =
-        TinyConstants::scalar_from_string(mass_xml->Attribute("value"));
+        Algebra::scalar_from_string(mass_xml->Attribute("value"));
 
     const tinyxml2::XMLElement* inertia_xml =
         config->FirstChildElement("inertia");
@@ -139,11 +140,11 @@ struct TinyUrdfParser {
     if ((inertia_xml->Attribute("ixx") && inertia_xml->Attribute("iyy") &&
          inertia_xml->Attribute("izz"))) {
       urdf_inertial.inertia_xxyyzz.m_x =
-          TinyConstants::scalar_from_string(inertia_xml->Attribute("ixx"));
+          Algebra::scalar_from_string(inertia_xml->Attribute("ixx"));
       urdf_inertial.inertia_xxyyzz.m_y =
-          TinyConstants::scalar_from_string(inertia_xml->Attribute("iyy"));
+          Algebra::scalar_from_string(inertia_xml->Attribute("iyy"));
       urdf_inertial.inertia_xxyyzz.m_z =
-          TinyConstants::scalar_from_string(inertia_xml->Attribute("izz"));
+          Algebra::scalar_from_string(inertia_xml->Attribute("izz"));
     } else {
       logger.report_error(
           "Inertial: inertia element must have ixx,iyy,izz attributes");
@@ -174,7 +175,7 @@ struct TinyUrdfParser {
         return false;
       } else {
         geom.m_sphere.m_radius =
-            TinyConstants::scalar_from_string(shape->Attribute("radius"));
+            Algebra::scalar_from_string(shape->Attribute("radius"));
       }
     } else if (type_name == "box") {
       geom.geom_type = TINY_BOX_TYPE;
@@ -193,9 +194,9 @@ struct TinyUrdfParser {
         return false;
       }
       geom.m_capsule.m_radius =
-          TinyConstants::scalar_from_string(shape->Attribute("radius"));
+          Algebra::scalar_from_string(shape->Attribute("radius"));
       geom.m_capsule.m_length =
-          TinyConstants::scalar_from_string(shape->Attribute("length"));
+          Algebra::scalar_from_string(shape->Attribute("length"));
     } else if (type_name == "capsule") {
       geom.geom_type = TINY_CAPSULE_TYPE;
       if (!shape->Attribute("length") || !shape->Attribute("radius")) {
@@ -204,14 +205,14 @@ struct TinyUrdfParser {
         return false;
       }
       geom.m_capsule.m_radius =
-          TinyConstants::scalar_from_string(shape->Attribute("radius"));
+          Algebra::scalar_from_string(shape->Attribute("radius"));
       geom.m_capsule.m_length =
-          TinyConstants::scalar_from_string(shape->Attribute("length"));
+          Algebra::scalar_from_string(shape->Attribute("length"));
     } else if ((type_name == "mesh") || (type_name == "cdf")) {
       geom.geom_type = TINY_MESH_TYPE;
 
-      geom.m_mesh.m_scale.setValue(TinyConstants::one(), TinyConstants::one(),
-                                   TinyConstants::one());
+      geom.m_mesh.m_scale.setValue(Algebra::one(), Algebra::one(),
+                                   Algebra::one());
       std::string fn;
 
       // URDF
@@ -225,8 +226,8 @@ struct TinyUrdfParser {
               "Scale should be a vector3, not single scalar. Workaround "
               "activated.\n");
           std::string scalar_str = shape->Attribute("scale");
-          TinyScalar scale_factor =
-              TinyConstants::scalar_from_string(scalar_str.c_str());
+          Scalar scale_factor =
+              Algebra::scalar_from_string(scalar_str.c_str());
           geom.m_mesh.m_scale.setValue(scale_factor, scale_factor,
                                        scale_factor);
         }
@@ -267,7 +268,7 @@ struct TinyUrdfParser {
       logger.report_error("Material must contain a name attribute");
       return false;
     }
-    TinyVisualMaterial<TinyScalar, TinyConstants> material;
+    TinyVisualMaterial<Algebra> material;
     std::string material_m_name = vis_xml->Attribute("name");
 
     // texture
@@ -410,7 +411,7 @@ struct TinyUrdfParser {
           return false;
         }
         link.contact_info.lateral_friction =
-            TinyConstants::scalar_from_string(friction_xml->Attribute("value"));
+            Algebra::scalar_from_string(friction_xml->Attribute("value"));
       }
       {
         const tinyxml2::XMLElement* restitution_xml =
@@ -422,7 +423,7 @@ struct TinyUrdfParser {
             logger.report_error(linkName);
             return false;
           }
-          link.contact_info.restitution = TinyConstants::scalar_from_string(
+          link.contact_info.restitution = Algebra::scalar_from_string(
               restitution_xml->Attribute("value"));
         }
       }
@@ -436,7 +437,7 @@ struct TinyUrdfParser {
             logger.report_error(linkName);
             return false;
           }
-          link.contact_info.stiffness = TinyConstants::scalar_from_string(
+          link.contact_info.stiffness = Algebra::scalar_from_string(
               stiffness_xml->Attribute("value"));
         }
       }
@@ -450,7 +451,7 @@ struct TinyUrdfParser {
             logger.report_error(linkName);
             return false;
           }
-          link.contact_info.damping = TinyConstants::scalar_from_string(
+          link.contact_info.damping = Algebra::scalar_from_string(
               damping_xml->Attribute("value"));
         }
       }
@@ -597,8 +598,8 @@ struct TinyUrdfParser {
               "axis");
           logger.report_warning(joint.joint_name);
           joint.joint_axis_xyz =
-              TinyVector3(TinyConstants::zero(), TinyConstants::zero(),
-                          TinyConstants::one());
+              Vector3(Algebra::zero(), Algebra::zero(),
+                      Algebra::one());
         } else {
           if (axis_xml->Attribute("xyz")) {
             if (!parse_vector3(joint.joint_axis_xyz, axis_xml->Attribute("xyz"),
@@ -653,14 +654,14 @@ struct TinyUrdfParser {
 			const char* damping_str = prop_xml->Attribute("damping");
 			if (damping_str)
 			{
-				joint.m_jointDamping = TinyConstants::scalar_from_string(damping_str);
+				joint.m_jointDamping = Algebra::scalar_from_string(damping_str);
 			}
 
 			// Get joint friction
 			const char* friction_str = prop_xml->Attribute("friction");
 			if (friction_str)
 			{
-				joint.m_jointFriction = TinyConstants::scalar_from_string(friction_str);
+				joint.m_jointFriction = Algebra::scalar_from_string(friction_str);
 			}
 
 			if (damping_str == NULL && friction_str == NULL)
@@ -916,5 +917,3 @@ struct TinyUrdfParser {
     return true;
   }
 };
-
-#endif  // TINY_URDF_PARSER_H

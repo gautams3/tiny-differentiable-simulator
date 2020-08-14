@@ -113,6 +113,13 @@ struct EnokiAlgebra {
   ENOKI_INLINE static Scalar zero() { return 0; }
   ENOKI_INLINE static Scalar one() { return 1; }
   ENOKI_INLINE static Scalar half() { return 0.5; }
+  ENOKI_INLINE static Scalar fraction(const Scalar &a, const Scalar &b) {
+    return a / b;
+  }
+
+  static Scalar scalar_from_string(const std::string& s) {
+    return std::stod(s);
+  }
 
   ENOKI_INLINE static Vector3 zero3() { return Vector3(0); }
   ENOKI_INLINE static Vector3 unit3_x() { return Vector3(1, 0, 0); }

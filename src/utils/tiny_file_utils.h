@@ -1,5 +1,4 @@
-#ifndef TINY_FILE_UTILS_H
-#define TINY_FILE_UTILS_H
+#pragma once
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h> /* _NSGetExecutablePath */
@@ -14,6 +13,7 @@
 
 #define TINY_MAX_EXE_PATH_LEN 4096
 
+#include <cassert>
 #include <stddef.h>  //ptrdiff_h
 #include <stdio.h>
 #include <string.h>
@@ -145,5 +145,3 @@ struct TinyFileUtils {
     return numBytes;
   }
 };
-
-#endif  // TINY_FILE_UTILS_H

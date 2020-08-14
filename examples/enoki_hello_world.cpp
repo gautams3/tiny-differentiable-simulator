@@ -15,6 +15,7 @@ namespace plt = matplotlibcpp;
 #endif
 
 #include "../src/multi_body.hpp"
+#include "../src/urdf/tiny_system_constructor.h"
 
 #ifdef USE_MATPLOTLIB
 template <typename Algebra>
