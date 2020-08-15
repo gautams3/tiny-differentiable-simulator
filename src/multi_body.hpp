@@ -113,32 +113,12 @@ class MultiBody {
       }
     }
 
-    if (static_cast<int>(q.size()) != dof()) {
-      q.resize(dof());
-    }
-    for (Scalar &v : q) {
-      v = Algebra::zero();
-    }
+    q = Algebra::zerox(dof());
+    qd = Algebra::zerox(dof_qd());
+    qdd = Algebra::zerox(dof_qd());
+    tau = Algebra::zerox(dof_actuated());
     if (is_floating) {
       q[3] = Algebra::one();  // make sure orientation is valid
-    }
-    if (static_cast<int>(qd.size()) != dof_qd()) {
-      qd.resize(dof_qd());
-    }
-    for (Scalar &v : qd) {
-      v = Algebra::zero();
-    }
-    if (static_cast<int>(qdd.size()) != dof_qd()) {
-      qdd.resize(dof_qd());
-    }
-    for (Scalar &v : qdd) {
-      v = Algebra::zero();
-    }
-    if (static_cast<int>(tau.size()) != dof_actuated()) {
-      tau.resize(dof_actuated());
-    }
-    for (Scalar &v : tau) {
-      v = Algebra::zero();
     }
 
     // (Re-)create actuator to make sure it has the right degrees of freedom.
@@ -227,7 +207,7 @@ class MultiBody {
   }
 
   TINY_INLINE Scalar get_q_for_link(const VectorX &q, int link_index) const {
-    if (q.empty()) return Algebra::zero();
+    if (Algebra::size(q) == 0) return Algebra::zero();
     const Link &link = links[link_index];
     return link.joint_type == JOINT_FIXED ? Algebra::zero() : q[link.q_index];
   }
@@ -236,7 +216,7 @@ class MultiBody {
   }
 
   TINY_INLINE Scalar get_qd_for_link(const VectorX &qd, int link_index) const {
-    if (qd.empty()) return Algebra::zero();
+    if (Algebra::size(qd) == 0) return Algebra::zero();
     const Link &link = links[link_index];
     return link.joint_type == JOINT_FIXED ? Algebra::zero() : qd[link.qd_index];
   }
@@ -254,7 +234,7 @@ class MultiBody {
 
   TINY_INLINE Scalar get_tau_for_link(const VectorX &tau,
                                       int link_index) const {
-    if (tau.empty()) return Algebra::zero();
+    if (Algebra::size(tau) == 0) return Algebra::zero();
     const Link &link = links[link_index];
     int offset = is_floating ? -6 : 0;
     return link.joint_type == JOINT_FIXED ? Algebra::zero()
@@ -303,6 +283,15 @@ class MultiBody {
     forward_dynamics(q, qd, tau, gravity, qdd);
   }
 
+  static std::string joint_type_name(JointType t) {
+    static std::string names[] = {
+        "JOINT_FIXED",       "JOINT_PRISMATIC_X",    "JOINT_PRISMATIC_Y",
+        "JOINT_PRISMATIC_Z", "JOINT_PRISMATIC_AXIS", "JOINT_REVOLUTE_X",
+        "JOINT_REVOLUTE_Y",  "JOINT_REVOLUTE_Z",     "JOINT_REVOLUTE_AXIS",
+    };
+    return names[int(t) + 1];
+  }
+
   // attaches a new link, setting parent to the last link
   void attach(Link &link, bool is_controllable = true) {
     int parent_index = -1;
@@ -335,8 +324,8 @@ class MultiBody {
     printf(
         "Attached link %i of type %s (parent: %i, index q: %i, index qd: "
         "%i).\n",
-        link.rbindex, joint_type_name(link.joint_type).c_str(),
-        link.parent_index, link.q_index, link.qd_index);
+        link.index, joint_type_name(link.joint_type).c_str(), link.parent_index,
+        link.q_index, link.qd_index);
 //    link.S.print("joint.S");
 #endif
     links.push_back(link);

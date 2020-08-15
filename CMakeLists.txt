@@ -46,6 +46,7 @@ if (Eigen3_FOUND)
 endif (Eigen3_FOUND)
 
 
+include_directories(src)
 
 
 IF(WIN32)

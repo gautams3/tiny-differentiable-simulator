@@ -23,7 +23,7 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
     // update base-world transform from q, and update base velocity from qd
     base_X_world.rotation = Algebra::quat_to_matrix(q[0], q[1], q[2], q[3]);
     base_X_world.translation = Vector3(q[4], q[5], q[6]);
-    if (!qd.empty()) {
+    if (Algebra::size(qd) != 0) {
       base_velocity.top = Vector3(qd[0], qd[1], qd[2]);
       base_velocity.bottom = Vector3(qd[3], qd[4], qd[5]);
     } else {

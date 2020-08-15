@@ -19,7 +19,8 @@
 
 #include <stdio.h>
 
-#include "tiny_spatial_motion_vector.h"
+// #include "tiny_spatial_motion_vector.h"
+#include "tiny_vector3.h"
 #include "tiny_vector_x.h"
 
 /**
@@ -331,9 +332,9 @@ class TinyMatrixXxX_ {
   }
 };
 
-template <typename TinyScalar, typename TinyConstants>
-using TinyMatrix6xX =
-    TinyMatrixXxX_<TinyScalar, TinyConstants, TinySpatialMotionVector>;
+// template <typename TinyScalar, typename TinyConstants>
+// using TinyMatrix6xX =
+//     TinyMatrixXxX_<TinyScalar, TinyConstants, TinySpatialMotionVector>;
 
 template <typename TinyScalar, typename TinyConstants>
 using TinyMatrix3xX = TinyMatrixXxX_<TinyScalar, TinyConstants, TinyVector3>;

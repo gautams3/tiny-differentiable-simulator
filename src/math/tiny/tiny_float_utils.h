@@ -77,24 +77,25 @@ struct FloatUtils {
 };
 
 #include "tiny_matrix3x3.h"
-#include "tiny_pose.h"
 #include "tiny_quaternion.h"
 #include "tiny_vector3.h"
+#include "tiny_algebra.hpp"
+#include "../pose.hpp"
 
 typedef ::TinyVector3<float, FloatUtils> TinyVector3f;
 typedef ::TinyQuaternion<float, FloatUtils> TinyQuaternionf;
 typedef ::TinyMatrix3x3<float, FloatUtils> TinyMatrix3x3f;
-typedef ::TinyPose<float, FloatUtils> TinyPosef;
+typedef ::Pose<TinyAlgebra<float, FloatUtils>> Posef;
 
-inline void setFromOpenGLMatrix(TinyPosef& tr, const float* m) {
+inline void setFromOpenGLMatrix(Posef& tr, const float* m) {
   TinyMatrix3x3f mat;
   mat.setValue(m[0], m[4], m[8], m[1], m[5], m[9], m[2], m[6], m[10]);
-  mat.getRotation(tr.m_orientation);
-  tr.m_position.setValue(m[12], m[13], m[14]);
+  mat.getRotation(tr.orientation);
+  tr.position.setValue(m[12], m[13], m[14]);
 }
 
-inline void getOpenGLMatrix(const TinyPosef& tr, float* m) {
-  TinyMatrix3x3f mat(tr.m_orientation);
+inline void getOpenGLMatrix(const Posef& tr, float* m) {
+  TinyMatrix3x3f mat(tr.orientation);
   m[0] = mat.getRow(0).x();
   m[1] = mat.getRow(1).x();
   m[2] = mat.getRow(2).x();
@@ -107,9 +108,9 @@ inline void getOpenGLMatrix(const TinyPosef& tr, float* m) {
   m[9] = mat.getRow(1).z();
   m[10] = mat.getRow(2).z();
   m[11] = 0.0f;
-  m[12] = tr.m_position.x();
-  m[13] = tr.m_position.y();
-  m[14] = tr.m_position.z();
+  m[12] = tr.position.x();
+  m[13] = tr.position.y();
+  m[14] = tr.position.z();
   m[15] = 1.0f;
 }
 

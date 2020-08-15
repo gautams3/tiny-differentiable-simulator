@@ -16,7 +16,7 @@
 #define TINY_COMMON_GRAPHICS_APP_INTERFACE_H
 
 #include "tiny_camera.h"
-#include "tiny_float_utils.h"
+#include "../../src/math/tiny/tiny_float_utils.h"
 #include "tiny_gl_instancing_renderer.h"
 #include "tiny_window_interface.h"
 

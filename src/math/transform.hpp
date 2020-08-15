@@ -1,8 +1,8 @@
 #pragma once
 
-#include "spatial_vector.hpp"
-#include "inertia.hpp"
 #include "enoki_algebra.hpp"
+#include "inertia.hpp"
+#include "spatial_vector.hpp"
 
 template <typename Algebra>
 struct Transform {
@@ -14,19 +14,38 @@ struct Transform {
   typedef ::MotionVector<Algebra> MotionVector;
   typedef ::ForceVector<Algebra> ForceVector;
 
-  Vector3 translation{0.};
-  Matrix3 rotation{Matrix3(1.)};
+  Vector3 translation{Algebra::zero3()};
+  Matrix3 rotation{Algebra::eye3()};
 
   friend std::ostream &operator<<(std::ostream &os, const Transform &tf) {
     os << "[ translation: " << tf.translation << "  rotation: " << tf.rotation
        << " ]";
     return os;
   }
+  void print(const char *title) const {
+    printf("%s\n", title);
+    printf("  translation:  %.4f\t%.4f\t%.4f\n",
+           Algebra::to_double(translation[0]),
+           Algebra::to_double(translation[1]),
+           Algebra::to_double(translation[2]));
+    printf("  rotation:     %.4f\t%.4f\t%.4f\n",
+           Algebra::to_double(rotation(0, 0)),
+           Algebra::to_double(rotation(0, 1)),
+           Algebra::to_double(rotation(0, 2)));
+    printf("                %.4f\t%.4f\t%.4f\n",
+           Algebra::to_double(rotation(1, 0)),
+           Algebra::to_double(rotation(1, 1)),
+           Algebra::to_double(rotation(1, 2)));
+    printf("                %.4f\t%.4f\t%.4f\n",
+           Algebra::to_double(rotation(2, 0)),
+           Algebra::to_double(rotation(2, 1)),
+           Algebra::to_double(rotation(2, 2)));
+  }
 
   TINY_INLINE void set_identity() {
     Algebra::set_zero(translation);
     // set diagonal entries to one, others to zero
-    rotation = Matrix3(1.);
+    rotation = Algebra::eye3();
   }
 
   Transform(const Vector3 &translation) : translation(translation) {}
@@ -71,10 +90,10 @@ struct Transform {
 
     Vector3 rxw = Algebra::cross(translation, inVec.top);
     Vector3 v_rxw = inVec.bottom - rxw;
-    Matrix3 Et = rotation;  // Algebra::transpose(rotation);
+    const Matrix3 &E = rotation;  // Algebra::transpose(rotation);
 
-    outVec.top = Et * inVec.top;
-    outVec.bottom = Et * v_rxw;
+    outVec.top = E * inVec.top;
+    outVec.bottom = E * v_rxw;
 
     return outVec;
   }

@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <thread>
 
+#define DEBUG true
+
 #include "opengl_window/tiny_opengl3_app.h"
 
 #define USE_MATPLOTLIB 1
@@ -14,8 +16,11 @@
 namespace plt = matplotlibcpp;
 #endif
 
-#include "../src/multi_body.hpp"
-#include "../src/urdf/tiny_system_constructor.h"
+#include "math/tiny/tiny_algebra.hpp"
+#include "math/tiny/tiny_double_utils.h"
+#include "multi_body.hpp"
+
+// #include "urdf/tiny_system_constructor.h"
 
 #ifdef USE_MATPLOTLIB
 template <typename Algebra>
@@ -41,6 +46,7 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
   typedef ::Transform<Algebra> Transform;
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
+  using VectorX = typename Algebra::VectorX;
   using Matrix3 = typename Algebra::Matrix3;
 
   TinyOpenGL3App app(window_title.c_str(), 1024, 768);
@@ -57,7 +63,7 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
     mb.links[i].X_visuals = {Transform(mb.links[i].rbi.com)};
   }
 
-  for (const std::vector<double> &state : states) {
+  for (const auto &state : states) {
     app.m_renderer->update_camera(2);
     DrawGridData data;
     data.upAxis = 2;
@@ -83,6 +89,7 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
       parent_pos = link_pos;
       for (std::size_t j = 0; j < link.visual_ids.size(); ++j) {
         Transform X_visual = link.X_world * link.X_visuals[j];
+        Algebra::print("X_visual", X_visual);
         // sync transform
         TinyVector3f geom_pos(static_cast<float>(X_visual.translation[0]),
                               static_cast<float>(X_visual.translation[1]),
@@ -104,79 +111,122 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
   }
 }
 
+bool equals(const typename EnokiAlgebra::Matrix3 &e,
+            const typename TinyAlgebra<double, DoubleUtils>::Matrix3 &t) {
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      if (std::abs(e(i, j) - t(i, j)) > 1e-6) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 int main(int argc, char **argv) {
+  // {
+  //   using TinyAlgebra = ::TinyAlgebra<double, DoubleUtils>;
+  //   for (int n = 0; n < 20; ++n) {
+  //     typename EnokiAlgebra::Matrix3 e1(0.), e2(0.);
+  //     typename TinyAlgebra::Matrix3 t1, t2;
+  //     double v1 = rand() * 1.0 / RAND_MAX;
+  //     t1 = TinyAlgebra::rotation_x_matrix(v1);
+  //     e1 = EnokiAlgebra::rotation_x_matrix(v1);
+  //     // for (int i = 0; i < 3; ++i) {
+  //     //   for (int j = 0; j < 3; ++j) {
+  //     //     double v1 = rand() * 1.0 / RAND_MAX;
+  //     //     e1(i, j) = v1;
+  //     //     t1(i, j) = v1;
+  //     //     // double v2 = rand() * 1.0 / RAND_MAX;
+  //     //     // e2(i, j) = v2;
+  //     //     // t2(i, j) = v2;
+  //     //   }
+  //     // }
+
+  //     std::cout << "e1:\n" << e1 << std::endl;
+  //     t1.print("t1");
+
+  //     std::cout << "Equals " << n << ": " << std::boolalpha
+  //               << equals(e1, t1) << std::endl;
+  //   }
+  //   return 0;
+  // }
+
   {
-    using Tf = Transform<EnokiAlgebra>;
-    using Vector3 = EnokiAlgebra::Vector3;
-    using Matrix3 = EnokiAlgebra::Matrix3;
-    using RigidBodyInertia = ::RigidBodyInertia<EnokiAlgebra>;
+    using Algebra = TinyAlgebra<double, DoubleUtils>;
+    // using Algebra = EnokiAlgebra;
+    using Tf = Transform<Algebra>;
+    using Vector3 = Algebra::Vector3;
+    using VectorX = typename Algebra::VectorX;
+    using Matrix3 = Algebra::Matrix3;
+    using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
 
     // Set NaN trap
     // feenableexcept(FE_INVALID | FE_OVERFLOW);
 
-    Tf tf;
-    tf.set_identity();
-    std::cout << "tf: " << tf << std::endl;
+    // Tf tf;
+    // tf.set_identity();
+    // std::cout << "tf: " << tf << std::endl;
 
-    EnokiAlgebra::Vector3 vec(1., 2, 3);
-    std::cout << "VCM: " << EnokiAlgebra::cross_matrix(vec) << "\n";
+    // Algebra::Vector3 vec(1., 2, 3);
+    // std::cout << "VCM: " << Algebra::cross_matrix(vec) << "\n";
 
-    std::cout << "rot-x: " << EnokiAlgebra::rotation_x_matrix(0.3) << std::endl;
+    // std::cout << "rot-x: " << Algebra::rotation_x_matrix(0.3) << std::endl;
 
-    RigidBodyInertia rbi;
-    std::cout << "rbi.inertia: " << rbi.inertia << std::endl;
+    // RigidBodyInertia rbi;
+    // std::cout << "rbi.inertia: " << rbi.inertia << std::endl;
 
-    EnokiAlgebra::Matrix6 mat6(0.);
-    EnokiAlgebra::assign_block(mat6, EnokiAlgebra::Matrix3(3.14), 0, 2);
-    std::cout << "mat6: " << mat6 << std::endl;
+    // Algebra::Matrix6 mat6(0.);
+    // Algebra::assign_block(mat6, Algebra::Matrix3(3.14), 0, 2);
+    // std::cout << "mat6: " << mat6 << std::endl;
 
-    double angle = M_PI_2;
-    std::cout << "rotx(0):\n"
-              << EnokiAlgebra::rotation_x_matrix(angle) << std::endl;
+    // double angle = M_PI_2;
+    // std::cout << "rotx(0):\n"
+    //           << Algebra::rotation_x_matrix(angle) << std::endl;
 
-    // ArticulatedBodyInertia<EnokiAlgebra> abi;
+    // ArticulatedBodyInertia<Algebra> abi;
     // abi.I = Matrix3(1.);
     // abi.H = Matrix3(2.);
     // abi.M = Matrix3(3.);
     // std::cout << "abi:\n" << abi.matrix() << std::endl;
-    // ArticulatedBodyInertia<EnokiAlgebra> abi_sum = abi + abi.matrix();
+    // ArticulatedBodyInertia<Algebra> abi_sum = abi + abi.matrix();
     // std::cout << "abi+abi:\n" << abi_sum.matrix() << std::endl;
-    // ArticulatedBodyInertia<EnokiAlgebra> abi_sub = abi - abi.matrix();
+    // ArticulatedBodyInertia<Algebra> abi_sub = abi - abi.matrix();
     // std::cout << "abi-abi:\n" << abi_sub.matrix() << std::endl;
 
     //   return 0;
 
-    MultiBody<EnokiAlgebra> mb;
+    MultiBody<Algebra> mb;
 
     double mass = 1.;
     Vector3 com(0., 0., 1.);
-    Matrix3 I = EnokiAlgebra::diagonal3(Vector3(1., 1., 1.));
-    Link<EnokiAlgebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
-                              RigidBodyInertia(mass, com, I));
-    Link<EnokiAlgebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
-                              RigidBodyInertia(mass, com, I));
+    Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));
+    Link<Algebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+                         RigidBodyInertia(mass, com, I));
+    Link<Algebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+                         RigidBodyInertia(mass, com, I));
     mb.attach(link_a);
     mb.attach(link_b);
     mb.initialize();
 
-    mb.q = {M_PI_2, 0.0};
+    mb.q = VectorX({M_PI_2, 0.0});
 
     mb.forward_kinematics();
     Vector3 gravity(0., 0., -9.81);
     mb.forward_dynamics(gravity);
 
-    std::vector<typename EnokiAlgebra::VectorX> traj;
+    std::vector<typename Algebra::VectorX> traj;
 
     double dt = 0.01;
-    for (int i = 0; i < 10000; ++i) {
+    for (int i = 0; i < 1000; ++i) {
       traj.push_back(mb.q);
       mb.integrate(dt);
       mb.forward_dynamics(gravity);
       mb.print_state();
     }
 
-    // plot_trajectory<EnokiAlgebra>(traj);
-    visualize_trajectory<EnokiAlgebra>(traj, mb, dt);
+    // plot_trajectory<Algebra>(traj);
+    visualize_trajectory<Algebra>(traj, mb, dt);
   }
 
   return 0;

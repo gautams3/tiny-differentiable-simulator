@@ -15,7 +15,7 @@
 #ifndef TINY_CAMERA_H
 #define TINY_CAMERA_H
 
-#include "tiny_float_utils.h"
+#include "math/tiny/tiny_float_utils.h"
 
 struct TinyCamera {
   struct TinyCameraInternalData* m_data;

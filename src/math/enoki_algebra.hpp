@@ -11,9 +11,10 @@
 #include "spatial_vector.hpp"
 
 struct EnokiAlgebra {
+  using Index = std::size_t;
   using Scalar = double;
   using Vector3 = enoki::Array<Scalar, 3>;
-  using Vector6 = enoki::Array<Scalar, 6>;
+  // using Vector6 = enoki::Array<Scalar, 6>;
   using VectorX = std::vector<Scalar>;
   using Matrix3 = enoki::Matrix<Scalar, 3>;
   using Matrix6 = enoki::Matrix<Scalar, 6>;
@@ -65,6 +66,8 @@ struct EnokiAlgebra {
         enoki::cross(a.top, b.bottom));
   }
 
+  TINY_INLINE static Index size(const VectorX &v) { return v.size(); }
+
   /**
    * V = mv(w, v)
    * F = mv(n, f)
@@ -82,10 +85,10 @@ struct EnokiAlgebra {
     return enoki::dot(vector_a, vector_b);
   }
 
-  ENOKI_INLINE static Scalar norm(const SpatialVector &v) {
-    Vector6 v6 = v;
-    return enoki::norm(v6);
-  }
+  // ENOKI_INLINE static Scalar norm(const SpatialVector &v) {
+  //   Vector6 v6 = v;
+  //   return enoki::norm(v6);
+  // }
 
   template <typename T>
   ENOKI_INLINE static Scalar norm(const T &v) {
@@ -105,10 +108,14 @@ struct EnokiAlgebra {
   }
 
   ENOKI_INLINE static Matrix3 zero33() { return Matrix3(0); }
+  TINY_INLINE static VectorX zerox(Index size) {
+    return std::vector<Scalar>(size, 0.0);
+  }
   ENOKI_INLINE static Matrix3 diagonal3(const Vector3 &v) {
     return Matrix3(v[0], 0, 0, 0, v[1], 0, 0, 0, v[2]);
   }
   ENOKI_INLINE static Matrix3 diagonal3(const Scalar &v) { return Matrix3(v); }
+  TINY_INLINE static Matrix3 eye3() { return Matrix3(1.0); }
 
   ENOKI_INLINE static Scalar zero() { return 0; }
   ENOKI_INLINE static Scalar one() { return 1; }
@@ -117,7 +124,7 @@ struct EnokiAlgebra {
     return a / b;
   }
 
-  static Scalar scalar_from_string(const std::string& s) {
+  static Scalar scalar_from_string(const std::string &s) {
     return std::stod(s);
   }
 
@@ -139,6 +146,13 @@ struct EnokiAlgebra {
         output(ii + i, jj + j) = input(ii + input_i, jj + input_j);
       }
     }
+  }
+
+  template <std::size_t Size>
+  ENOKI_INLINE static void assign_column(enoki::Matrix<Scalar, Size> &m,
+                                         std::size_t i,
+                                         const enoki::Array<Scalar, Size> &v) {
+    m.col(i) = v;
   }
 
   ENOKI_INLINE static Matrix3 quat_to_matrix(const Quaternion &quat) {
@@ -202,37 +216,49 @@ struct EnokiAlgebra {
     m = 0;
   }
   template <std::size_t Size>
-  ENOKI_INLINE static void set_zero(enoki::Array<Scalar, Size> &m) {
-    m = 0;
+  ENOKI_INLINE static void set_zero(enoki::Array<Scalar, Size> &v) {
+    v = 0;
   }
 
   ENOKI_INLINE static double to_double(const Scalar &s) {
     return static_cast<double>(s);
   }
 
-  template <typename T>
-  static void print(const std::string &title, T object) {
-    std::cout << title << "\n" << object << std::endl;
+  template <std::size_t Size>
+  static void print(const std::string &title, enoki::Matrix<Scalar, Size> &m) {
+    std::cout << title << "\n" << m << std::endl;
+  }
+  template <std::size_t Size>
+  static void print(const std::string &title, enoki::Array<Scalar, Size> &v) {
+    std::cout << title << "\n" << v << std::endl;
+  }
+  static void print(const std::string &title, const Scalar &v) {
+    std::cout << title << "\n" << to_double(v) << std::endl;
+  }
+  template<typename T>
+  static void print(const std::string &title,
+                    const T &abi) {
+    abi.print(title.c_str());
   }
 
   /**
    * Computes 6x6 matrix by multiplying a and b^T.
    */
-  template <std::size_t Size>
-  ENOKI_INLINE static enoki::Matrix<Scalar, Size> mul_transpose(
-      const enoki::Array<Scalar, Size> &a,
-      const enoki::Array<Scalar, Size> &b) {
-    enoki::Matrix<Scalar, Size> m(0.0);
-    for (std::size_t c = 0; c < Size; ++c) {
-      m.col(c) = a * b[c];
-    }
-    return m;
-  }
-  ENOKI_INLINE static Matrix6 mul_transpose(const SpatialVector &a,
-                                            const SpatialVector &b) {
-    Vector6 a6 = a, b6 = b;
-    return mul_transpose(a6, b6);
-  }
+  // template <std::size_t Size>
+  // ENOKI_INLINE static enoki::Matrix<Scalar, Size> mul_transpose(
+  //     const enoki::Array<Scalar, Size> &a,
+  //     const enoki::Array<Scalar, Size> &b) {
+  //   enoki::Matrix<Scalar, Size> m(0.0);
+  //   for (std::size_t c = 0; c < Size; ++c) {
+  //     m.col(c) = a * b[c];
+  //   }
+  //   return m;
+  // }
+  // ENOKI_INLINE static Matrix6 mul_transpose(const SpatialVector &a,
+  //                                           const SpatialVector &b) {
+  //   Vector6 a6 = a, b6 = b;
+  //   return mul_transpose(a6, b6);
+  // }
 
   EnokiAlgebra() = delete;
 };

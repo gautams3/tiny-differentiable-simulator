@@ -26,7 +26,7 @@ template <typename TinyScalar, typename TinyConstants>
 class TinyMatrix3x3 {
   typedef ::TinyQuaternion<TinyScalar, TinyConstants> TinyQuaternion;
   typedef ::TinyVector3<TinyScalar, TinyConstants> TinyVector3;
-  /// Data storage for the matrix, each vector is a row of the matrix
+  /// Data storage for the matrix, each vector is a column of the matrix
   TinyVector3 m_el[3];
 
  public:
@@ -43,7 +43,7 @@ class TinyMatrix3x3 {
   /**@brief Constructor from Quaternion */
   explicit TinyMatrix3x3(const TinyQuaternion& q) { setRotation(q); }
 
-  /** @brief Constructor with row major formatting */
+  /** @brief Constructor with column major formatting */
   TinyMatrix3x3(const TinyScalar& xx, const TinyScalar& xy,
                 const TinyScalar& xz, const TinyScalar& yx,
                 const TinyScalar& yy, const TinyScalar& yz,
@@ -68,9 +68,9 @@ class TinyMatrix3x3 {
   }
 
   inline TinyMatrix3x3& operator*=(const TinyMatrix3x3& m) {
-    setValue(m.tdotx(m_el[0]), m.tdoty(m_el[0]), m.tdotz(m_el[0]),
-             m.tdotx(m_el[1]), m.tdoty(m_el[1]), m.tdotz(m_el[1]),
-             m.tdotx(m_el[2]), m.tdoty(m_el[2]), m.tdotz(m_el[2]));
+    setValue(tdotx(m[0]), tdotx(m[1]), tdotx(m[2]),
+             tdoty(m[0]), tdoty(m[1]), tdoty(m[2]),
+             tdotz(m[0]), tdotz(m[1]), tdotz(m[2]));
     return *this;
   }
 
@@ -81,7 +81,7 @@ class TinyMatrix3x3 {
     m_el[2] = v2;
   }
 
-  /** @brief Set the values of the matrix explicitly (row major)
+  /** @brief Set the values of the matrix explicitly (column major)
    *  @param xx Top left
    *  @param xy Top Middle
    *  @param xz Top Right
@@ -96,19 +96,19 @@ class TinyMatrix3x3 {
                 const TinyScalar& yy, const TinyScalar& yz,
                 const TinyScalar& zx, const TinyScalar& zy,
                 const TinyScalar& zz) {
-    m_el[0].setValue(xx, xy, xz);
-    m_el[1].setValue(yx, yy, yz);
-    m_el[2].setValue(zx, zy, zz);
+    m_el[0].setValue(xx, yx, zx);
+    m_el[1].setValue(xy, yy, zy);
+    m_el[2].setValue(xz, yz, zz);
   }
 
-  /** @brief Get a mutable reference to a row of the matrix as a vector
+  /** @brief Get a mutable reference to a column of the matrix as a vector
    *  @param i Row number 0 indexed */
   inline TinyVector3& operator[](int i) {
     TinyConstants::FullAssert(0 <= i && i < 3);
     return m_el[i];
   }
 
-  /** @brief Get a const reference to a row of the matrix as a vector
+  /** @brief Get a const reference to a column of the matrix as a vector
    *  @param i Row number 0 indexed */
   inline const TinyVector3& operator[](int i) const {
     TinyConstants::FullAssert(0 <= i && i < 3);
@@ -118,12 +118,12 @@ class TinyMatrix3x3 {
   inline const TinyScalar& operator()(int row, int col) const {
     TinyConstants::FullAssert(0 <= row && row < 3);
     TinyConstants::FullAssert(0 <= col && col < 3);
-    return m_el[row][col];
+    return m_el[col][row];
   }
   inline TinyScalar& operator()(int row, int col) {
     TinyConstants::FullAssert(0 <= row && row < 3);
     TinyConstants::FullAssert(0 <= col && col < 3);
-    return m_el[row][col];
+    return m_el[col][row];
   }
 
   /** @brief Set the matrix from euler angles YPR around ZYX axes
@@ -201,13 +201,13 @@ class TinyMatrix3x3 {
   }
 
   inline TinyScalar tdotx(const TinyVector3& v) const {
-    return m_el[0].x() * v.x() + m_el[1].x() * v.y() + m_el[2].x() * v.z();
+    return getRow(0).dot(v);
   }
   inline TinyScalar tdoty(const TinyVector3& v) const {
-    return m_el[0].y() * v.x() + m_el[1].y() * v.y() + m_el[2].y() * v.z();
+    return getRow(1).dot(v);
   }
   inline TinyScalar tdotz(const TinyVector3& v) const {
-    return m_el[0].z() * v.x() + m_el[1].z() * v.y() + m_el[2].z() * v.z();
+    return getRow(2).dot(v);
   }
 
   /** @brief Set the matrix from a quaternion
@@ -247,17 +247,17 @@ class TinyMatrix3x3 {
       temp[i] = s * TinyConstants::half();
       s = TinyConstants::half() / s;
 
-      temp[3] = (m_el[k][j] - m_el[j][k]) * s;
-      temp[j] = (m_el[j][i] + m_el[i][j]) * s;
-      temp[k] = (m_el[k][i] + m_el[i][k]) * s;
+      temp[3] = (m_el[j][k] - m_el[k][j]) * s;
+      temp[j] = (m_el[i][j] + m_el[j][i]) * s;
+      temp[k] = (m_el[i][k] + m_el[k][i]) * s;
     } else {
       TinyScalar s = TinyConstants::sqrt1(trace + TinyConstants::one());
       temp[3] = (s * TinyConstants::half());
       s = TinyConstants::half() / s;
 
-      temp[0] = ((m_el[2].y() - m_el[1].z()) * s);
-      temp[1] = ((m_el[0].z() - m_el[2].x()) * s);
-      temp[2] = ((m_el[1].x() - m_el[0].y()) * s);
+      temp[0] = ((m_el[1][2] - m_el[2][1]) * s);
+      temp[1] = ((m_el[2][0] - m_el[0][2]) * s);
+      temp[2] = ((m_el[0][1] - m_el[1][0]) * s);
     }
     q.setValue(temp[0], temp[1], temp[2], temp[3]);
   }
@@ -269,11 +269,9 @@ class TinyMatrix3x3 {
    *  @param m matrix to be applied
    * Equivilant to this = this + m */
   TinyMatrix3x3& operator+=(const TinyMatrix3x3& m) {
-    setValue(m_el[0][0] + m.m_el[0][0], m_el[0][1] + m.m_el[0][1],
-             m_el[0][2] + m.m_el[0][2], m_el[1][0] + m.m_el[1][0],
-             m_el[1][1] + m.m_el[1][1], m_el[1][2] + m.m_el[1][2],
-             m_el[2][0] + m.m_el[2][0], m_el[2][1] + m.m_el[2][1],
-             m_el[2][2] + m.m_el[2][2]);
+	  m_el[0] += m[0];
+	  m_el[1] += m[1];
+	  m_el[2] += m[2];
     return *this;
   }
 
@@ -281,19 +279,17 @@ class TinyMatrix3x3 {
    *  @param m matrix to be applied
    * Equivilant to this = this - m */
   TinyMatrix3x3& operator-=(const TinyMatrix3x3& m) {
-    setValue(m_el[0][0] - m.m_el[0][0], m_el[0][1] - m.m_el[0][1],
-             m_el[0][2] - m.m_el[0][2], m_el[1][0] - m.m_el[1][0],
-             m_el[1][1] - m.m_el[1][1], m_el[1][2] - m.m_el[1][2],
-             m_el[2][0] - m.m_el[2][0], m_el[2][1] - m.m_el[2][1],
-             m_el[2][2] - m.m_el[2][2]);
+	  m_el[0] -= m[0];
+	  m_el[1] -= m[1];
+	  m_el[2] -= m[2];
     return *this;
   }
 
   /** @brief Get a row of the matrix as a vector
    *  @param i Row number 0 indexed */
-  inline const TinyVector3& getRow(int i) const {
+  inline const TinyVector3 getRow(int i) const {
     TinyConstants::FullAssert(0 <= i && i < 3);
-    return m_el[i];
+    return TinyVector3(m_el[0][i], m_el[1][i], m_el[2][i]);
   }
 
   void print(const char* txt) const {
@@ -316,9 +312,9 @@ class TinyMatrix3x3 {
     TinyConstants::FullAssert(det != TinyConstants::zero());
     TinyScalar s = TinyConstants::one() / det;
     return TinyMatrix3x3(
-        co.x() * s, cofac(0, 2, 2, 1) * s, cofac(0, 1, 1, 2) * s, co.y() * s,
-        cofac(0, 0, 2, 2) * s, cofac(0, 2, 1, 0) * s, co.z() * s,
-        cofac(0, 1, 2, 0) * s, cofac(0, 0, 1, 1) * s);
+        co.x() * s, co.y() * s, co.z() * s,
+		cofac(0, 2, 2, 1) * s, cofac(0, 0, 2, 2) * s, cofac(0, 1, 2, 0) * s,
+		cofac(0, 1, 1, 2) * s, cofac(0, 2, 1, 0) * s, cofac(0, 0, 1, 1) * s);
   }
 
   inline TinyMatrix3x3 operator-() const {
@@ -353,7 +349,7 @@ class TinyMatrix3x3 {
   }
 
   inline TinyVector3 dot(const TinyVector3& v) const {
-    return TinyVector3((*this)[0].dot(v), (*this)[1].dot(v), (*this)[2].dot(v));
+    return TinyVector3(getRow(0).dot(v), getRow(1).dot(v), getRow(2).dot(v));
   }
 #if 0
 
@@ -736,16 +732,15 @@ template <typename TinyScalar, typename TinyConstants>
 inline TinyVector3<TinyScalar, TinyConstants> operator*(
     const TinyMatrix3x3<TinyScalar, TinyConstants>& m,
     const TinyVector3<TinyScalar, TinyConstants>& v) {
-  return TinyVector3<TinyScalar, TinyConstants>(m[0].dot(v), m[1].dot(v),
-                                                m[2].dot(v));
+  return TinyVector3<TinyScalar, TinyConstants>(m.getRow(0).dot(v), m.getRow(1).dot(v),
+                                                m.getRow(2).dot(v));
 }
 
 template <typename TinyScalar, typename TinyConstants>
 inline TinyMatrix3x3<TinyScalar, TinyConstants>
 TinyMatrix3x3<TinyScalar, TinyConstants>::transpose() const {
   return TinyMatrix3x3<TinyScalar, TinyConstants>(
-      m_el[0].x(), m_el[1].x(), m_el[2].x(), m_el[0].y(), m_el[1].y(),
-      m_el[2].y(), m_el[0].z(), m_el[1].z(), m_el[2].z());
+      getRow(0), getRow(1), getRow(2));
 }
 
 template <typename TinyScalar, typename TinyConstants>
@@ -760,41 +755,29 @@ inline TinyMatrix3x3<TinyScalar, TinyConstants> TinyVectorCrossMatrix(
 template <typename TinyScalar, typename TinyConstants>
 inline TinyMatrix3x3<TinyScalar, TinyConstants> operator*(
     const TinyMatrix3x3<TinyScalar, TinyConstants>& m, const TinyScalar& k) {
-  return TinyMatrix3x3<TinyScalar, TinyConstants>(
-      m[0].x() * k, m[0].y() * k, m[0].z() * k, m[1].x() * k, m[1].y() * k,
-      m[1].z() * k, m[2].x() * k, m[2].y() * k, m[2].z() * k);
+  return TinyMatrix3x3<TinyScalar, TinyConstants>(m[0] * k, m[1] * k, m[2] * k);
 }
 
 template <typename TinyScalar, typename TinyConstants>
 inline TinyMatrix3x3<TinyScalar, TinyConstants> operator+(
     const TinyMatrix3x3<TinyScalar, TinyConstants>& m1,
     const TinyMatrix3x3<TinyScalar, TinyConstants>& m2) {
-  return TinyMatrix3x3<TinyScalar, TinyConstants>(
-      m1[0][0] + m2[0][0], m1[0][1] + m2[0][1], m1[0][2] + m2[0][2],
-
-      m1[1][0] + m2[1][0], m1[1][1] + m2[1][1], m1[1][2] + m2[1][2],
-
-      m1[2][0] + m2[2][0], m1[2][1] + m2[2][1], m1[2][2] + m2[2][2]);
+  return TinyMatrix3x3<TinyScalar, TinyConstants>(m1[0] + m2[0], m1[1] + m2[1], m1[2] + m2[2]);
 }
 template <typename TinyScalar, typename TinyConstants>
 inline TinyMatrix3x3<TinyScalar, TinyConstants> operator-(
     const TinyMatrix3x3<TinyScalar, TinyConstants>& m1,
     const TinyMatrix3x3<TinyScalar, TinyConstants>& m2) {
-  return TinyMatrix3x3<TinyScalar, TinyConstants>(
-      m1[0][0] - m2[0][0], m1[0][1] - m2[0][1], m1[0][2] - m2[0][2],
-
-      m1[1][0] - m2[1][0], m1[1][1] - m2[1][1], m1[1][2] - m2[1][2],
-
-      m1[2][0] - m2[2][0], m1[2][1] - m2[2][1], m1[2][2] - m2[2][2]);
+  return TinyMatrix3x3<TinyScalar, TinyConstants>(m1[0] - m2[0], m1[1] - m2[1], m1[2] - m2[2]);
 }
 template <typename TinyScalar, typename TinyConstants>
 inline TinyMatrix3x3<TinyScalar, TinyConstants> operator*(
     const TinyMatrix3x3<TinyScalar, TinyConstants>& m1,
     const TinyMatrix3x3<TinyScalar, TinyConstants>& m2) {
   return TinyMatrix3x3<TinyScalar, TinyConstants>(
-      m2.tdotx(m1[0]), m2.tdoty(m1[0]), m2.tdotz(m1[0]), m2.tdotx(m1[1]),
-      m2.tdoty(m1[1]), m2.tdotz(m1[1]), m2.tdotx(m1[2]), m2.tdoty(m1[2]),
-      m2.tdotz(m1[2]));
+      m1.tdotx(m2[0]), m1.tdotx(m2[1]), m1.tdotx(m2[2]),
+	  m1.tdoty(m2[0]), m1.tdoty(m2[1]), m1.tdoty(m2[2]),
+	  m1.tdotz(m2[0]), m1.tdotz(m2[1]), m1.tdotz(m2[2]));
 }
 
 #if 0

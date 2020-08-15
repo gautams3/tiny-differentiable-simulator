@@ -14,7 +14,7 @@
 # limitations under the License.
 
 
-include_directories(. ..)
+include_directories(. .. ${CMAKE_SOURCE_DIR}/src)
 
 set(DL ${CMAKE_DL_LIBS})
 

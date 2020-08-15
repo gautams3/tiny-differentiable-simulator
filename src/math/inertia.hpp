@@ -1,7 +1,7 @@
 #pragma once
 
+// #include "enoki_algebra.hpp"
 #include "spatial_vector.hpp"
-#include "enoki_algebra.hpp"
 
 template <typename Algebra>
 struct RigidBodyInertia {
@@ -23,6 +23,8 @@ struct RigidBodyInertia {
   Vector3 com{0};
 
   Matrix3 inertia{Algebra::diagonal3(1)};
+
+  RigidBodyInertia() = default;
 
   RigidBodyInertia(const RigidBodyInertia<Algebra> &rbi) = default;
 
@@ -150,9 +152,9 @@ struct RigidBodyInertia {
     return *this;
   }
 
-  ENOKI_STRUCT(RigidBodyInertia, mass, com, inertia)
+  // ENOKI_STRUCT(RigidBodyInertia, mass, com, inertia)
 };
-ENOKI_STRUCT_SUPPORT(RigidBodyInertia, mass, com, inertia)
+// ENOKI_STRUCT_SUPPORT(RigidBodyInertia, mass, com, inertia)
 
 /**
  * The articulated body inertia matrix has the form
@@ -162,6 +164,7 @@ ENOKI_STRUCT_SUPPORT(RigidBodyInertia, mass, com, inertia)
  */
 template <typename Algebra>
 struct ArticulatedBodyInertia {
+  using Index = typename Algebra::Index;
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
@@ -173,6 +176,10 @@ struct ArticulatedBodyInertia {
   Matrix3 I{Algebra::diagonal3(1.)};
   Matrix3 H{Algebra::zero33()};
   Matrix3 M{Algebra::diagonal3(1.)};
+
+  ArticulatedBodyInertia() = default;
+  ArticulatedBodyInertia(const Matrix3 &I, const Matrix3 &H, const Matrix3 &M)
+      : I(I), H(H), M(M) {}
 
   ArticulatedBodyInertia(const RigidBodyInertia &rbi)
       : I(rbi.inertia),
@@ -208,6 +215,9 @@ struct ArticulatedBodyInertia {
 
   ArticulatedBodyInertia operator+(const ArticulatedBodyInertia &abi) const {
     return ArticulatedBodyInertia(I + abi.I, H + abi.H, M + abi.M);
+  }
+  ArticulatedBodyInertia operator-(const ArticulatedBodyInertia &abi) const {
+    return ArticulatedBodyInertia(I - abi.I, H - abi.H, M - abi.M);
   }
 
   ArticulatedBodyInertia &operator+=(const ArticulatedBodyInertia &abi) {
@@ -265,28 +275,10 @@ struct ArticulatedBodyInertia {
     return *this;
   }
 
-  Matrix6 inverse() const {
-  // Inverse of a symmetric block matrix
-  // according to (4.1) in
-  //
-  http:  // msvlab.hre.ntou.edu.tw/grades/now/inte/Inverse%20&%20Border/border-LuTT.pdf
-    Matrix3 Ainv = Algebra::inverse(I);
-    Matrix3 B = H;
-    Matrix3 C = -B;
-    Matrix3 DCAB = Algebra::inverse(M - C * Ainv * B);
-    Matrix3 AinvBDCAB = Ainv * B * DCAB;
-
-    Matrix6 m;
-    Algebra::assign_block(m, Ainv + AinvBDCAB * C * Ainv, 0, 0);
-    Algebra::assign_block(m, -AinvBDCAB, 0, 3);
-    Algebra::assign_block(m, -DCAB * C * Ainv, 3, 0);
-    Algebra::assign_block(m, DCAB, 3, 3);
-    return m;
-  }
-
-  // ArticulatedBodyInertia inverse() const {
+  // Matrix6 inverse() const {
   //   // Inverse of a symmetric block matrix
   //   // according to (4.1) in
+  //   //
   //   //
   //   http://msvlab.hre.ntou.edu.tw/grades/now/inte/Inverse%20&%20Border/border-LuTT.pdf
   //   Matrix3 Ainv = Algebra::inverse(I);
@@ -295,13 +287,73 @@ struct ArticulatedBodyInertia {
   //   Matrix3 DCAB = Algebra::inverse(M - C * Ainv * B);
   //   Matrix3 AinvBDCAB = Ainv * B * DCAB;
 
-  //   ArticulatedBodyInertia abi;
-  //   abi.I = Ainv + AinvBDCAB * C * Ainv;
-  //   abi.H = -AinvBDCAB;
-  //   abi.M = DCAB;
-  //   return abi;
+  //   Matrix6 m;
+  //   Algebra::assign_block(m, Ainv + AinvBDCAB * C * Ainv, 0, 0);
+  //   Algebra::assign_block(m, -AinvBDCAB, 0, 3);
+  //   Algebra::assign_block(m, -DCAB * C * Ainv, 3, 0);
+  //   Algebra::assign_block(m, DCAB, 3, 3);
+  //   return m;
   // }
 
-  ENOKI_STRUCT(ArticulatedBodyInertia, I, H, M)
+  ArticulatedBodyInertia inverse() const {
+    // Inverse of a symmetric block matrix
+    // according to (4.1) in
+    //
+    // http://msvlab.hre.ntou.edu.tw/grades/now/inte/Inverse%20&%20Border/border-LuTT.pdf
+    Matrix3 Ainv = Algebra::inverse(I);
+    Matrix3 B = H;
+    Matrix3 C = -B;
+    Matrix3 DCAB = Algebra::inverse(M - C * Ainv * B);
+    Matrix3 AinvBDCAB = Ainv * B * DCAB;
+
+    ArticulatedBodyInertia abi;
+    abi.I = Ainv + AinvBDCAB * C * Ainv;
+    abi.H = -AinvBDCAB;
+    abi.M = DCAB;
+    return abi;
+  }
+
+  MotionVector inv_mul(const ForceVector &v) const {
+    // TODO verify
+    ArticulatedBodyInertia abi = inverse();
+    MotionVector result;
+    result.top = abi.I * v.top + abi.H * v.bottom;
+    result.bottom = abi.M * v.bottom + Algebra::transpose(abi.H) * v.top;
+    return result;
+  }
+
+  static ArticulatedBodyInertia mul_transpose(const ForceVector &a,
+                                              const ForceVector &b) {
+    ArticulatedBodyInertia abi;
+    for (Index i = 0; i < 3; i++) {
+      Algebra::assign_column(abi.I, i, a.top[i] * b.top);
+      Algebra::assign_column(abi.H, i, a.bottom[i] * b.top);
+      Algebra::assign_column(abi.M, i, a.bottom[i] * b.bottom);
+    }
+    return abi;
+  }
+
+  void print(const char *name) const {
+    printf("%s\n", name);
+    print("I", I, 4);
+    print("H", H, 4);
+    print("M", M, 4);
+  }
+
+ private:
+  static void print(const char *name, const Matrix3 &m, int indent) {
+    for (int i = 0; i < indent; ++i) {
+      printf(" ");
+    }
+    printf("%s:\n", name);
+    for (int j = 0; j < 3; ++j) {
+      for (int i = 0; i < indent; ++i) {
+        printf(" ");
+      }
+      printf("%.3f  %.3f  %.3f\n", m(j, 0), m(j, 1), m(j, 2));
+    }
+  }
+
+  // ENOKI_STRUCT(ArticulatedBodyInertia, I, H, M)
 };
-ENOKI_STRUCT_SUPPORT(ArticulatedBodyInertia, I, H, M)
+// ENOKI_STRUCT_SUPPORT(ArticulatedBodyInertia, I, H, M)
