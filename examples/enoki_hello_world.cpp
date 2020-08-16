@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <thread>
 
-#define DEBUG true
+// #define DEBUG false
 
 #include "opengl_window/tiny_opengl3_app.h"
 
@@ -16,11 +16,13 @@
 namespace plt = matplotlibcpp;
 #endif
 
+#include "math/enoki_algebra.hpp"
 #include "math/tiny/tiny_algebra.hpp"
 #include "math/tiny/tiny_double_utils.h"
 #include "multi_body.hpp"
-
-// #include "urdf/tiny_system_constructor.h"
+#include "urdf/tiny_system_constructor.h"
+#include "utils/tiny_file_utils.h"
+#include "world.hpp"
 
 #ifdef USE_MATPLOTLIB
 template <typename Algebra>
@@ -42,6 +44,7 @@ void plot_trajectory(const std::vector<typename Algebra::VectorX> &states,
 template <typename Algebra>
 void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
                           MultiBody<Algebra> &mb, double dt,
+                          std::size_t skip_steps = 10,
                           const std::string &window_title = "Trajectory") {
   typedef ::Transform<Algebra> Transform;
   using Scalar = typename Algebra::Scalar;
@@ -56,14 +59,17 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
   app.m_renderer->get_active_camera()->set_camera_pitch(-30);
   app.m_renderer->get_active_camera()->set_camera_target_position(0, 0, 0);
 
+  float box_size = 0.02f;
+
   for (std::size_t i = 0; i < mb.links.size(); ++i) {
-    int cube_shape = app.register_cube_shape(0.1f, 0.1f, 0.1f);
+    int cube_shape = app.register_cube_shape(box_size, box_size, box_size);
     int cube_id = app.m_renderer->register_graphics_instance(cube_shape);
     mb.links[i].visual_ids = {cube_id};
     mb.links[i].X_visuals = {Transform(mb.links[i].rbi.com)};
   }
 
-  for (const auto &state : states) {
+  for (std::size_t t = 0; t < states.size(); t += skip_steps) {
+    const auto &state = states[t];
     app.m_renderer->update_camera(2);
     DrawGridData data;
     data.upAxis = 2;
@@ -89,7 +95,7 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
       parent_pos = link_pos;
       for (std::size_t j = 0; j < link.visual_ids.size(); ++j) {
         Transform X_visual = link.X_world * link.X_visuals[j];
-        Algebra::print("X_visual", X_visual);
+        // Algebra::print("X_visual", X_visual);
         // sync transform
         TinyVector3f geom_pos(static_cast<float>(X_visual.translation[0]),
                               static_cast<float>(X_visual.translation[1]),
@@ -161,43 +167,49 @@ int main(int argc, char **argv) {
     using Matrix3 = Algebra::Matrix3;
     using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
 
-    // Set NaN trap
-    // feenableexcept(FE_INVALID | FE_OVERFLOW);
+    UrdfCache<Algebra> cache;
+    World<Algebra> world;
 
-    // Tf tf;
-    // tf.set_identity();
-    // std::cout << "tf: " << tf << std::endl;
+    std::string urdf_filename;
+    TinyFileUtils::find_file("swimmer/swimmer05/swimmer05.urdf", urdf_filename);
+    MultiBody<Algebra> *mb = cache.construct(urdf_filename, world);
+    // mb->base_rbi = RigidBodyInertia(0.);
+    for (std::size_t j = 2; j < mb->links.size(); ++j) {
+      mb->links[j].rbi = RigidBodyInertia(0.5);
+    }
 
-    // Algebra::Vector3 vec(1., 2, 3);
-    // std::cout << "VCM: " << Algebra::cross_matrix(vec) << "\n";
+    Vector3 gravity(0., 0., -9.81);
+    // mb.forward_dynamics(gravity);
 
-    // std::cout << "rot-x: " << Algebra::rotation_x_matrix(0.3) << std::endl;
+    std::vector<typename Algebra::VectorX> traj;
 
-    // RigidBodyInertia rbi;
-    // std::cout << "rbi.inertia: " << rbi.inertia << std::endl;
+    double dt = 0.001;
+    for (int i = 0; i < 10000; ++i) {
+      traj.push_back(mb->q);
+      mb->integrate(dt);
+      for (Algebra::Index j = 3; j < mb->dof_actuated(); ++j) {
+        mb->tau[j] = Algebra::sin(i * dt + j * 1.58) * 0.5;
+      }
+      mb->forward_dynamics(gravity);
+      // mb->print_state();
+    }
 
-    // Algebra::Matrix6 mat6(0.);
-    // Algebra::assign_block(mat6, Algebra::Matrix3(3.14), 0, 2);
-    // std::cout << "mat6: " << mat6 << std::endl;
+    // plot_trajectory<Algebra>(traj);
+    visualize_trajectory<Algebra>(traj, *mb, dt);
+  }
 
-    // double angle = M_PI_2;
-    // std::cout << "rotx(0):\n"
-    //           << Algebra::rotation_x_matrix(angle) << std::endl;
+  return 0;
 
-    // ArticulatedBodyInertia<Algebra> abi;
-    // abi.I = Matrix3(1.);
-    // abi.H = Matrix3(2.);
-    // abi.M = Matrix3(3.);
-    // std::cout << "abi:\n" << abi.matrix() << std::endl;
-    // ArticulatedBodyInertia<Algebra> abi_sum = abi + abi.matrix();
-    // std::cout << "abi+abi:\n" << abi_sum.matrix() << std::endl;
-    // ArticulatedBodyInertia<Algebra> abi_sub = abi - abi.matrix();
-    // std::cout << "abi-abi:\n" << abi_sub.matrix() << std::endl;
-
-    //   return 0;
+  {
+    using Algebra = TinyAlgebra<double, DoubleUtils>;
+    // using Algebra = EnokiAlgebra;
+    using Tf = Transform<Algebra>;
+    using Vector3 = Algebra::Vector3;
+    using VectorX = typename Algebra::VectorX;
+    using Matrix3 = Algebra::Matrix3;
+    using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
 
     MultiBody<Algebra> mb;
-
     double mass = 1.;
     Vector3 com(0., 0., 1.);
     Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));

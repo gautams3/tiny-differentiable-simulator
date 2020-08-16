@@ -16,183 +16,199 @@
 
 #pragma once
 
-#include "pybullet_urdf_import.h"
-#include "tiny_actuator.h"
-#include "tiny_double_utils.h"
+// #include "pybullet_urdf_import.h"
+// #include "tiny_actuator.h"
+// #include "tiny_double_utils.h"
+#include "multi_body.hpp"
+#include "world.hpp"
 #include "tiny_urdf_parser.h"
-#include "tiny_urdf_to_multi_body.h"
+#include "urdf/tiny_urdf_to_multi_body.h"
 
 template <typename Algebra>
-struct TinyUrdfCache {
+struct UrdfCache {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
-  typedef ::TinyUrdfStructures<Algebra> UrdfStructures;
-  typedef ::PyBulletUrdfImport<Algebra> UrdfImport;
-  typedef b3RobotSimulatorLoadUrdfFileArgs UrdfFileArgs;
+  typedef ::UrdfStructures<Algebra> UrdfStructures;
+  // typedef ::PyBulletUrdfImport<Algebra> UrdfImport;
+  // typedef b3RobotSimulatorLoadUrdfFileArgs UrdfFileArgs;
 
   std::map<std::string, UrdfStructures> data;
 
-  template <typename VisualizerAPI>
-  const UrdfStructures& retrieve(const std::string& urdf_filename,
-                                 VisualizerAPI* sim, VisualizerAPI* vis,
-                                 UrdfFileArgs args = UrdfFileArgs(),
-                                 bool ignore_cache = false) {
-    if (ignore_cache || data.find(urdf_filename) == data.end()) {
-      printf("Loading URDF \"%s\".\n", urdf_filename.c_str());
-      int robotId = sim->loadURDF(urdf_filename, args);
-      if (robotId < 0) {
-        std::cerr << "Error: Could not load URDF file \"" << urdf_filename
-                  << "\".\n";
-        exit(1);
-      }
-      data[urdf_filename] = UrdfStructures();
-      UrdfImport::extract_urdf_structs(data[urdf_filename], robotId, *sim,
-                                       *vis);
-      sim->removeBody(robotId);
-    }
-    return data[urdf_filename];
-  }
+  // template <typename VisualizerAPI>
+  // const UrdfStructures& retrieve(const std::string& urdf_filename,
+  //                                VisualizerAPI* sim, VisualizerAPI* vis,
+  //                                UrdfFileArgs args = UrdfFileArgs(),
+  //                                bool ignore_cache = false) {
+  //   if (ignore_cache || data.find(urdf_filename) == data.end()) {
+  //     printf("Loading URDF \"%s\".\n", urdf_filename.c_str());
+  //     int robotId = sim->loadURDF(urdf_filename, args);
+  //     if (robotId < 0) {
+  //       std::cerr << "Error: Could not load URDF file \"" << urdf_filename
+  //                 << "\".\n";
+  //       exit(1);
+  //     }
+  //     data[urdf_filename] = UrdfStructures();
+  //     UrdfImport::extract_urdf_structs(data[urdf_filename], robotId, *sim,
+  //                                      *vis);
+  //     sim->removeBody(robotId);
+  //   }
+  //   return data[urdf_filename];
+  // }
 
   const UrdfStructures& retrieve(const std::string& urdf_filename,
                                  bool ignore_cache = false) {
     if (ignore_cache || data.find(urdf_filename) == data.end()) {
       printf("Loading URDF \"%s\".\n", urdf_filename.c_str());
-      TinyUrdfParser<Algebra> parser;
+      UrdfParser<Algebra> parser;
       data[urdf_filename] = parser.load_urdf(urdf_filename);
     }
     return data[urdf_filename];
   }
 
-  template <typename VisualizerAPI>
-  TinyMultiBody<Algebra>* construct(const std::string& urdf_filename,
-                                          TinyWorld<Algebra>& world,
-                                          VisualizerAPI* sim,
-                                          VisualizerAPI* vis,
-                                          bool ignore_cache = false,
-                                          bool is_floating = false) {
-    b3RobotSimulatorLoadUrdfFileArgs args;
-    args.m_flags |= URDF_MERGE_FIXED_LINKS;
-    TinyMultiBody<Algebra>* mb = world.create_multi_body();
-    const auto& urdf_data =
-        retrieve(urdf_filename, sim, vis, args, ignore_cache);
-    TinyUrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data, world,
-                                                              *mb);
-    mb->m_isFloating = is_floating;
+  MultiBody<Algebra>* construct(const std::string& urdf_filename,
+                                World<Algebra>& world,
+                                bool ignore_cache = false,
+                                bool is_floating = false) {
+    MultiBody<Algebra>* mb = world.create_multi_body();
+    const auto& urdf_data = retrieve(urdf_filename, ignore_cache);
+    UrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data, world, *mb);
+    mb->is_floating = is_floating;
     mb->initialize();
     return mb;
   }
+
+  // template <typename VisualizerAPI>
+  // MultiBody<Algebra>* construct(const std::string& urdf_filename,
+  //                                         World<Algebra>& world,
+  //                                         VisualizerAPI* sim,
+  //                                         VisualizerAPI* vis,
+  //                                         bool ignore_cache = false,
+  //                                         bool is_floating = false) {
+  //   b3RobotSimulatorLoadUrdfFileArgs args;
+  //   args.m_flags |= URDF_MERGE_FIXED_LINKS;
+  //   MultiBody<Algebra>* mb = world.create_multi_body();
+  //   const auto& urdf_data =
+  //       retrieve(urdf_filename, sim, vis, args, ignore_cache);
+  //   UrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data, world,
+  //                                                             *mb);
+  //   mb->isFloating = is_floating;
+  //   mb->initialize();
+  //   return mb;
+  // }
 };
 
 /**
- * Provides the system construction function to TinySystem and derived classes.
+ * Provides the system construction function to System and derived classes.
  */
-template <template <typename> typename Actuator = TinyActuator>
-struct TinySystemConstructor {
-  std::string m_system_urdf_filename;
-  // if empty, no ground plane is used
-  std::string m_plane_urdf_filename{""};
+// template <template <typename> typename Actuator = Actuator>
+// struct SystemConstructor {
+//   std::string system_urdf_filename;
+//   // if empty, no ground plane is used
+//   std::string plane_urdf_filename{""};
 
-  bool m_is_floating{false};
+//   bool is_floating{false};
 
-  // settings for stiffness and damping of all joints in the system
-  double m_joint_stiffness{0};
-  double m_joint_damping{0};
+//   // settings for stiffness and damping of all joints in the system
+//   double joint_stiffness{0};
+//   double joint_damping{0};
 
-  std::vector<int> m_control_indices;
+//   std::vector<int> control_indices;
 
-  Actuator<Algebra>* m_actuator{nullptr};
+//   // Actuator<Algebra>* actuator{nullptr};
 
-  explicit TinySystemConstructor(const std::string& system_urdf_filename,
-                                 const std::string& plane_urdf_filename = "")
-      : m_system_urdf_filename(system_urdf_filename),
-        m_plane_urdf_filename(plane_urdf_filename) {}
+//   explicit SystemConstructor(const std::string& system_urdf_filename,
+//                                  const std::string& plane_urdf_filename = "")
+//       : system_urdf_filename(system_urdf_filename),
+//         plane_urdf_filename(plane_urdf_filename) {}
 
-  TinySystemConstructor(const std::string& system_urdf_filename,
-                        const std::string& plane_urdf_filename,
-                        bool is_floating, double joint_stiffness,
-                        double joint_damping)
-      : m_system_urdf_filename(system_urdf_filename),
-        m_plane_urdf_filename(plane_urdf_filename),
-        m_is_floating(is_floating),
-        m_joint_stiffness(joint_stiffness),
-        m_joint_damping(joint_damping) {}
+//   SystemConstructor(const std::string& system_urdf_filename,
+//                         const std::string& plane_urdf_filename,
+//                         bool is_floating, double joint_stiffness,
+//                         double joint_damping)
+//       : system_urdf_filename(system_urdf_filename),
+//         plane_urdf_filename(plane_urdf_filename),
+//         is_floating(is_floating),
+//         joint_stiffness(joint_stiffness),
+//         joint_damping(joint_damping) {}
 
-  template <typename VisualizerAPI, typename Algebra>
-  void operator()(VisualizerAPI* sim, VisualizerAPI* vis,
-                  TinyWorld<Algebra>& world,
-                  TinyMultiBody<Algebra>** system,
-                  bool clear_cache = false) const {
-    static TinyUrdfCache<Algebra> cache;
-    if (clear_cache) {
-      cache.data.clear();
-    }
+//   // template <typename VisualizerAPI, typename Algebra>
+//   // void operator()(VisualizerAPI* sim, VisualizerAPI* vis,
+//   //                 World<Algebra>& world,
+//   //                 MultiBody<Algebra>** system,
+//   //                 bool clear_cache = false) const {
+//   //   static UrdfCache<Algebra> cache;
+//   //   if (clear_cache) {
+//   //     cache.data.clear();
+//   //   }
 
-    b3RobotSimulatorLoadUrdfFileArgs args;
-    args.m_flags |= URDF_MERGE_FIXED_LINKS;
-    if (!m_plane_urdf_filename.empty()) {
-      TinyMultiBody<Algebra>* mb = world.create_multi_body();
-      const auto& urdf_data =
-          cache.retrieve(m_plane_urdf_filename, sim, vis, args);
-      TinyUrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data,
-                                                                world, *mb);
-    }
+//   //   b3RobotSimulatorLoadUrdfFileArgs args;
+//   //   args.m_flags |= URDF_MERGE_FIXED_LINKS;
+//   //   if (!m_plane_urdf_filename.empty()) {
+//   //     MultiBody<Algebra>* mb = world.create_multi_body();
+//   //     const auto& urdf_data =
+//   //         cache.retrieve(plane_urdf_filename, sim, vis, args);
+//   //     UrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data,
+//   //                                                               world,
+//   *mb);
+//   //   }
 
-    {
-      TinyMultiBody<Algebra>* mb = world.create_multi_body();
-      const auto& urdf_data =
-          cache.retrieve(m_system_urdf_filename, sim, vis, args);
-      TinyUrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data,
-                                                                world, *mb);
-      mb->m_isFloating = m_is_floating;
-      if (!m_control_indices.empty()) {
-        mb->m_control_indices = m_control_indices;
-      }
-      mb->initialize();
-      if (m_actuator) {
-        mb->m_actuator = new Actuator<Algebra>(*m_actuator);
-      }
-      for (auto& link : mb->m_links) {
-        link.m_stiffness = Utils::scalar_from_double(m_joint_stiffness);
-        link.m_damping = Utils::scalar_from_double(m_joint_damping);
-      }
-      *system = mb;
-    }
-  }
+//   //   {
+//   //     MultiBody<Algebra>* mb = world.create_multi_body();
+//   //     const auto& urdf_data =
+//   //         cache.retrieve(system_urdf_filename, sim, vis, args);
+//   //     UrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data,
+//   //                                                               world,
+//   *mb);
+//   //     mb->isFloating = is_floating;
+//   //     if (!m_control_indices.empty()) {
+//   //       mb->control_indices = control_indices;
+//   //     }
+//   //     mb->initialize();
+//   //     if (actuator) {
+//   //       mb->actuator = new Actuator<Algebra>(*m_actuator);
+//   //     }
+//   //     for (auto& link : mb->links) {
+//   //       link.m_stiffness = Utils::scalar_from_double(joint_stiffness);
+//   //       link.m_damping = Utils::scalar_from_double(joint_damping);
+//   //     }
+//   //     *system = mb;
+//   //   }
+//   // }
 
-  template <typename Algebra>
-  void operator()(TinyWorld<Algebra>& world,
-                  TinyMultiBody<Algebra>** system,
-                  bool clear_cache = false) const {
-    thread_local static TinyUrdfCache<Algebra> cache;
-    if (clear_cache) {
-      cache.data.clear();
-    }
+//   template <typename Algebra>
+//   void operator()(World<Algebra>& world,
+//                   MultiBody<Algebra>** system,
+//                   bool clear_cache = false) const {
+//     thread_local static UrdfCache<Algebra> cache;
+//     if (clear_cache) {
+//       cache.data.clear();
+//     }
 
-    if (!m_plane_urdf_filename.empty()) {
-      TinyMultiBody<Algebra>* mb = world.create_multi_body();
-      const auto& urdf_data = cache.retrieve(m_plane_urdf_filename);
-      TinyUrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data,
-                                                                world, *mb);
-    }
+//     if (!m_plane_urdf_filename.empty()) {
+//       MultiBody<Algebra>* mb = world.create_multi_body();
+//       const auto& urdf_data = cache.retrieve(plane_urdf_filename);
+//       UrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data,
+//                                                                 world, *mb);
+//     }
 
-    {
-      TinyMultiBody<Algebra>* mb = world.create_multi_body();
-      const auto& urdf_data = cache.retrieve(m_system_urdf_filename);
-      TinyUrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data,
-                                                                world, *mb);
-      mb->m_isFloating = m_is_floating;
-      if (!m_control_indices.empty()) {
-        mb->m_control_indices = m_control_indices;
-      }
-      mb->initialize();
-      if (m_actuator) {
-        mb->m_actuator = new Actuator<Algebra>(*m_actuator);
-      }
-      for (auto& link : mb->m_links) {
-        link.m_stiffness = Utils::scalar_from_double(m_joint_stiffness);
-        link.m_damping = Utils::scalar_from_double(m_joint_damping);
-      }
-      *system = mb;
-    }
-  }
-};
+//     {
+//       MultiBody<Algebra>* mb = world.create_multi_body();
+//       const auto& urdf_data = cache.retrieve(system_urdf_filename);
+//       UrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data,
+//                                                                 world, *mb);
+//       mb->isFloating = is_floating;
+//       if (!m_control_indices.empty()) {
+//         mb->control_indices = control_indices;
+//       }
+//       mb->initialize();
+//       if (actuator) {
+//         mb->actuator = new Actuator<Algebra>(*m_actuator);
+//       }
+//       for (auto& link : mb->links) {
+//         link.m_stiffness = Utils::scalar_from_double(joint_stiffness);
+//         link.m_damping = Utils::scalar_from_double(joint_damping);
+//       }
+//       *system = mb;
+//     }
+//   }
+// };

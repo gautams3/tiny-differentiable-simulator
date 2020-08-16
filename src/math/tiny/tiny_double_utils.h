@@ -63,8 +63,8 @@ struct DoubleUtils {
 
   static double convert(int value) { return double(value); }
 
-  template <class T>
-  static double fraction(T, T) = delete;  // C++11
+  // template <class T>
+  // static double fraction(T, T) = delete;  // C++11
 
   static double fraction(int num, int denom) {
     return double(num) / double(denom);

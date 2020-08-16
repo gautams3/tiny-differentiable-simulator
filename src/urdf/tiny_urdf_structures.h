@@ -22,14 +22,14 @@
 #include <string>
 #include <vector>
 
-#include "../geometry.h"  // for TinyGeometryTypes
+#include "../geometry.hpp"  // for GeometryTypes
 
 template <typename Algebra>
-struct TinyUrdfInertial {
+struct UrdfInertial {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  TinyUrdfInertial()
+  UrdfInertial()
       : mass(Algebra::zero()),
         inertia_xxyyzz(Vector3::zero()),
         origin_rpy(Vector3::zero()),
@@ -41,10 +41,10 @@ struct TinyUrdfInertial {
 };
 
 template <typename Algebra>
-struct TinyUrdfContact {
+struct UrdfContact {
   using Scalar = typename Algebra::Scalar;
 
-  TinyUrdfContact()
+  UrdfContact()
       : lateral_friction(Algebra::fraction(1, 2)),
         restitution(Algebra::fraction(0, 1)),
         stiffness(Algebra::fraction(1, 1)),
@@ -57,7 +57,7 @@ struct TinyUrdfContact {
 };
 
 template <typename Algebra>
-struct TinyVisualMaterial {
+struct VisualMaterial {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
@@ -66,83 +66,82 @@ struct TinyVisualMaterial {
 };
 
 template <typename Algebra>
-struct TinyUrdfCollisionSphere {
+struct UrdfCollisionSphere {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  TinyUrdfCollisionSphere() : m_radius(Algebra::one()) {}
-  Scalar m_radius;
+  UrdfCollisionSphere() : radius(Algebra::one()) {}
+  Scalar radius;
 };
 
 template <typename Algebra>
-struct TinyUrdfCollisionPlane {
+struct UrdfCollisionPlane {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  TinyUrdfCollisionPlane()
-      : m_normal(Vector3(Algebra::zero(), Algebra::zero(), Algebra::one())),
-        m_constant(Algebra::zero()) {}
-  Vector3 m_normal;
-  Scalar m_constant;
+  UrdfCollisionPlane()
+      : normal(Vector3(Algebra::zero(), Algebra::zero(), Algebra::one())),
+        constant(Algebra::zero()) {}
+  Vector3 normal;
+  Scalar constant;
 };
 
 template <typename Algebra>
-struct TinyUrdfCollisionCapsule {
+struct UrdfCollisionCapsule {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  TinyUrdfCollisionCapsule()
-      : m_radius(Algebra::one()), m_length(Algebra::one()) {}
-  Scalar m_radius;
-  Scalar m_length;
+  UrdfCollisionCapsule() : radius(Algebra::one()), length(Algebra::one()) {}
+  Scalar radius;
+  Scalar length;
 };
 
 template <typename Algebra>
-struct TinyUrdfCollisionBox {
+struct UrdfCollisionBox {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  TinyUrdfCollisionBox()
-      : m_extents(Vector3(Algebra::one(), Algebra::one(), Algebra::one())) {}
-  Vector3 m_extents;
+  UrdfCollisionBox()
+      : extents(Vector3(Algebra::one(), Algebra::one(), Algebra::one())) {}
+  Vector3 extents;
 };
 
 template <typename Algebra>
-struct TinyUrdfCollisionMesh {
+struct UrdfCollisionMesh {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  TinyUrdfCollisionMesh()
-      : m_scale(Vector3(Algebra::one(), Algebra::one(), Algebra::one())) {}
-  std::string m_file_name;
-  Vector3 m_scale;
+  UrdfCollisionMesh()
+      : scale(Vector3(Algebra::one(), Algebra::one(), Algebra::one())) {}
+  std::string file_name;
+  Vector3 scale;
 };
 
 template <typename Algebra>
-struct TinyUrdfGeometry {
+struct UrdfGeometry {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  TinyUrdfGeometry() : geom_type(TINY_MAX_GEOM_TYPE) {}
+  UrdfGeometry() : geom_type(TINY_MAX_GEOM_TYPE) {}
 
-  // pybind11 doesn't like enum TinyGeometryTypes
-  int geom_type;  // see TinyGeometryTypes in tiny_geometry.h
+  // pybind11 doesn't like enum GeometryTypes
+  int geom_type;  // see GeometryTypes in tiny_geometry.h
 
-  TinyUrdfCollisionSphere<Algebra> m_sphere;
-  TinyUrdfCollisionCapsule<Algebra> m_capsule;
-  TinyUrdfCollisionBox<Algebra> m_box;
-  TinyUrdfCollisionMesh<Algebra> m_mesh;
-  TinyUrdfCollisionPlane<Algebra> m_plane;
+  UrdfCollisionSphere<Algebra> sphere;
+  UrdfCollisionCapsule<Algebra> capsule;
+  UrdfCollisionBox<Algebra> box;
+  UrdfCollisionMesh<Algebra> mesh;
+  UrdfCollisionPlane<Algebra> plane;
 };
 
 template <typename Algebra>
-struct TinyUrdfVisual {
+struct UrdfVisual {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::TinyUrdfGeometry<Algebra> TinyUrdfGeometry;
-  typedef ::TinyVisualMaterial<Algebra> TinyVisualMaterial;
-  TinyUrdfVisual()
+  typedef ::UrdfGeometry<Algebra> UrdfGeometry;
+  typedef ::VisualMaterial<Algebra> VisualMaterial;
+  UrdfVisual()
       : origin_xyz(Vector3::zero()),
         origin_rpy(Vector3::zero()),
         has_local_material(false),
@@ -152,9 +151,9 @@ struct TinyUrdfVisual {
   {}
   Vector3 origin_rpy;
   Vector3 origin_xyz;
-  TinyUrdfGeometry geometry;
+  UrdfGeometry geometry;
   std::string material_name;
-  TinyVisualMaterial m_material;
+  VisualMaterial material;
   std::string visual_name;
   bool has_local_material;
   int sync_visual_body_uid1;
@@ -162,13 +161,13 @@ struct TinyUrdfVisual {
 };
 
 template <typename Algebra>
-struct TinyUrdfCollision {
+struct UrdfCollision {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::TinyUrdfGeometry<Algebra> TinyUrdfGeometry;
+  typedef ::UrdfGeometry<Algebra> UrdfGeometry;
 
-  TinyUrdfCollision()
+  UrdfCollision()
       : origin_xyz(Vector3::zero()),
         origin_rpy(Vector3::zero()),
         collision_group(0),
@@ -181,36 +180,36 @@ struct TinyUrdfCollision {
   int collision_group;
   int collision_mask;
   int flags;
-  TinyUrdfGeometry geometry;
+  UrdfGeometry geometry;
 };
 
 template <typename Algebra>
-struct TinyUrdfLink {
+struct UrdfLink {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::TinyUrdfCollision<Algebra> TinyUrdfCollision;
-  typedef ::TinyUrdfVisual<Algebra> TinyUrdfVisual;
-  typedef ::TinyUrdfContact<Algebra> TinyUrdfContact;
+  typedef ::UrdfCollision<Algebra> UrdfCollision;
+  typedef ::UrdfVisual<Algebra> UrdfVisual;
+  typedef ::UrdfContact<Algebra> UrdfContact;
 
-  TinyUrdfLink() : m_parent_index(-2) {}
+  UrdfLink() : parent_index(-2) {}
   std::string link_name;
-  TinyUrdfInertial<Algebra> urdf_inertial;
-  std::vector<TinyUrdfVisual> urdf_visual_shapes;
-  std::vector<TinyUrdfCollision> urdf_collision_shapes;
+  UrdfInertial<Algebra> urdf_inertial;
+  std::vector<UrdfVisual> urdf_visual_shapes;
+  std::vector<UrdfCollision> urdf_collision_shapes;
   std::vector<int> child_link_indices;
-  TinyUrdfContact contact_info;
-  int m_parent_index;
+  UrdfContact contact_info;
+  int parent_index;
 };
 
 template <typename Algebra>
-struct TinyUrdfJoint {
+struct UrdfJoint {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::TinyUrdfLink<Algebra> TinyUrdfLink;
+  typedef ::UrdfLink<Algebra> UrdfLink;
 
-  TinyUrdfJoint()
+  UrdfJoint()
       : joint_type(JOINT_INVALID),
         joint_lower_limit(Algebra::one()),
         joint_upper_limit(Algebra::zero()),
@@ -221,7 +220,7 @@ struct TinyUrdfJoint {
         joint_axis_xyz(
             Vector3(Algebra::zero(), Algebra::zero(), Algebra::one())) {}
   std::string joint_name;
-  // pybind11 doesn't like enum TinyJointType
+  // pybind11 doesn't like enum JointType
   int joint_type;
   Scalar joint_lower_limit;
   Scalar joint_upper_limit;
@@ -232,20 +231,20 @@ struct TinyUrdfJoint {
   Vector3 joint_axis_xyz;
 };
 
-enum TinyConversionReturnCode {
+enum ConversionReturnCode {
   kCONVERSION_OK = 1,
   kCONVERSION_JOINT_FAILED,
 };
 
 template <typename Algebra>
-struct TinyUrdfStructures {
+struct UrdfStructures {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  std::string m_robot_name;
-  std::vector<TinyUrdfLink<Algebra> > m_base_links;
-  std::vector<TinyUrdfLink<Algebra> > m_links;
-  std::vector<TinyUrdfJoint<Algebra> > m_joints;
-  std::map<std::string, int> m_name_to_link_index;
-  std::map<std::string, TinyVisualMaterial<Algebra> > m_materials;
+  std::string robot_name;
+  std::vector<UrdfLink<Algebra> > base_links;
+  std::vector<UrdfLink<Algebra> > links;
+  std::vector<UrdfJoint<Algebra> > joints;
+  std::map<std::string, int> name_to_link_index;
+  std::map<std::string, VisualMaterial<Algebra> > materials;
 };

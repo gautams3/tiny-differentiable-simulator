@@ -222,6 +222,12 @@ struct TinyAlgebra {
     return m;
   }
 
+  TINY_INLINE static Matrix3 rotation_zyx_matrix(const Scalar &r, const Scalar &p, const Scalar &y) {
+    Matrix3 m;
+    m.setEulerZYX(r, p, y);
+    return m;
+  }
+
   TINY_INLINE static Vector3 rotate(const Quaternion &q, const Vector3 &v) {
     return q.rotate(v);
   }
@@ -272,6 +278,10 @@ struct TinyAlgebra {
   //                                          const SpatialVector &b) {
   //   return Matrix6::vTimesvTranspose(a, b);
   // }
+
+  TINY_INLINE static Scalar sin(const Scalar& s) {
+    return TinyConstants::sin1(s);
+  }
 
   TinyAlgebra() = delete;
 };

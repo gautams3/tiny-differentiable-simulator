@@ -30,15 +30,16 @@
 #include <vector>
 
 #include "tiny_urdf_structures.h"
+#include "multi_body.hpp"
 
-struct TinyLogger {
-  virtual ~TinyLogger() {}
+struct Logger {
+  virtual ~Logger() {}
   virtual void report_error(const std::string& txt) = 0;
   virtual void report_warning(const std::string& txt) = 0;
   virtual void print_message(const std::string& msg) = 0;
 };
 
-struct StdLogger : public TinyLogger {
+struct StdLogger : public Logger {
   virtual void report_error(const std::string& txt) {
     std::cout << std::string("Error:") << txt << std::endl;
   }
@@ -51,20 +52,20 @@ struct StdLogger : public TinyLogger {
 };
 
 template <typename Algebra>
-struct TinyUrdfParser {
+struct UrdfParser {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::TinyUrdfStructures<Algebra> TinyUrdfStructures;
-  typedef ::TinyUrdfLink<Algebra> TinyUrdfLink;
-  typedef ::TinyUrdfJoint<Algebra> TinyUrdfJoint;
-  typedef ::TinyUrdfInertial<Algebra> TinyUrdfInertial;
-  typedef ::TinyUrdfVisual<Algebra> TinyUrdfVisual;
-  typedef ::TinyUrdfCollision<Algebra> TinyUrdfCollision;
-  typedef ::TinyUrdfGeometry<Algebra> TinyUrdfGeometry;
+  typedef ::UrdfStructures<Algebra> UrdfStructures;
+  typedef ::UrdfLink<Algebra> UrdfLink;
+  typedef ::UrdfJoint<Algebra> UrdfJoint;
+  typedef ::UrdfInertial<Algebra> UrdfInertial;
+  typedef ::UrdfVisual<Algebra> UrdfVisual;
+  typedef ::UrdfCollision<Algebra> UrdfCollision;
+  typedef ::UrdfGeometry<Algebra> UrdfGeometry;
 
   static bool parse_vector3(Vector3& vec3, const std::string& vector_str,
-                            TinyLogger& logger) {
+                            Logger& logger) {
     vec3.set_zero();
     std::vector<Scalar> scalars;
     std::istringstream iss(vector_str);
@@ -86,7 +87,7 @@ struct TinyUrdfParser {
 
   static bool parse_transform(Vector3& xyz, Vector3& rpy,
                               const tinyxml2::XMLElement* xml,
-                              TinyLogger& logger) {
+                              Logger& logger) {
     xyz.set_zero();
     rpy.set_zero();
     bool result = true;
@@ -103,9 +104,9 @@ struct TinyUrdfParser {
     return result;
   }
 
-  static bool parse_inertia(TinyUrdfInertial& urdf_inertial,
+  static bool parse_inertia(UrdfInertial& urdf_inertial,
                             const tinyxml2::XMLElement* config,
-                            TinyLogger& logger) {
+                            Logger& logger) {
     urdf_inertial.origin_xyz.set_zero();
     urdf_inertial.origin_rpy.set_zero();
     urdf_inertial.mass = Algebra::zero();
@@ -139,11 +140,11 @@ struct TinyUrdfParser {
 
     if ((inertia_xml->Attribute("ixx") && inertia_xml->Attribute("iyy") &&
          inertia_xml->Attribute("izz"))) {
-      urdf_inertial.inertia_xxyyzz.m_x =
+      urdf_inertial.inertia_xxyyzz[0] =
           Algebra::scalar_from_string(inertia_xml->Attribute("ixx"));
-      urdf_inertial.inertia_xxyyzz.m_y =
+      urdf_inertial.inertia_xxyyzz[1] =
           Algebra::scalar_from_string(inertia_xml->Attribute("iyy"));
-      urdf_inertial.inertia_xxyyzz.m_z =
+      urdf_inertial.inertia_xxyyzz[2] =
           Algebra::scalar_from_string(inertia_xml->Attribute("izz"));
     } else {
       logger.report_error(
@@ -154,9 +155,9 @@ struct TinyUrdfParser {
     return true;
   }
 
-  static bool parse_geometry(TinyUrdfGeometry& geom,
+  static bool parse_geometry(UrdfGeometry& geom,
                              const tinyxml2::XMLElement* vis_xml,
-                             TinyLogger& logger) {
+                             Logger& logger) {
     if (vis_xml == 0) return false;
 
     const tinyxml2::XMLElement* shape = vis_xml->FirstChildElement();
@@ -174,7 +175,7 @@ struct TinyUrdfParser {
         logger.report_error("Sphere shape must have a radius attribute");
         return false;
       } else {
-        geom.m_sphere.m_radius =
+        geom.sphere.radius =
             Algebra::scalar_from_string(shape->Attribute("radius"));
       }
     } else if (type_name == "box") {
@@ -184,7 +185,7 @@ struct TinyUrdfParser {
         logger.report_error("box requires a size attribute");
         return false;
       } else {
-        parse_vector3(geom.m_box.m_extents, shape->Attribute("size"), logger);
+        parse_vector3(geom.box.extents, shape->Attribute("size"), logger);
       }
     } else if (type_name == "cylinder") {
       geom.geom_type = TINY_CAPSULE_TYPE;
@@ -193,9 +194,9 @@ struct TinyUrdfParser {
             "Cylinder shape must have both length and radius attributes");
         return false;
       }
-      geom.m_capsule.m_radius =
+      geom.capsule.radius =
           Algebra::scalar_from_string(shape->Attribute("radius"));
-      geom.m_capsule.m_length =
+      geom.capsule.length =
           Algebra::scalar_from_string(shape->Attribute("length"));
     } else if (type_name == "capsule") {
       geom.geom_type = TINY_CAPSULE_TYPE;
@@ -204,14 +205,14 @@ struct TinyUrdfParser {
             "Capsule shape must have both length and radius attributes");
         return false;
       }
-      geom.m_capsule.m_radius =
+      geom.capsule.radius =
           Algebra::scalar_from_string(shape->Attribute("radius"));
-      geom.m_capsule.m_length =
+      geom.capsule.length =
           Algebra::scalar_from_string(shape->Attribute("length"));
     } else if ((type_name == "mesh") || (type_name == "cdf")) {
       geom.geom_type = TINY_MESH_TYPE;
 
-      geom.m_mesh.m_scale.setValue(Algebra::one(), Algebra::one(),
+      geom.mesh.scale.setValue(Algebra::one(), Algebra::one(),
                                    Algebra::one());
       std::string fn;
 
@@ -220,7 +221,7 @@ struct TinyUrdfParser {
         fn = shape->Attribute("filename");
       }
       if (shape->Attribute("scale")) {
-        if (!parse_vector3(geom.m_mesh.m_scale, shape->Attribute("scale"),
+        if (!parse_vector3(geom.mesh.scale, shape->Attribute("scale"),
                            logger)) {
           logger.report_warning(
               "Scale should be a vector3, not single scalar. Workaround "
@@ -228,7 +229,7 @@ struct TinyUrdfParser {
           std::string scalar_str = shape->Attribute("scale");
           Scalar scale_factor =
               Algebra::scalar_from_string(scalar_str.c_str());
-          geom.m_mesh.m_scale.setValue(scale_factor, scale_factor,
+          geom.mesh.scale.setValue(scale_factor, scale_factor,
                                        scale_factor);
         }
       }
@@ -238,7 +239,7 @@ struct TinyUrdfParser {
         return false;
       }
 
-      geom.m_mesh.m_file_name = fn;
+      geom.mesh.file_name = fn;
     } else {
       if (type_name == "plane") {
         geom.geom_type = TINY_PLANE_TYPE;
@@ -247,7 +248,7 @@ struct TinyUrdfParser {
           logger.report_error("plane requires a normal attribute");
           return false;
         } else {
-          parse_vector3(geom.m_plane.m_normal, shape->Attribute("normal"),
+          parse_vector3(geom.plane.normal, shape->Attribute("normal"),
                         logger);
         }
       } else {
@@ -260,15 +261,15 @@ struct TinyUrdfParser {
     return true;
   }
 
-  static bool parse_material(TinyUrdfStructures& urdf_structures,
-                             TinyUrdfVisual& visual,
+  static bool parse_material(UrdfStructures& urdf_structures,
+                             UrdfVisual& visual,
                              const tinyxml2::XMLElement* vis_xml,
-                             TinyLogger& logger) {
+                             Logger& logger) {
     if (!vis_xml->Attribute("name")) {
       logger.report_error("Material must contain a name attribute");
       return false;
     }
-    TinyVisualMaterial<Algebra> material;
+    VisualMaterial<Algebra> material;
     std::string material_m_name = vis_xml->Attribute("name");
 
     // texture
@@ -293,13 +294,13 @@ struct TinyUrdfParser {
       }
     }
 
-    urdf_structures.m_materials[material_m_name] = material;
+    urdf_structures.materials[material_m_name] = material;
     return true;
   }
 
-  static bool parse_collision(TinyUrdfCollision& collision,
+  static bool parse_collision(UrdfCollision& collision,
                               const tinyxml2::XMLElement* config,
-                              TinyLogger& logger) {
+                              Logger& logger) {
     collision.origin_xyz.set_zero();
     collision.origin_rpy.set_zero();
 
@@ -319,14 +320,14 @@ struct TinyUrdfParser {
     {
       const char* group_char = config->Attribute("group");
       if (group_char) {
-        collision.collision_group = DoubleUtils::scalar_from_string(group_char);
+        collision.collision_group = Algebra::scalar_from_string(group_char);
       }
     }
 
     {
       const char* mask_char = config->Attribute("mask");
       if (mask_char) {
-        collision.collision_mask = DoubleUtils::scalar_from_string(mask_char);
+        collision.collision_mask = Algebra::scalar_from_string(mask_char);
       }
     }
 
@@ -340,10 +341,10 @@ struct TinyUrdfParser {
     return true;
   }
 
-  static bool parse_visual(TinyUrdfStructures& urdf_structures,
-                           TinyUrdfVisual& visual,
+  static bool parse_visual(UrdfStructures& urdf_structures,
+                           UrdfVisual& visual,
                            const tinyxml2::XMLElement* vis_xml,
-                           TinyLogger& logger) {
+                           Logger& logger) {
     visual.origin_xyz.set_zero();
     visual.origin_rpy.set_zero();
     // Origin
@@ -387,10 +388,10 @@ struct TinyUrdfParser {
     return true;
   }
 
-  static bool parse_link(TinyUrdfLink& link,
-                         TinyUrdfStructures& urdf_structures,
+  static bool parse_link(UrdfLink& link,
+                         UrdfStructures& urdf_structures,
                          const tinyxml2::XMLElement* config,
-                         TinyLogger& logger) {
+                         Logger& logger) {
     const char* linkName = config->Attribute("name");
     if (!linkName) {
       logger.report_error("Link with no name");
@@ -471,7 +472,7 @@ struct TinyUrdfParser {
     for (const tinyxml2::XMLElement* vis_xml =
              config->FirstChildElement("visual");
          vis_xml; vis_xml = vis_xml->NextSiblingElement("visual")) {
-      TinyUrdfVisual visual;
+      UrdfVisual visual;
 
       if (parse_visual(urdf_structures, visual, vis_xml, logger)) {
         link.urdf_visual_shapes.push_back(visual);
@@ -486,7 +487,7 @@ struct TinyUrdfParser {
     for (const tinyxml2::XMLElement* col_xml =
              config->FirstChildElement("collision");
          col_xml; col_xml = col_xml->NextSiblingElement("collision")) {
-      TinyUrdfCollision col;
+      UrdfCollision col;
 
       if (parse_collision(col, col_xml, logger)) {
         link.urdf_collision_shapes.push_back(col);
@@ -500,9 +501,9 @@ struct TinyUrdfParser {
     return true;
   }
 
-  static bool parse_joint(TinyUrdfStructures& urdf_structures,
-                          TinyUrdfJoint& joint, tinyxml2::XMLElement* config,
-                          TinyLogger& logger) {
+  static bool parse_joint(UrdfStructures& urdf_structures,
+                          UrdfJoint& joint, tinyxml2::XMLElement* config,
+                          Logger& logger) {
     // Get Joint Name
     const char* name = config->Attribute("name");
     if (!name) {
@@ -623,28 +624,28 @@ struct TinyUrdfParser {
 			if (!parseJointLimits(joint, limit_xml, logger))
 			{
 				logger.report_error("Could not parse limit element for joint:");
-				logger.report_error(joint.m_name.c_str());
+				logger.report_error(joint.name.c_str());
 				return false;
 			}
 		}
-		else if (joint.m_type == URDFRevoluteJoint)
+		else if (joint.type == URDFRevoluteJoint)
 		{
 			logger.report_error("Joint is of type REVOLUTE but it does not specify limits");
-			logger.report_error(joint.m_name.c_str());
+			logger.report_error(joint.name.c_str());
 			return false;
 		}
-		else if (joint.m_type == URDFPrismaticJoint)
+		else if (joint.type == URDFPrismaticJoint)
 		{
 			logger.report_error("Joint is of type PRISMATIC without limits");
-			logger.report_error(joint.m_name.c_str());
+			logger.report_error(joint.name.c_str());
 			return false;
 		}
 #endif
 
 #if 0
 		//todo
-		//joint.m_jointDamping = 0;
-		//joint.m_jointFriction = 0;
+		//joint.jointDamping = 0;
+		//joint.jointFriction = 0;
 
 		// Get Dynamics
 		XMLElement* prop_xml = config->FirstChildElement("dynamics");
@@ -654,14 +655,14 @@ struct TinyUrdfParser {
 			const char* damping_str = prop_xml->Attribute("damping");
 			if (damping_str)
 			{
-				joint.m_jointDamping = Algebra::scalar_from_string(damping_str);
+				joint.jointDamping = Algebra::scalar_from_string(damping_str);
 			}
 
 			// Get joint friction
 			const char* friction_str = prop_xml->Attribute("friction");
 			if (friction_str)
 			{
-				joint.m_jointFriction = Algebra::scalar_from_string(friction_str);
+				joint.jointFriction = Algebra::scalar_from_string(friction_str);
 			}
 
 			if (damping_str == NULL && friction_str == NULL)
@@ -677,7 +678,7 @@ struct TinyUrdfParser {
 
   static void assign_links(
       const std::string& link_name,
-      std::map<std::string, TinyUrdfJoint>& joints_by_name,
+      std::map<std::string, UrdfJoint>& joints_by_name,
       std::map<std::string, std::string>& link_to_joint_name,
       std::map<std::string, std::string>& joint_to_parent_name,
       std::map<std::string, int>& link_name_to_index, int level) {
@@ -689,7 +690,7 @@ struct TinyUrdfParser {
       // Check if value of this entry matches with given value
       if (it->second == link_name) {
         std::string joint_name = it->first;
-        TinyUrdfJoint joint = joints_by_name[joint_name];
+        UrdfJoint joint = joints_by_name[joint_name];
         int index = (int)link_name_to_index.size() -
                     1;  // compensate for parent link at -1
         link_name_to_index[joint.child_name] = index;
@@ -699,7 +700,7 @@ struct TinyUrdfParser {
     }
   }
 
-  TinyUrdfStructures load_urdf(const std::string& file_name) {
+  UrdfStructures load_urdf(const std::string& file_name) {
     std::ifstream ifs(file_name);
     std::string urdf_string;
 
@@ -713,14 +714,14 @@ struct TinyUrdfParser {
 
     StdLogger logger;
     int flags = 0;
-    TinyUrdfStructures urdf_structures;
+    UrdfStructures urdf_structures;
     load_urdf_from_string(urdf_string, flags, logger, urdf_structures);
     return urdf_structures;
   }
 
   static bool load_urdf_from_string(const std::string& urdf_text, int flags,
-                                    TinyLogger& logger,
-                                    TinyUrdfStructures& urdf_structures) {
+                                    Logger& logger,
+                                    UrdfStructures& urdf_structures) {
     tinyxml2::XMLDocument xml_doc;
     xml_doc.Parse(urdf_text.c_str());
     if (xml_doc.Error()) {
@@ -742,7 +743,7 @@ struct TinyUrdfParser {
       logger.report_error("Expected a name for robot");
       return false;
     }
-    urdf_structures.m_robot_name = name;
+    urdf_structures.robot_name = name;
 
 #if 0
 		// Get all Material elements
@@ -753,7 +754,7 @@ struct TinyUrdfParser {
 
 			parseMaterial(*material, material_xml, logger);
 
-			UrdfMaterial** mat = m_urdf2Model.m_materials.find(material->m_name.c_str());
+			UrdfMaterial** mat = m_urdf2Model.materials.find(material->m_name.c_str());
 			if (mat)
 			{
 				delete material;
@@ -765,16 +766,16 @@ struct TinyUrdfParser {
 			}
 		}
 #endif
-    std::map<std::string, TinyUrdfJoint> joints_by_name;
+    std::map<std::string, UrdfJoint> joints_by_name;
     std::map<std::string, std::string> link_to_joint_name;
     std::map<std::string, std::string> joint_to_parent_name;
-    std::vector<TinyUrdfJoint> tmp_joints;
+    std::vector<UrdfJoint> tmp_joints;
 
     // Get all Joint elements
     for (tinyxml2::XMLElement* joint_xml =
              robot_xml->FirstChildElement("joint");
          joint_xml; joint_xml = joint_xml->NextSiblingElement("joint")) {
-      TinyUrdfJoint joint;
+      UrdfJoint joint;
       if (parse_joint(urdf_structures, joint, joint_xml, logger)) {
         if (joint_to_parent_name.find(joint.joint_name) !=
             joint_to_parent_name.end()) {
@@ -797,7 +798,7 @@ struct TinyUrdfParser {
 
     for (tinyxml2::XMLElement* link_xml = robot_xml->FirstChildElement("link");
          link_xml; link_xml = link_xml->NextSiblingElement("link")) {
-      TinyUrdfLink link;
+      UrdfLink link;
 
       const char* name = link_xml->Attribute("name");
       if (!name) {
@@ -825,38 +826,38 @@ struct TinyUrdfParser {
     logger.print_message(std::string("base link=") + parent_links[0]);
     // now order joints and links
 
-    urdf_structures.m_name_to_link_index[parent_links[0]] = -1;
+    urdf_structures.name_to_link_index[parent_links[0]] = -1;
     int link_index = 0;
     // recursively assign links
 
     assign_links(parent_links[0], joints_by_name, link_to_joint_name,
-                 joint_to_parent_name, urdf_structures.m_name_to_link_index, 0);
+                 joint_to_parent_name, urdf_structures.name_to_link_index, 0);
 
-    if (urdf_structures.m_name_to_link_index.size() !=
+    if (urdf_structures.name_to_link_index.size() !=
         (link_to_joint_name.size() + 1)) {
       logger.report_error("Inconsistent joint/link connections");
       return false;
     }
 
-    urdf_structures.m_links.resize(link_to_joint_name.size());
+    urdf_structures.links.resize(link_to_joint_name.size());
 
     for (tinyxml2::XMLElement* link_xml = robot_xml->FirstChildElement("link");
          link_xml; link_xml = link_xml->NextSiblingElement("link")) {
-      TinyUrdfLink link;
+      UrdfLink link;
 
       if (parse_link(link, urdf_structures, link_xml, logger)) {
-        if (urdf_structures.m_name_to_link_index.find(link.link_name) ==
-            urdf_structures.m_name_to_link_index.end()) {
+        if (urdf_structures.name_to_link_index.find(link.link_name) ==
+            urdf_structures.name_to_link_index.end()) {
           logger.report_error("Link inconsistency.");
           logger.report_error(link.link_name);
           return false;
         }
 
-        link.m_parent_index = -2;  // no parent
-        int link_index = urdf_structures.m_name_to_link_index[link.link_name];
+        link.parent_index = -2;  // no parent
+        int link_index = urdf_structures.name_to_link_index[link.link_name];
         if (link_index >= 0) {
-          link.m_parent_index =
-              urdf_structures.m_name_to_link_index
+          link.parent_index =
+              urdf_structures.name_to_link_index
                   [joint_to_parent_name[link_to_joint_name[link.link_name]]];
         }
 
@@ -865,51 +866,51 @@ struct TinyUrdfParser {
 				for (int i = 0; i < link->m_visualArray.size(); i++)
 				{
 					UrdfVisual& vis = link->m_visualArray.at(i);
-					if (!vis.m_geometry.m_hasLocalMaterial && vis.m_materialName.c_str())
+					if (!vis.geometry.hasLocalMaterial && vis.materialName.c_str())
 					{
-						UrdfMaterial** mat = m_urdf2Model.m_materials.find(vis.m_materialName.c_str());
+						UrdfMaterial** mat = m_urdf2Model.materials.find(vis.materialName.c_str());
 						if (mat && *mat)
 						{
-							vis.m_geometry.m_localMaterial = **mat;
+							vis.geometry.localMaterial = **mat;
 						}
 						else
 						{
 							//logger.report_error("Cannot find material with name:");
-							//logger.report_error(vis.m_materialName);
+							//logger.report_error(vis.materialName);
 						}
 					}
 				}
 #endif
         // root/base or child link?
         if (link_index >= 0) {
-          urdf_structures.m_links[link_index] = link;
+          urdf_structures.links[link_index] = link;
         } else {
-          urdf_structures.m_base_links.push_back(link);
+          urdf_structures.base_links.push_back(link);
         }
       }
     }
 
-    urdf_structures.m_joints.resize(tmp_joints.size());
+    urdf_structures.joints.resize(tmp_joints.size());
     for (int i = 0; i < tmp_joints.size(); i++) {
-      const TinyUrdfJoint& joint = tmp_joints[i];
-      int link_index = urdf_structures.m_name_to_link_index[joint.child_name];
-      urdf_structures.m_joints[link_index] = tmp_joints[i];
+      const UrdfJoint& joint = tmp_joints[i];
+      int link_index = urdf_structures.name_to_link_index[joint.child_name];
+      urdf_structures.joints[link_index] = tmp_joints[i];
     }
 
 #if 0
 		if (flags & URDF_FORCE_FIXED_BASE)
 		{
 			
-			for (int i = 0; i < urdf_structures.m_base_links.size(); i++)
+			for (int i = 0; i < urdf_structures.base_links.size(); i++)
 			{
-				urdf_structures.m_base_links[i].
-				link->m_inertia.m_mass = 0.0;
-				link->m_inertia.m_ixx = 0.0;
-				link->m_inertia.m_ixy = 0.0;
-				link->m_inertia.m_ixz = 0.0;
-				link->m_inertia.m_iyy = 0.0;
-				link->m_inertia.m_iyz = 0.0;
-				link->m_inertia.m_izz = 0.0;
+				urdf_structures.base_links[i].
+				link->m_inertia.mass = 0.0;
+				link->m_inertia.ixx = 0.0;
+				link->m_inertia.ixy = 0.0;
+				link->m_inertia.ixz = 0.0;
+				link->m_inertia.iyy = 0.0;
+				link->m_inertia.iyz = 0.0;
+				link->m_inertia.izz = 0.0;
 			}
 		}
 #endif

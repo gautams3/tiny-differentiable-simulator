@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef TINY_GEOMETRY_H
-#define TINY_GEOMETRY_H
+#pragma once
 
 #include <vector>
 
-#include "tiny_pose.h"
+#include "math/pose.hpp"
 
-enum TinyGeometryTypes {
+enum GeometryTypes {
   TINY_SPHERE_TYPE = 0,
   TINY_PLANE_TYPE,
   TINY_CAPSULE_TYPE,
@@ -32,59 +31,57 @@ enum TinyGeometryTypes {
 };
 
 template <typename Algebra>
-class TinyGeometry {
+class Geometry {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  int m_type;
+  int type;
 
  public:
-  explicit TinyGeometry(int type) : m_type(type) {}
-  virtual ~TinyGeometry() {}
-  int get_type() const { return m_type; }
+  explicit Geometry(int type) : type(type) {}
+  virtual ~Geometry() = default;
+  int get_type() const { return type; }
 };
 
 template <typename Algebra>
-class TinySphere : public TinyGeometry<Algebra> {
+class Sphere : public Geometry<Algebra> {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  Scalar m_radius;
+  Scalar radius;
 
  public:
-  explicit TinySphere(Scalar radius)
-      : TinyGeometry<Algebra>(TINY_SPHERE_TYPE), m_radius(radius) {}
+  explicit Sphere(Scalar radius)
+      : Geometry<Algebra>(TINY_SPHERE_TYPE), radius(radius) {}
 
-  Scalar get_radius() const { return m_radius; }
+  Scalar get_radius() const { return radius; }
 
   Vector3 compute_local_inertia(Scalar mass) const {
-    Scalar elem = Algebra::fraction(4, 10) * mass * m_radius * m_radius;
+    Scalar elem = Algebra::fraction(4, 10) * mass * radius * radius;
     return Vector3(elem, elem, elem);
   }
 };
 
 // capsule aligned with the Z axis
 template <typename Algebra>
-class TinyCapsule : public TinyGeometry<Algebra> {
+class Capsule : public Geometry<Algebra> {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  Scalar m_radius;
-  Scalar m_length;
+  Scalar radius;
+  Scalar length;
 
  public:
-  explicit TinyCapsule(Scalar radius, Scalar length)
-      : TinyGeometry<Algebra>(TINY_CAPSULE_TYPE),
-        m_radius(radius),
-        m_length(length) {}
+  explicit Capsule(Scalar radius, Scalar length)
+      : Geometry<Algebra>(TINY_CAPSULE_TYPE), radius(radius), length(length) {}
 
-  Scalar get_radius() const { return m_radius; }
-  Scalar get_length() const { return m_length; }
+  Scalar get_radius() const { return radius; }
+  Scalar get_length() const { return length; }
 
   Vector3 compute_local_inertia(Scalar mass) const {
-    Scalar lx = Algebra::fraction(2, 1) * (m_radius);
-    Scalar ly = Algebra::fraction(2, 1) * (m_radius);
-    Scalar lz = m_length + Algebra::fraction(2, 1) * (m_radius);
+    Scalar lx = Algebra::fraction(2, 1) * (radius);
+    Scalar ly = Algebra::fraction(2, 1) * (radius);
+    Scalar lz = length + Algebra::fraction(2, 1) * (radius);
     Scalar x2 = lx * lx;
     Scalar y2 = ly * ly;
     Scalar z2 = lz * lz;
@@ -99,51 +96,50 @@ class TinyCapsule : public TinyGeometry<Algebra> {
 };
 
 template <typename Algebra>
-class TinyPlane : public TinyGeometry<Algebra> {
+class Plane : public Geometry<Algebra> {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  Vector3 m_normal;
-  Scalar m_constant;
+  Vector3 normal;
+  Scalar constant;
 
  public:
-  TinyPlane()
-      : TinyGeometry<Algebra>(TINY_PLANE_TYPE),
-        m_normal(Algebra::zero(), Algebra::zero(), Algebra::one()),
-        m_constant(Algebra::zero()) {}
+  Plane()
+      : Geometry<Algebra>(TINY_PLANE_TYPE),
+        normal(Algebra::zero(), Algebra::zero(), Algebra::one()),
+        constant(Algebra::zero()) {}
 
-  const Vector3& get_normal() const { return m_normal; }
-  Scalar get_constant() const { return m_constant; }
+  const Vector3& get_normal() const { return normal; }
+  Scalar get_constant() const { return constant; }
 };
 
 template <typename Algebra>
-struct TinyContactPoint {
+struct ContactPoint {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  Vector3 m_world_normal_on_b;
-  Vector3 m_world_point_on_a;
-  Vector3 m_world_point_on_b;
-  Scalar m_distance;
+  Vector3 world_normal_on_b;
+  Vector3 world_point_on_a;
+  Vector3 world_point_on_b;
+  Scalar distance;
 };
 
 template <typename Algebra>
-int contactSphereSphere(
-
-    using Scalar = typename Algebra::Scalar;
-    using Vector3 = typename Algebra::Vector3;
-
-    const TinyGeometry<Algebra>* geomA, const TinyPose<Algebra>& poseA,
-    const TinyGeometry<Algebra>* geomB, const TinyPose<Algebra>& poseB,
-    std::vector<TinyContactPoint<Algebra> >& contactsOut) {
+int contactSphereSphere(const Geometry<Algebra>* geomA,
+                        const Pose<Algebra>& poseA,
+                        const Geometry<Algebra>* geomB,
+                        const Pose<Algebra>& poseB,
+                        std::vector<ContactPoint<Algebra> >& contactsOut) {
+  using Scalar = typename Algebra::Scalar;
+  using Vector3 = typename Algebra::Vector3;
   Scalar CONTACT_EPSILON = Algebra::fraction(1, 100000);
 
-  typedef ::TinySphere<Algebra> TinySphere;
-  typedef ::TinyContactPoint<Algebra> TinyContactPoint;
+  typedef ::Sphere<Algebra> Sphere;
+  typedef ::ContactPoint<Algebra> ContactPoint;
   assert(geomA->get_type() == TINY_SPHERE_TYPE);
   assert(geomB->get_type() == TINY_SPHERE_TYPE);
-  TinySphere* sphereA = (TinySphere*)geomA;
-  TinySphere* sphereB = (TinySphere*)geomB;
+  Sphere* sphereA = (Sphere*)geomA;
+  Sphere* sphereB = (Sphere*)geomB;
 
   Vector3 diff = poseA.m_position - poseB.m_position;
   Scalar length = diff.length();
@@ -155,7 +151,7 @@ int contactSphereSphere(
     Vector3 point_a_world =
         poseA.m_position - sphereA->get_radius() * normal_on_b;
     Vector3 point_b_world = point_a_world - distance * normal_on_b;
-    TinyContactPoint pt;
+    ContactPoint pt;
     pt.m_world_normal_on_b = normal_on_b;
     pt.m_world_point_on_a = point_a_world;
     pt.m_world_point_on_b = point_b_world;
@@ -167,19 +163,20 @@ int contactSphereSphere(
 }
 
 template <typename Algebra>
-int contactPlaneSphere(
-    const TinyGeometry<Algebra>* geomA, const TinyPose<Algebra>& poseA,
-    const TinyGeometry<Algebra>* geomB, const TinyPose<Algebra>& poseB,
-    std::vector<TinyContactPoint<Algebra> >& contactsOut) {
+int contactPlaneSphere(const Geometry<Algebra>* geomA,
+                       const Pose<Algebra>& poseA,
+                       const Geometry<Algebra>* geomB,
+                       const Pose<Algebra>& poseB,
+                       std::vector<ContactPoint<Algebra> >& contactsOut) {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
-  typedef ::TinySphere<Algebra> TinySphere;
-  typedef ::TinyPlane<Algebra> TinyPlane;
-  typedef ::TinyContactPoint<Algebra> TinyContactPoint;
+  typedef ::Sphere<Algebra> Sphere;
+  typedef ::Plane<Algebra> Plane;
+  typedef ::ContactPoint<Algebra> ContactPoint;
   assert(geomA->get_type() == TINY_PLANE_TYPE);
   assert(geomB->get_type() == TINY_SPHERE_TYPE);
-  TinyPlane* planeA = (TinyPlane*)geomA;
-  TinySphere* sphereB = (TinySphere*)geomB;
+  Plane* planeA = (Plane*)geomA;
+  Sphere* sphereB = (Sphere*)geomB;
 
   Scalar t =
       -(poseB.m_position.dot(-planeA->get_normal()) + planeA->get_constant());
@@ -187,7 +184,7 @@ int contactPlaneSphere(
   Scalar distance = t - sphereB->get_radius();
   Vector3 pointBWorld =
       poseB.m_position - sphereB->get_radius() * planeA->get_normal();
-  TinyContactPoint pt;
+  ContactPoint pt;
   pt.m_world_normal_on_b = -planeA->get_normal();
   pt.m_world_point_on_a = pointAWorld;
   pt.m_world_point_on_b = pointBWorld;
@@ -197,31 +194,30 @@ int contactPlaneSphere(
 }
 
 template <typename Algebra>
-int contactPlaneCapsule(
-
-    using Scalar = typename Algebra::Scalar;
-    using Vector3 = typename Algebra::Vector3;
-
-    const TinyGeometry<Algebra>* geomA, const TinyPose<Algebra>& poseA,
-    const TinyGeometry<Algebra>* geomB, const TinyPose<Algebra>& poseB,
-    std::vector<TinyContactPoint<Algebra> >& contactsOut) {
-  typedef ::TinyPose<Algebra> TinyPose;
-  typedef ::TinyPlane<Algebra> TinyPlane;
-  typedef ::TinyCapsule<Algebra> TinyCapsule;
-  typedef ::TinyContactPoint<Algebra> TinyContactPoint;
-  typedef ::TinySphere<Algebra> TinySphere;
+int contactPlaneCapsule(const Geometry<Algebra>* geomA,
+                        const Pose<Algebra>& poseA,
+                        const Geometry<Algebra>* geomB,
+                        const Pose<Algebra>& poseB,
+                        std::vector<ContactPoint<Algebra> >& contactsOut) {
+  using Scalar = typename Algebra::Scalar;
+  using Vector3 = typename Algebra::Vector3;
+  typedef ::Pose<Algebra> Pose;
+  typedef ::Plane<Algebra> Plane;
+  typedef ::Capsule<Algebra> Capsule;
+  typedef ::ContactPoint<Algebra> ContactPoint;
+  typedef ::Sphere<Algebra> Sphere;
   assert(geomA->get_type() == TINY_PLANE_TYPE);
   assert(geomB->get_type() == TINY_CAPSULE_TYPE);
-  TinyCapsule* capsule = (TinyCapsule*)geomB;
+  Capsule* capsule = (Capsule*)geomB;
 
   // create twice a plane-sphere contact
-  TinySphere sphere(capsule->get_radius());
+  Sphere sphere(capsule->get_radius());
   // shift the sphere to each end-point
-  TinyPose offset;
+  Pose offset;
   offset.m_orientation.set_identity();
   offset.m_position.setValue(Algebra::zero(), Algebra::zero(),
                              Algebra::fraction(1, 2) * capsule->get_length());
-  TinyPose poseEndSphere = poseB * offset;
+  Pose poseEndSphere = poseB * offset;
   contactPlaneSphere<Algebra>(geomA, poseA, &sphere, poseEndSphere,
                               contactsOut);
   offset.m_position.setValue(Algebra::zero(), Algebra::zero(),
@@ -234,49 +230,47 @@ int contactPlaneCapsule(
 }
 
 template <typename Algebra>
-struct TinyCollisionDispatcher {
+struct CollisionDispatcher {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::TinyGeometry<Algebra> TinyGeometry;
-  typedef ::TinyPose<Algebra> TinyPose;
-  typedef ::TinyContactPoint<Algebra> TinyContactPoint;
+  typedef ::Geometry<Algebra> Geometry;
+  typedef ::Pose<Algebra> Pose;
+  typedef ::ContactPoint<Algebra> ContactPoint;
 
-  typedef int (*contact_func)(const TinyGeometry* geomA, const TinyPose& poseA,
-                              const TinyGeometry* geomB, const TinyPose& poseB,
-                              std::vector<TinyContactPoint>& contactsOut);
+  typedef int (*contact_func)(const Geometry* geomA, const Pose& poseA,
+                              const Geometry* geomB, const Pose& poseB,
+                              std::vector<ContactPoint>& contactsOut);
 
-  contact_func m_contactFuncs[TINY_MAX_GEOM_TYPE][TINY_MAX_GEOM_TYPE];
+  contact_func contactFuncs[TINY_MAX_GEOM_TYPE][TINY_MAX_GEOM_TYPE];
 
-  TinyCollisionDispatcher() {
+  CollisionDispatcher() {
     for (int i = 0; i < TINY_MAX_GEOM_TYPE; i++) {
       for (int j = 0; j < TINY_MAX_GEOM_TYPE; j++) {
-        m_contactFuncs[i][j] = 0;
+        contactFuncs[i][j] = 0;
       }
     }
-    m_contactFuncs[TINY_SPHERE_TYPE][TINY_SPHERE_TYPE] = contactSphereSphere;
-    m_contactFuncs[TINY_PLANE_TYPE][TINY_SPHERE_TYPE] = contactPlaneSphere;
-    m_contactFuncs[TINY_PLANE_TYPE][TINY_CAPSULE_TYPE] = contactPlaneCapsule;
+    contactFuncs[TINY_SPHERE_TYPE][TINY_SPHERE_TYPE] = contactSphereSphere;
+    contactFuncs[TINY_PLANE_TYPE][TINY_SPHERE_TYPE] = contactPlaneSphere;
+    contactFuncs[TINY_PLANE_TYPE][TINY_CAPSULE_TYPE] = contactPlaneCapsule;
   }
 
-  int computeContacts(const TinyGeometry* geomA, const TinyPose& poseA,
-                      const TinyGeometry* geomB, const TinyPose& poseB,
-                      std::vector<TinyContactPoint>& contactsOut) {
-    contact_func f = m_contactFuncs[geomA->get_type()][geomB->get_type()];
+  int computeContacts(const Geometry* geomA, const Pose& poseA,
+                      const Geometry* geomB, const Pose& poseB,
+                      std::vector<ContactPoint>& contactsOut) {
+    contact_func f = contactFuncs[geomA->get_type()][geomB->get_type()];
     if (f) {
       return f(geomA, poseA, geomB, poseB, contactsOut);
     }
     return 0;
   }
 
-  std::vector<TinyContactPoint> compute_contacts(const TinyGeometry* geomA,
-                                                 const TinyPose& poseA,
-                                                 const TinyGeometry* geomB,
-                                                 const TinyPose& poseB) {
-    std::vector<TinyContactPoint> pts;
+  std::vector<ContactPoint> compute_contacts(const Geometry* geomA,
+                                             const Pose& poseA,
+                                             const Geometry* geomB,
+                                             const Pose& poseB) {
+    std::vector<ContactPoint> pts;
     int num = computeContacts(geomA, poseA, geomB, poseB, pts);
     return pts;
   }
 };
-
-#endif  // TINY_GEOMETRY_H

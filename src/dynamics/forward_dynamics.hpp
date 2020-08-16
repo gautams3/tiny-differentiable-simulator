@@ -153,7 +153,9 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
         qdd[link.qd_index] = qdd_val;
       }
       link.a = link.a + link.S * qdd_val;
+#if DEBUG
       Algebra::print("a", link.a);
+#endif
     }
   }
   if (is_floating) {

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "enoki_algebra.hpp"
 #include "inertia.hpp"
 #include "spatial_vector.hpp"
 
@@ -16,6 +15,14 @@ struct Transform {
 
   Vector3 translation{Algebra::zero3()};
   Matrix3 rotation{Algebra::eye3()};
+
+  Transform() = default;
+  Transform(const Vector3 &translation) : translation(translation) {}
+  Transform(const Matrix3 &rotation) : rotation(rotation) {}
+  Transform(const Vector3 &translation, const Matrix3 &rotation)
+      : translation(translation), rotation(rotation) {}
+  Transform(const Scalar &trans_x, const Scalar &trans_y, const Scalar &trans_z)
+      : translation(trans_x, trans_y, trans_z) {}
 
   friend std::ostream &operator<<(std::ostream &os, const Transform &tf) {
     os << "[ translation: " << tf.translation << "  rotation: " << tf.rotation
@@ -47,13 +54,6 @@ struct Transform {
     // set diagonal entries to one, others to zero
     rotation = Algebra::eye3();
   }
-
-  Transform(const Vector3 &translation) : translation(translation) {}
-  Transform(const Matrix3 &rotation) : rotation(rotation) {}
-  Transform(const Vector3 &translation, const Matrix3 &rotation)
-      : translation(translation), rotation(rotation) {}
-  Transform(const Scalar &trans_x, const Scalar &trans_y, const Scalar &trans_z)
-      : translation(trans_x, trans_y, trans_z) {}
 
   /**
    * X1*X2 = plx(E1*E2, r2 + E2T*r1)
@@ -218,6 +218,6 @@ struct Transform {
     return result;
   }
 
-  ENOKI_STRUCT(Transform, translation, rotation)
+  // ENOKI_STRUCT(Transform, translation, rotation)
 };
-ENOKI_STRUCT_SUPPORT(Transform, translation, rotation)
+// ENOKI_STRUCT_SUPPORT(Transform, translation, rotation)
