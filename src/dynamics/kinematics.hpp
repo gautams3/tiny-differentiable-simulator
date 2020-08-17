@@ -15,9 +15,9 @@
 template <typename Algebra>
 void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
                                             const VectorX &qdd) const {
-  assert(static_cast<int>(q.size()) == dof());
-  assert(qd.empty() || static_cast<int>(qd.size()) == dof_qd());
-  assert(qdd.empty() || static_cast<int>(qdd.size()) == dof_qd());
+  assert(Algebra::size(q) == dof());
+  assert(Algebra::size(qd) == 0 || Algebra::size(qd) == dof_qd());
+  assert(Algebra::size(qdd) == 0 || Algebra::size(qdd) == dof_qd());
 
   if (is_floating) {
     // update base-world transform from q, and update base velocity from qd
@@ -36,6 +36,8 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
 
     base_abi = base_rbi;
   }
+  
+  Algebra::set_zero(base_bias_force);
 
   for (int i = 0; i < static_cast<int>(links.size()); i++) {
     const Link &link = links[i];
@@ -65,7 +67,7 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
     link.c = v_x_vJ /*+link.c_J[i]*/;
 
     link.abi = link.rbi;
-    ForceVector I_mul_v = link.abi * link.v;
+    ForceVector I_mul_v = link.rbi * link.v;
     ForceVector f_ext = link.X_world.apply_inverse(link.f_ext);
 
     // #ifdef NEURAL_SIM
@@ -97,9 +99,9 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
     //       }
     // #endif
 
-    link.pA = Algebra::cross(link.v, I_mul_v) - f_ext;
+    link.pA = Algebra::cross(link.v, I_mul_v);// - f_ext;
 #ifdef DEBUG
-    Algebra::print("link.abi", link.abi);
+    // Algebra::print("link.abi", link.abi);
     Algebra::print("I_mul_v", I_mul_v);
     Algebra::print("link.pA", link.pA);
 #endif

@@ -85,11 +85,15 @@ struct EnokiAlgebra {
     return enoki::dot(vector_a, vector_b);
   }
 
-  // ENOKI_INLINE static Scalar norm(const SpatialVector &v) {
-  //   Vector6 v6 = v;
-  //   return enoki::norm(v6);
-  // }
+  TINY_INLINE static Scalar norm(const MotionVector &v) {
+    return enoki::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3] +
+                       v[4] * v[4] + v[5] * v[5]);
+  }
 
+  TINY_INLINE static Scalar norm(const ForceVector &v) {
+    return enoki::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3] +
+                       v[4] * v[4] + v[5] * v[5]);
+  }
   template <typename T>
   ENOKI_INLINE static Scalar norm(const T &v) {
     return enoki::norm(v);
@@ -187,6 +191,22 @@ struct EnokiAlgebra {
     return Matrix3(c, s, 0, -s, c, 0, 0, 0, 1);
   }
 
+  static Matrix3 rotation_zyx_matrix(const Scalar &r, const Scalar &p,
+                                     const Scalar &y) {
+    Scalar ci(enoki::cos(r));
+    Scalar cj(enoki::cos(p));
+    Scalar ch(enoki::cos(y));
+    Scalar si(enoki::sin(r));
+    Scalar sj(enoki::sin(p));
+    Scalar sh(enoki::sin(y));
+    Scalar cc = ci * ch;
+    Scalar cs = ci * sh;
+    Scalar sc = si * ch;
+    Scalar ss = si * sh;
+    return Matrix3(cj * ch, sj * sc - cs, sj * cc + ss, cj * sh, sj * ss + cc,
+                   sj * cs - sc, -sj, cj * si, cj * ci);
+  }
+
   ENOKI_INLINE static Vector3 rotate(const Quaternion &q, const Vector3 &v) {
     return enoki::quat_to_matrix<Matrix3>(q) * v;
   }
@@ -219,6 +239,14 @@ struct EnokiAlgebra {
   ENOKI_INLINE static void set_zero(enoki::Array<Scalar, Size> &v) {
     v = 0;
   }
+  TINY_INLINE static void set_zero(MotionVector &v) {
+    v.top = 0;
+    v.bottom = 0;
+  }
+  TINY_INLINE static void set_zero(ForceVector &v) {
+    v.top = 0;
+    v.bottom = 0;
+  }
 
   ENOKI_INLINE static double to_double(const Scalar &s) {
     return static_cast<double>(s);
@@ -235,9 +263,8 @@ struct EnokiAlgebra {
   static void print(const std::string &title, const Scalar &v) {
     std::cout << title << "\n" << to_double(v) << std::endl;
   }
-  template<typename T>
-  static void print(const std::string &title,
-                    const T &abi) {
+  template <typename T>
+  static void print(const std::string &title, const T &abi) {
     abi.print(title.c_str());
   }
 
@@ -259,6 +286,21 @@ struct EnokiAlgebra {
   //   Vector6 a6 = a, b6 = b;
   //   return mul_transpose(a6, b6);
   // }
+
+  template <typename T>
+  ENOKI_INLINE static auto sin(const T &s) {
+    return enoki::sin(s);
+  }
+
+  template <typename T>
+  ENOKI_INLINE static auto cos(const T &s) {
+    return enoki::cos(s);
+  }
+
+  template <typename T>
+  ENOKI_INLINE static auto abs(const T &s) {
+    return enoki::abs(s);
+  }
 
   EnokiAlgebra() = delete;
 };

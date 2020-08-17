@@ -31,9 +31,10 @@ struct UrdfInertial {
 
   UrdfInertial()
       : mass(Algebra::zero()),
-        inertia_xxyyzz(Vector3::zero()),
-        origin_rpy(Vector3::zero()),
-        origin_xyz(Vector3::zero()) {}
+        inertia_xxyyzz(Algebra::zero3()),
+        origin_rpy(Algebra::zero3()),
+        origin_xyz(Algebra::zero3()) {}
+
   Scalar mass;
   Vector3 inertia_xxyyzz;
   Vector3 origin_rpy;
@@ -142,8 +143,8 @@ struct UrdfVisual {
   typedef ::UrdfGeometry<Algebra> UrdfGeometry;
   typedef ::VisualMaterial<Algebra> VisualMaterial;
   UrdfVisual()
-      : origin_xyz(Vector3::zero()),
-        origin_rpy(Vector3::zero()),
+      : origin_xyz(Algebra::zero3()),
+        origin_rpy(Algebra::zero3()),
         has_local_material(false),
         sync_visual_body_uid1(-1),
         sync_visual_body_uid2(-1)
@@ -168,8 +169,8 @@ struct UrdfCollision {
   typedef ::UrdfGeometry<Algebra> UrdfGeometry;
 
   UrdfCollision()
-      : origin_xyz(Vector3::zero()),
-        origin_rpy(Vector3::zero()),
+      : origin_xyz(Algebra::zero3()),
+        origin_rpy(Algebra::zero3()),
         collision_group(0),
         collision_mask(0),
         flags(0) {}

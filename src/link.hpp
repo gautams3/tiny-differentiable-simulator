@@ -46,7 +46,7 @@ class Link {
   MotionVector S;          // motion subspace (spatial joint axis/matrix)
 
   mutable ForceVector U;  // temp var in ABA, page 130
-  mutable Scalar d;       // temp var in ABA, page 130
+  mutable Scalar D;       // temp var in ABA, page 130
   mutable Scalar u;       // temp var in ABA, page 130
   mutable ForceVector f;  // temp var in RNEA, page 183
 

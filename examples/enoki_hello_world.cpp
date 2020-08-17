@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <thread>
 
-// #define DEBUG false
+// #define DEBUG 1
 
 #include "opengl_window/tiny_opengl3_app.h"
 
@@ -36,6 +36,7 @@ void plot_trajectory(const std::vector<typename Algebra::VectorX> &states,
     plt::named_plot("state[" + std::to_string(i) + "]", traj);
   }
   plt::legend();
+  plt::grid(true);
   plt::title(title);
   plt::show();
 }
@@ -130,6 +131,9 @@ bool equals(const typename EnokiAlgebra::Matrix3 &e,
 }
 
 int main(int argc, char **argv) {
+  // Set NaN trap
+  feenableexcept(FE_INVALID | FE_OVERFLOW);
+
   // {
   //   using TinyAlgebra = ::TinyAlgebra<double, DoubleUtils>;
   //   for (int n = 0; n < 20; ++n) {
@@ -159,42 +163,99 @@ int main(int argc, char **argv) {
   // }
 
   {
-    using Algebra = TinyAlgebra<double, DoubleUtils>;
-    // using Algebra = EnokiAlgebra;
+    // using Algebra = TinyAlgebra<double, DoubleUtils>;
+    using Algebra = EnokiAlgebra;
     using Tf = Transform<Algebra>;
     using Vector3 = Algebra::Vector3;
     using VectorX = typename Algebra::VectorX;
     using Matrix3 = Algebra::Matrix3;
     using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
 
-    UrdfCache<Algebra> cache;
-    World<Algebra> world;
+      UrdfCache<Algebra> cache;
+      World<Algebra> world;
+    MultiBody<Algebra> *mb = nullptr;
+    {
 
-    std::string urdf_filename;
-    TinyFileUtils::find_file("swimmer/swimmer05/swimmer05.urdf", urdf_filename);
-    MultiBody<Algebra> *mb = cache.construct(urdf_filename, world);
-    // mb->base_rbi = RigidBodyInertia(0.);
-    for (std::size_t j = 2; j < mb->links.size(); ++j) {
-      mb->links[j].rbi = RigidBodyInertia(0.5);
+      std::string urdf_filename;
+      TinyFileUtils::find_file("swimmer/swimmer05/swimmer05.urdf",
+                               urdf_filename);
+      mb = cache.construct(urdf_filename, world);
+
+      for (std::size_t j = 0; j < mb->links.size(); ++j) {
+        std::cout << "link " << j << ":\n";
+        Algebra::print("rbi", mb->links[j].rbi);
+      }
+      std::cout << "\n\n\n";
+      mb->forward_kinematics();
+      for (std::size_t j = 0; j < mb->links.size(); ++j) {
+        std::cout << "link " << j << ":\n";
+        Algebra::print("abi", mb->links[j].abi);
+      }
     }
+    // {
+    //   double mass = .001;
+    //   Vector3 com(0., 0., 0.);
+    //   double inertial = 0.001;
+    //   Matrix3 I = Algebra::diagonal3(Vector3(inertial));
+    //   Link<Algebra> link_a(JOINT_PRISMATIC_X, Tf(0., 0., 0.),
+    //                        RigidBodyInertia(mass, com, I));
+    //   Link<Algebra> link_b(JOINT_PRISMATIC_Y, Tf(0., 0., 0.),
+    //                        RigidBodyInertia(mass, com, I));
+    //   Link<Algebra> link_c(JOINT_REVOLUTE_Z, Tf(0., 0., 0.),
+    //                        RigidBodyInertia(mass, com, I));
+    //   Link<Algebra> link_d(JOINT_REVOLUTE_Z, Tf(1., 0., 0.),
+    //                        RigidBodyInertia(mass, com, I));
+    //   mb = new MultiBody<Algebra>;
+    //   mb->attach(link_a);
+    //   mb->attach(link_b);
+    //   mb->attach(link_c);
+    //   mb->attach(link_d);
+    // }
 
-    Vector3 gravity(0., 0., -9.81);
+    // return 0;
+
+    // mb->base_rbi = RigidBodyInertia(0.);
+    // for (std::size_t j = 2; j < mb->links.size(); ++j) {
+    //   mb->links[j].rbi = RigidBodyInertia(0.5);
+    // }
+
+    // Vector3 gravity(0., 0., -9.81);
+    Vector3 gravity(0., 0., 0.);
     // mb.forward_dynamics(gravity);
 
     std::vector<typename Algebra::VectorX> traj;
 
+    mb->initialize();
     double dt = 0.001;
-    for (int i = 0; i < 10000; ++i) {
+    for (int i = 0; i < 2000; ++i) {
+      printf("\n\n\nt: %i\n", i);
+      // mb->forward_kinematics();
       traj.push_back(mb->q);
-      mb->integrate(dt);
-      for (Algebra::Index j = 3; j < mb->dof_actuated(); ++j) {
-        mb->tau[j] = Algebra::sin(i * dt + j * 1.58) * 0.5;
+      for (auto &link : mb->links) {
+        Algebra::set_zero(link.a);
+      }
+      int nd = mb->dof_actuated();
+      // Algebra::Index j = 2;
+      for (Algebra::Index j = 3; j < nd; ++j) {
+        mb->tau[j] = Algebra::sin(i * dt * 10.) * .2;
       }
       mb->forward_dynamics(gravity);
-      // mb->print_state();
+      mb->print_state();
+      for (auto &link : mb->links) {
+        Algebra::print(("link[" + std::to_string(link.q_index) + "].D").c_str(),
+                       link.D);
+        Algebra::print(("link[" + std::to_string(link.q_index) + "].U").c_str(),
+                       link.U);
+        Algebra::print(("link[" + std::to_string(link.q_index) + "].S").c_str(),
+                       link.S);
+        Algebra::print(("link[" + std::to_string(link.q_index) + "].u").c_str(),
+                       link.u);
+      }
+      mb->clear_forces();
+      mb->integrate(dt);
     }
 
-    // plot_trajectory<Algebra>(traj);
+    plot_trajectory<Algebra>(traj, "Trajectory");
     visualize_trajectory<Algebra>(traj, *mb, dt);
   }
 
@@ -238,7 +299,7 @@ int main(int argc, char **argv) {
     }
 
     // plot_trajectory<Algebra>(traj);
-    visualize_trajectory<Algebra>(traj, mb, dt);
+    visualize_trajectory<Algebra>(traj, mb, dt, 1);
   }
 
   return 0;

@@ -83,6 +83,15 @@ struct TinyAlgebra {
     return vector_a.dot(vector_b);
   }
 
+  TINY_INLINE static Scalar norm(const MotionVector &v) {
+    return TinyConstants::sqrt1(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] +
+                                v[3] * v[3] + v[4] * v[4] + v[5] * v[5]);
+  }
+
+  TINY_INLINE static Scalar norm(const ForceVector &v) {
+    return TinyConstants::sqrt1(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] +
+                                v[3] * v[3] + v[4] * v[4] + v[5] * v[5]);
+  }
   template <typename T>
   TINY_INLINE static Scalar norm(const T &v) {
     return v.length();
@@ -222,7 +231,9 @@ struct TinyAlgebra {
     return m;
   }
 
-  TINY_INLINE static Matrix3 rotation_zyx_matrix(const Scalar &r, const Scalar &p, const Scalar &y) {
+  TINY_INLINE static Matrix3 rotation_zyx_matrix(const Scalar &r,
+                                                 const Scalar &p,
+                                                 const Scalar &y) {
     Matrix3 m;
     m.setEulerZYX(r, p, y);
     return m;
@@ -261,6 +272,14 @@ struct TinyAlgebra {
 
   TINY_INLINE static void set_zero(Vector3 &v) { v.set_zero(); }
   TINY_INLINE static void set_zero(VectorX &v) { v.set_zero(); }
+  TINY_INLINE static void set_zero(MotionVector &v) {
+    v.top.set_zero();
+    v.bottom.set_zero();
+  }
+  TINY_INLINE static void set_zero(ForceVector &v) {
+    v.top.set_zero();
+    v.bottom.set_zero();
+  }
 
   TINY_INLINE static double to_double(const Scalar &s) {
     return TinyConstants::getDouble(s);
@@ -279,8 +298,16 @@ struct TinyAlgebra {
   //   return Matrix6::vTimesvTranspose(a, b);
   // }
 
-  TINY_INLINE static Scalar sin(const Scalar& s) {
+  TINY_INLINE static Scalar sin(const Scalar &s) {
     return TinyConstants::sin1(s);
+  }
+
+  TINY_INLINE static Scalar cos(const Scalar &s) {
+    return TinyConstants::cos1(s);
+  }
+
+  TINY_INLINE static Scalar abs(const Scalar &s) {
+    return TinyConstants::abs(s);
   }
 
   TinyAlgebra() = delete;

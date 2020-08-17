@@ -152,6 +152,22 @@ struct RigidBodyInertia {
     return *this;
   }
 
+  void print(const char *name) const {
+    printf("%s\n", name);
+    printf("  mass:    %.8f\n", Algebra::to_double(mass));
+    printf("  com:     %.8f\t%.8f\t%.8f\n", Algebra::to_double(com[0]),
+           Algebra::to_double(com[1]), Algebra::to_double(com[2]));
+    printf("  inertia: %.8f\t%.8f\t%.8f\n", Algebra::to_double(inertia(0, 0)),
+           Algebra::to_double(inertia(0, 1)),
+           Algebra::to_double(inertia(0, 2)));
+    printf("           %.8f\t%.8f\t%.8f\n", Algebra::to_double(inertia(1, 0)),
+           Algebra::to_double(inertia(1, 1)),
+           Algebra::to_double(inertia(1, 2)));
+    printf("           %.8f\t%.8f\t%.8f\n", Algebra::to_double(inertia(2, 0)),
+           Algebra::to_double(inertia(2, 1)),
+           Algebra::to_double(inertia(2, 2)));
+  }
+
   // ENOKI_STRUCT(RigidBodyInertia, mass, com, inertia)
 };
 // ENOKI_STRUCT_SUPPORT(RigidBodyInertia, mass, com, inertia)
@@ -322,13 +338,19 @@ struct ArticulatedBodyInertia {
     return result;
   }
 
+  /**
+   * Multiplies force vectors a and b as a * b^T, resulting in a 6x6 matrix.
+   */
   static ArticulatedBodyInertia mul_transpose(const ForceVector &a,
                                               const ForceVector &b) {
+    // printf("mul_transpose:\n");
+    // Algebra::print("a", a);
+    // Algebra::print("b", b);
     ArticulatedBodyInertia abi;
     for (Index i = 0; i < 3; i++) {
-      Algebra::assign_column(abi.I, i, a.top[i] * b.top);
-      Algebra::assign_column(abi.H, i, a.bottom[i] * b.top);
-      Algebra::assign_column(abi.M, i, a.bottom[i] * b.bottom);
+      Algebra::assign_column(abi.I, i, a.top * b.top[i]);
+      Algebra::assign_column(abi.H, i, a.top * b.bottom[i]);
+      Algebra::assign_column(abi.M, i, a.bottom * b.bottom[i]);
     }
     return abi;
   }
@@ -350,7 +372,7 @@ struct ArticulatedBodyInertia {
       for (int i = 0; i < indent; ++i) {
         printf(" ");
       }
-      printf("%.3f  %.3f  %.3f\n", m(j, 0), m(j, 1), m(j, 2));
+      printf("%.8f  %.8f  %.8f\n", m(j, 0), m(j, 1), m(j, 2));
     }
   }
 

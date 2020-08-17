@@ -332,9 +332,9 @@ class MultiBody {
   }
 
   void integrate(VectorX &q, VectorX &qd, VectorX &qdd, const Scalar &dt) {
-    assert(static_cast<int>(q.size()) == dof());
-    assert(static_cast<int>(qd.size()) == dof_qd());
-    assert(static_cast<int>(qdd.size()) == dof_qd());
+    assert(Algebra::size(q) == dof());
+    assert(Algebra::size(qd) == dof_qd());
+    assert(Algebra::size(qdd) == dof_qd());
 
     int q_offset, qd_offset;
     if (is_floating) {

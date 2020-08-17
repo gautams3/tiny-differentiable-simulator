@@ -60,12 +60,12 @@ struct UrdfToMultiBody {
       mb.visual_uids1.push_back(visual_shape.sync_visual_body_uid1);
       mb.visual_uids2.push_back(visual_shape.sync_visual_body_uid2);
       Transform<Algebra> visual_offset;
-      visual_offset.translation.setValue(visual_shape.origin_xyz[0],
-                                         visual_shape.origin_xyz[1],
-                                         visual_shape.origin_xyz[2]);
+      visual_offset.translation =
+          Vector3(visual_shape.origin_xyz[0], visual_shape.origin_xyz[1],
+                  visual_shape.origin_xyz[2]);
       Vector3 rpy;
-      rpy.setValue(visual_shape.origin_rpy[0], visual_shape.origin_rpy[1],
-                   visual_shape.origin_rpy[2]);
+      rpy = Vector3(visual_shape.origin_rpy[0], visual_shape.origin_rpy[1],
+                    visual_shape.origin_rpy[2]);
       visual_offset.rotation =
           Algebra::rotation_zyx_matrix(rpy[0], rpy[1], rpy[2]);
       mb.X_visuals.push_back(visual_offset);
@@ -147,11 +147,12 @@ struct UrdfToMultiBody {
       };
 
       if (return_code == kCONVERSION_OK) {
-        l.X_T.rotation.set_identity();
+        l.X_T.rotation = Algebra::eye3();
         const UrdfJoint<Algebra>& j = urdf_structures.joints[i];
         const UrdfLink<Algebra>& link = urdf_structures.links[i];
-        l.X_T.translation.setValue(j.joint_origin_xyz[0], j.joint_origin_xyz[1],
-                                   j.joint_origin_xyz[2]);
+        l.X_T.translation =
+            Vector3(j.joint_origin_xyz[0], j.joint_origin_xyz[1],
+                    j.joint_origin_xyz[2]);
         l.X_T.rotation = Algebra::rotation_zyx_matrix(j.joint_origin_rpy[0],
                                                       j.joint_origin_rpy[1],
                                                       j.joint_origin_rpy[2]);
@@ -174,12 +175,12 @@ struct UrdfToMultiBody {
           l.visual_ids.push_back(visual_shape.sync_visual_body_uid1);
           // l.visual_uids2.push_back(visual_shape.sync_visual_body_uid2);
           Transform<Algebra> visual_offset;
-          visual_offset.translation.setValue(visual_shape.origin_xyz[0],
-                                             visual_shape.origin_xyz[1],
-                                             visual_shape.origin_xyz[2]);
+          visual_offset.translation =
+              Vector3(visual_shape.origin_xyz[0], visual_shape.origin_xyz[1],
+                      visual_shape.origin_xyz[2]);
           Vector3 rpy;
-          rpy.setValue(visual_shape.origin_rpy[0], visual_shape.origin_rpy[1],
-                       visual_shape.origin_rpy[2]);
+          rpy = Vector3(visual_shape.origin_rpy[0], visual_shape.origin_rpy[1],
+                        visual_shape.origin_rpy[2]);
           visual_offset.rotation =
               Algebra::rotation_zyx_matrix(rpy[0], rpy[1], rpy[2]);
           l.X_visuals.push_back(visual_offset);
@@ -203,8 +204,8 @@ struct UrdfToMultiBody {
       const UrdfCollision<Algebra>& col = link.urdf_collision_shapes[c];
 
       Transform<Algebra> collision_offset;
-      collision_offset.translation.setValue(
-          col.origin_xyz[0], col.origin_xyz[1], col.origin_xyz[2]);
+      collision_offset.translation =
+          Vector3(col.origin_xyz[0], col.origin_xyz[1], col.origin_xyz[2]);
       Vector3 rpy = col.origin_rpy;
       collision_offset.rotation =
           Algebra::rotation_zyx_matrix(rpy[0], rpy[1], rpy[2]);
@@ -218,7 +219,7 @@ struct UrdfToMultiBody {
       //     break;
       //   }
       //     // case BOX_TYPE: {
-      //     //     // col.box.extents.setValue(colShapeData.dimensions[0],
+      //     //     // col.box.extents = Vector3(colShapeData.dimensions[0],
       //     //     // colShapeData.dimensions[1], colShapeData.dimensions[2]);
       //     //     // urdfLink.urdf_collision_shapes.push_back(col);
       //     //     break;
@@ -233,7 +234,7 @@ struct UrdfToMultiBody {
       //   }
       //   // case GEOM_MESH: {
       //   //    // col.mesh.file_name = colShapeData.meshAssetFileName;
-      //   //    // col.mesh.scale.setValue(colShapeData.dimensions[0],
+      //   //    // col.mesh.scale = Vector3(colShapeData.dimensions[0],
       //   //    // colShapeData.dimensions[1], colShapeData.dimensions[2]);
       //   //    break;
       //   //}

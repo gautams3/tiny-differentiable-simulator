@@ -131,10 +131,10 @@ struct Transform {
   inline ForceVector apply_inverse(const ForceVector &inVec) const {
     const Vector3 &n = inVec.top;
     const Vector3 &f = inVec.bottom;
-    Matrix3 Et = rotation;  // Algebra::transpose(rotation);
+    const Matrix3 &E = rotation;
     ForceVector outVec;
-    outVec.top = Et * (n - Algebra::cross(translation, f));
-    outVec.bottom = Et * f;
+    outVec.top = E * (n - Algebra::cross(translation, f));
+    outVec.bottom = E * f;
     return outVec;
   }
 
@@ -144,7 +144,7 @@ struct Transform {
   inline RigidBodyInertia apply(const RigidBodyInertia &rbi) const {
     RigidBodyInertia result(rbi.mass);
     const Matrix3 rx = Algebra::cross_matrix(translation);
-    const Matrix3 E = rotation;
+    const Matrix3 &E = rotation;
     const Matrix3 Et = Algebra::transpose(rotation);
     // E(I + rx hx + (h - mr)x rx) E^T
     result.inertia =
@@ -162,7 +162,7 @@ struct Transform {
    */
   inline RigidBodyInertia apply_transpose(const RigidBodyInertia &rbi) const {
     RigidBodyInertia result(rbi.mass);
-    const Matrix3 E = rotation;
+    const Matrix3 &E = rotation;
     const Matrix3 Et = Algebra::transpose(rotation);
     // E^T h + mr
     const Vector3 Eth_mr = Et * rbi.com + rbi.mass * translation;

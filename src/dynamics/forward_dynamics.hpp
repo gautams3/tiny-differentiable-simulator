@@ -7,10 +7,10 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
                                           const VectorX &tau,
                                           const Vector3 &gravity,
                                           VectorX &qdd) const {
-  assert(static_cast<int>(q.size()) == dof());
-  assert(static_cast<int>(qd.size()) == dof_qd());
-  assert(static_cast<int>(qdd.size()) == dof_qd());
-  assert(static_cast<int>(tau.size()) == dof_actuated());
+  assert(Algebra::size(q) == dof());
+  assert(Algebra::size(qd) == dof_qd());
+  assert(Algebra::size(qdd) == dof_qd());
+  assert(Algebra::size(tau) == dof_actuated());
 
   MotionVector spatial_gravity;
   spatial_gravity.bottom = gravity;
@@ -33,15 +33,15 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
     // std::cout << "link.abi.matrix() * link.S:\n" << link.abi.matrix() *
     // link.S << std::endl; std::cout << "link.abi * link.S:\n" << link.abi *
     // link.S << std::endl; std::cout << "\n\n";
-    link.d = Algebra::dot(link.S, link.U);
+    link.D = Algebra::dot(link.S, link.U);
     Scalar tau_val = get_tau_for_link(tau, i);
     // apply linear joint stiffness and damping
     // see Eqns. (2.76), (2.78) in Rigid Body Dynamics Notes
     // by Shinjiro Sueda
     // https://github.com/sueda/redmax/blob/master/notes.pdf
     // TODO consider nonzero resting position of joint for stiffness?
-    tau_val -= link.stiffness * get_q_for_link(q, i);
-    tau_val -= link.damping * get_qd_for_link(qd, i);
+    // tau_val -= link.stiffness * get_q_for_link(q, i);
+    // tau_val -= link.damping * get_qd_for_link(qd, i);
 
     // #ifdef NEURAL_SIM
     //       NEURAL_ASSIGN(tau_val, "tau_" + std::to_string(i));
@@ -50,26 +50,32 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
     link.u = tau_val - Algebra::dot(link.S, link.pA);
 
 #ifdef DEBUG
-    Algebra::print("m_U", link.U);
-    printf("links[%d].d=", i);
-    double d1 = Algebra::to_double(link.d);
-    printf("%f\n", d1);
+    Algebra::print("ABI", link.abi);
+    Algebra::print("S", link.S);
+    Algebra::print("U", link.U);
+    printf("links[%d].D=", i);
+    double d1 = Algebra::to_double(link.D);
+    printf("%.24f\n", d1);
     printf("links[%d].u=", i);
     double u = Algebra::to_double(link.u);
-    printf("%f\n", u);
+    assert(!std::isnan(u));
+    printf("%.24f\n", u);
+
+    printf("LINK  %i\n", i);
 #endif
 
-    assert(link.joint_type == JOINT_FIXED || link.d > Algebra::zero());
-    Scalar invd = link.joint_type == JOINT_FIXED ? Algebra::zero()
-                                                 : Algebra::one() / link.d;
+    assert(link.joint_type == JOINT_FIXED ||
+           Algebra::abs(link.D) > Algebra::zero());
+    Scalar invD = link.joint_type == JOINT_FIXED ? Algebra::zero()
+                                                 : Algebra::one() / link.D;
 #ifdef DEBUG
-    printf("invd[%d]=%f\n", i, Algebra::to_double(invd));
+    printf("invD[%d]=%f\n", i, Algebra::to_double(invD));
 #endif
     auto u_dinv_ut =
-        ArticulatedBodyInertia::mul_transpose(link.U * invd, link.U);
+        ArticulatedBodyInertia::mul_transpose(link.U * invD, link.U);
     ArticulatedBodyInertia Ia = link.abi - u_dinv_ut;
     ForceVector Ia_c = Ia * link.c;
-    ForceVector pa = link.pA + Ia_c + link.U * (link.u * invd);
+    ForceVector pa = link.pA + Ia_c + link.U * (link.u * invD);
 #ifdef DEBUG
     Algebra::print("u_dinv_ut", u_dinv_ut);
     Algebra::print("Ia", Ia);
@@ -132,31 +138,29 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
     }
 #endif
 
-    MotionVector xpa = X_parent.apply(a_parent);
-    link.a = xpa + link.c;
-#if DEBUG
-    Algebra::print("xpa", xpa);
-    Algebra::print("a'", link.a);
-#endif
     // model.a[i] = X_parent.apply(model.a[parent]) + model.c[i];
     // LOG << "a'[" << i << "] = " << model.a[i].transpose() << std::endl;
 
-    // if (model.mJoints[i].mDoFCount == 1
-    {
-      Scalar invd = link.joint_type == JOINT_FIXED ? Algebra::zero()
-                                                   : Algebra::one() / link.d;
+    if (link.qd_index >= 0) {
+      MotionVector x_a = X_parent.apply(a_parent);
+      link.a = x_a + link.c;
+#if DEBUG
+      Algebra::print("x_a", x_a);
+      Algebra::print("a'", link.a);
+#endif
+      Scalar invD = link.joint_type == JOINT_FIXED ? Algebra::zero()
+                                                   : Algebra::one() / link.D;
       Scalar Ut_a = Algebra::dot(link.U, link.a);
       Scalar u_Ut_a = link.u - Ut_a;
-      Scalar qdd_val = Algebra::zero();
-      if (link.qd_index >= 0) {
-        qdd_val = invd * u_Ut_a;
-        qdd[link.qd_index] = qdd_val;
-      }
-      link.a = link.a + link.S * qdd_val;
-#if DEBUG
-      Algebra::print("a", link.a);
-#endif
+      Scalar qdd_val = invD * u_Ut_a;
+      assert(!std::isnan(Algebra::to_double(qdd_val)));
+      qdd[link.qd_index] = qdd_val;
+      link.a += link.S * qdd_val;
+      // link.a = link.S * qdd_val;
     }
+#if DEBUG
+    Algebra::print("a", link.a);
+#endif
   }
   if (is_floating) {
     base_acceleration += spatial_gravity;

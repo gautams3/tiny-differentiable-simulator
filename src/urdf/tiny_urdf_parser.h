@@ -29,8 +29,8 @@
 #include <string>
 #include <vector>
 
-#include "tiny_urdf_structures.h"
 #include "multi_body.hpp"
+#include "tiny_urdf_structures.h"
 
 struct Logger {
   virtual ~Logger() {}
@@ -66,7 +66,7 @@ struct UrdfParser {
 
   static bool parse_vector3(Vector3& vec3, const std::string& vector_str,
                             Logger& logger) {
-    vec3.set_zero();
+    Algebra::set_zero(vec3);
     std::vector<Scalar> scalars;
     std::istringstream iss(vector_str);
     std::vector<std::string> pieces((std::istream_iterator<std::string>(iss)),
@@ -81,15 +81,14 @@ struct UrdfParser {
       logger.report_error("Couldn't parse vector3, need at least 3 values.");
       return false;
     }
-    vec3.setValue(scalars[0], scalars[1], scalars[2]);
+    vec3 = Vector3(scalars[0], scalars[1], scalars[2]);
     return true;
   }
 
   static bool parse_transform(Vector3& xyz, Vector3& rpy,
-                              const tinyxml2::XMLElement* xml,
-                              Logger& logger) {
-    xyz.set_zero();
-    rpy.set_zero();
+                              const tinyxml2::XMLElement* xml, Logger& logger) {
+    Algebra::set_zero(xyz);
+    Algebra::set_zero(rpy);
     bool result = true;
 
     const char* xyz_str = xml->Attribute("xyz");
@@ -107,8 +106,8 @@ struct UrdfParser {
   static bool parse_inertia(UrdfInertial& urdf_inertial,
                             const tinyxml2::XMLElement* config,
                             Logger& logger) {
-    urdf_inertial.origin_xyz.set_zero();
-    urdf_inertial.origin_rpy.set_zero();
+    Algebra::set_zero(urdf_inertial.origin_xyz);
+    Algebra::set_zero(urdf_inertial.origin_rpy);
     urdf_inertial.mass = Algebra::zero();
     // Origin
     const tinyxml2::XMLElement* o = config->FirstChildElement("origin");
@@ -212,8 +211,7 @@ struct UrdfParser {
     } else if ((type_name == "mesh") || (type_name == "cdf")) {
       geom.geom_type = TINY_MESH_TYPE;
 
-      geom.mesh.scale.setValue(Algebra::one(), Algebra::one(),
-                                   Algebra::one());
+      geom.mesh.scale = Vector3(Algebra::one(), Algebra::one(), Algebra::one());
       std::string fn;
 
       // URDF
@@ -227,10 +225,8 @@ struct UrdfParser {
               "Scale should be a vector3, not single scalar. Workaround "
               "activated.\n");
           std::string scalar_str = shape->Attribute("scale");
-          Scalar scale_factor =
-              Algebra::scalar_from_string(scalar_str.c_str());
-          geom.mesh.scale.setValue(scale_factor, scale_factor,
-                                       scale_factor);
+          Scalar scale_factor = Algebra::scalar_from_string(scalar_str.c_str());
+          geom.mesh.scale = Vector3(scale_factor, scale_factor, scale_factor);
         }
       }
 
@@ -248,8 +244,7 @@ struct UrdfParser {
           logger.report_error("plane requires a normal attribute");
           return false;
         } else {
-          parse_vector3(geom.plane.normal, shape->Attribute("normal"),
-                        logger);
+          parse_vector3(geom.plane.normal, shape->Attribute("normal"), logger);
         }
       } else {
         logger.report_error("Unknown geometry type:");
@@ -301,8 +296,8 @@ struct UrdfParser {
   static bool parse_collision(UrdfCollision& collision,
                               const tinyxml2::XMLElement* config,
                               Logger& logger) {
-    collision.origin_xyz.set_zero();
-    collision.origin_rpy.set_zero();
+    Algebra::set_zero(collision.origin_xyz);
+    Algebra::set_zero(collision.origin_rpy);
 
     // Origin
     const tinyxml2::XMLElement* o = config->FirstChildElement("origin");
@@ -341,12 +336,11 @@ struct UrdfParser {
     return true;
   }
 
-  static bool parse_visual(UrdfStructures& urdf_structures,
-                           UrdfVisual& visual,
+  static bool parse_visual(UrdfStructures& urdf_structures, UrdfVisual& visual,
                            const tinyxml2::XMLElement* vis_xml,
                            Logger& logger) {
-    visual.origin_xyz.set_zero();
-    visual.origin_rpy.set_zero();
+    Algebra::set_zero(visual.origin_xyz);
+    Algebra::set_zero(visual.origin_rpy);
     // Origin
     const tinyxml2::XMLElement* o = vis_xml->FirstChildElement("origin");
     if (o) {
@@ -388,10 +382,8 @@ struct UrdfParser {
     return true;
   }
 
-  static bool parse_link(UrdfLink& link,
-                         UrdfStructures& urdf_structures,
-                         const tinyxml2::XMLElement* config,
-                         Logger& logger) {
+  static bool parse_link(UrdfLink& link, UrdfStructures& urdf_structures,
+                         const tinyxml2::XMLElement* config, Logger& logger) {
     const char* linkName = config->Attribute("name");
     if (!linkName) {
       logger.report_error("Link with no name");
@@ -424,8 +416,8 @@ struct UrdfParser {
             logger.report_error(linkName);
             return false;
           }
-          link.contact_info.restitution = Algebra::scalar_from_string(
-              restitution_xml->Attribute("value"));
+          link.contact_info.restitution =
+              Algebra::scalar_from_string(restitution_xml->Attribute("value"));
         }
       }
       {
@@ -438,8 +430,8 @@ struct UrdfParser {
             logger.report_error(linkName);
             return false;
           }
-          link.contact_info.stiffness = Algebra::scalar_from_string(
-              stiffness_xml->Attribute("value"));
+          link.contact_info.stiffness =
+              Algebra::scalar_from_string(stiffness_xml->Attribute("value"));
         }
       }
       {
@@ -452,8 +444,8 @@ struct UrdfParser {
             logger.report_error(linkName);
             return false;
           }
-          link.contact_info.damping = Algebra::scalar_from_string(
-              damping_xml->Attribute("value"));
+          link.contact_info.damping =
+              Algebra::scalar_from_string(damping_xml->Attribute("value"));
         }
       }
     }
@@ -501,9 +493,8 @@ struct UrdfParser {
     return true;
   }
 
-  static bool parse_joint(UrdfStructures& urdf_structures,
-                          UrdfJoint& joint, tinyxml2::XMLElement* config,
-                          Logger& logger) {
+  static bool parse_joint(UrdfStructures& urdf_structures, UrdfJoint& joint,
+                          tinyxml2::XMLElement* config, Logger& logger) {
     // Get Joint Name
     const char* name = config->Attribute("name");
     if (!name) {
@@ -599,8 +590,7 @@ struct UrdfParser {
               "axis");
           logger.report_warning(joint.joint_name);
           joint.joint_axis_xyz =
-              Vector3(Algebra::zero(), Algebra::zero(),
-                      Algebra::one());
+              Vector3(Algebra::zero(), Algebra::zero(), Algebra::one());
         } else {
           if (axis_xml->Attribute("xyz")) {
             if (!parse_vector3(joint.joint_axis_xyz, axis_xml->Attribute("xyz"),
