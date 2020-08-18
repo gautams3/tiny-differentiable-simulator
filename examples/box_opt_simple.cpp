@@ -1,246 +1,534 @@
-// Copyright 2020 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+#include <fstream>
 
-#include <stdio.h>
-
-#include "assert.h"
-#include "tiny_world.h"
-//#include "stan_double_utils.h"
-#include "tiny_dual.h"
-#include "tiny_matrix3x3.h"
-#include "tiny_quaternion.h"
-#include "tiny_vector3.h"
-
-#include <ceres/autodiff_cost_function.h>
-
-#include <chrono>  // std::chrono::seconds
-#include <thread>  // std::this_thread::sleep_for
-
-#include "ceres_utils.h"
-#include "tiny_double_utils.h"
-#include "tiny_dual_double_utils.h"
-#include "tiny_multi_body.h"
-#include "tiny_pose.h"
-#include "tiny_rigid_body.h"
-
-#include "pybullet_visualizer_api.h"
+#include "neural_scalar.h"
+#include "opengl_window/tiny_opengl3_app.h"
+#include "pendulum.h"
+#include "tiny_ceres_estimator.h"
 #include "tiny_file_utils.h"
+#include "tiny_mb_constraint_solver_spring.h"
+#include "tiny_multi_body.h"
+#include "tiny_system_constructor.h"
+#include "tiny_world.h"
 
-typedef PyBulletVisualizerAPI VisualizerAPI;
-std::string box;
-std::string sphere2red;
+// whether to use Parallel Basin Hopping
+#define USE_PBH true
+// whether the state consists of [q qd] or just q
+#define STATE_INCLUDES_QD true
+std::vector<double> start_state;
+const int analytical_param_dim = 2;
+const int neural_param_dim = 22;
 
-VisualizerAPI* visualizer = nullptr;
+const int param_dim = analytical_param_dim + neural_param_dim;
 
-// ID of the ball whose position is optimized for
-const int TARGET_ID = 0;
-
-template <typename TinyScalar, typename TinyConstants>
-TinyScalar rollout(TinyScalar force_x, TinyScalar force_y, int steps = 300,
-                   VisualizerAPI* vis = nullptr,
-                   TinyScalar dt = TinyConstants::fraction(1, 60)) {
-  typedef TinyVector3<TinyScalar, TinyConstants> TinyVector3;
-  typedef TinyRigidBody<TinyScalar, TinyConstants> TinyRigidBody;
-  typedef TinyGeometry<TinyScalar, TinyConstants> TinyGeometry;
-
-  std::vector<int> visuals;
-  TinyVector3 target(TinyConstants::fraction(0, 10),
-                     TinyConstants::fraction(8, 1), TinyConstants::zero());
-  if (vis) {
-    vis->resetSimulation();
-  }
-
-  TinyScalar gravity_z = TinyConstants::zero();
-  TinyWorld<TinyScalar, TinyConstants> world(gravity_z);
-
-  std::vector<TinyRigidBody*> bodies;
-
-  TinyScalar length = TinyConstants::one();
-  TinyScalar mass = TinyConstants::one();
-  TinyScalar x = TinyConstants::zero(), y = TinyConstants::zero();
-  
-  const TinyGeometry* geom = world.create_box(length);
-  TinyRigidBody* body = world.create_rigid_body(mass, geom);
-  body->m_world_pose.m_position =
-      TinyVector3::create(x, y, TinyConstants::zero());
-  bodies.push_back(body);
-  if (vis) {
-    b3RobotSimulatorLoadUrdfFileArgs args;
-    args.m_startPosition.setX(TinyConstants::getDouble(x));
-    args.m_startPosition.setY(TinyConstants::getDouble(y));
-    int box_id = visualizer->loadURDF(box, args);
-    visuals.push_back(box_id);
-    b3RobotSimulatorChangeVisualShapeArgs vargs;
-    vargs.m_objectUniqueId = box_id;
-    vargs.m_hasRgbaColor = true;
-    vargs.m_rgbaColor = btVector4(0, 0.6, 1, 1);
-    vis->changeVisualShape(vargs);
-  }
-
-  // Create white ball
-  TinyScalar radius = TinyConstants::half();
-  TinyVector3 white = TinyVector3::create(
-      TinyConstants::zero(), -TinyConstants::two(), TinyConstants::zero());
-  const TinyGeometry* white_geom = world.create_sphere(radius);
-  TinyRigidBody* white_ball = world.create_rigid_body(mass, white_geom);
-  white_ball->m_world_pose.m_position =
-      TinyVector3::create(white.x(), white.y(), white.z());
-  bodies.push_back(white_ball);
-  white_ball->apply_central_force(
-      TinyVector3::create(force_x, force_y, TinyConstants::zero()));
-
-  
-  if (vis) {
-    {
-      // visualize white ball
-      b3RobotSimulatorLoadUrdfFileArgs args;
-      args.m_startPosition.setX(TinyConstants::getDouble(white.x()));
-      args.m_startPosition.setY(TinyConstants::getDouble(white.y()));
-      args.m_startPosition.setZ(TinyConstants::getDouble(white.z()));
-      int sphere_id = visualizer->loadURDF(sphere2red, args);
-      visuals.push_back(sphere_id);
-      b3RobotSimulatorChangeVisualShapeArgs vargs;
-      vargs.m_objectUniqueId = sphere_id;
-      vargs.m_hasRgbaColor = true;
-      vargs.m_rgbaColor = btVector4(1, 1, 1, 1);
-      vis->changeVisualShape(vargs);
+#ifdef USE_MATPLOTLIB
+template <typename T>
+void plot_trajectory(const std::vector<std::vector<T>> &states) {
+  typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils,
+                             CeresUtils<param_dim>>
+      Utils;
+  for (int i = 0; i < static_cast<int>(states[0].size()); ++i) {
+    std::vector<double> traj(states.size());
+    for (int t = 0; t < static_cast<int>(states.size()); ++t) {
+      traj[t] = Utils::getDouble(states[t][i]);
     }
-
-    {
-      // visualize target
-      b3RobotSimulatorLoadUrdfFileArgs args;
-      args.m_startPosition.setX(TinyConstants::getDouble(target.x()));
-      args.m_startPosition.setY(TinyConstants::getDouble(target.y()));
-      args.m_startPosition.setZ(TinyConstants::getDouble(target.z()));
-      int box_id = visualizer->loadURDF(box, args);
-      visuals.push_back(box_id);
-      b3RobotSimulatorChangeVisualShapeArgs vargs;
-      vargs.m_objectUniqueId = box_id;
-      vargs.m_hasRgbaColor = true;
-      vargs.m_rgbaColor = btVector4(1, 0.6, 0, 0.8);
-      vis->changeVisualShape(vargs);
-    }
+    plt::named_plot("state[" + std::to_string(i) + "]", traj);
   }
+  plt::legend();
+  plt::show();
+}
+#endif
 
-  for (int i = 0; i < steps; i++) {
-    visualizer->submitProfileTiming("world.step");
-    world.step(dt);
-    visualizer->submitProfileTiming("");
-
-    if (vis) {
-      double dtd = TinyConstants::getDouble(dt);
-      // update visualization
-      std::this_thread::sleep_for(std::chrono::duration<double>(dtd));
-      for (int b = 0; b < bodies.size(); b++) {
-        const TinyRigidBody* body = bodies[b];
-        int box_id = visuals[b];
-        btVector3 base_pos(
-            TinyConstants::getDouble(body->m_world_pose.m_position.getX()),
-            TinyConstants::getDouble(body->m_world_pose.m_position.getY()),
-            TinyConstants::getDouble(body->m_world_pose.m_position.getZ()));
-        btQuaternion base_orn(
-            TinyConstants::getDouble(body->m_world_pose.m_orientation.getX()),
-            TinyConstants::getDouble(body->m_world_pose.m_orientation.getY()),
-            TinyConstants::getDouble(body->m_world_pose.m_orientation.getZ()),
-            TinyConstants::getDouble(body->m_world_pose.m_orientation.getW()));
-        visualizer->resetBasePositionAndOrientation(box_id, base_pos,
-                                                    base_orn);
-      }
-    }
+template <typename Scalar, typename Utils>
+std::vector<std::vector<double>> to_double_states(
+    const std::vector<std::vector<Scalar>> &states) {
+  if constexpr (std::is_same_v<Scalar, double>) {
+    return states;
   }
-
-  // Compute error
-  TinyVector3 delta = bodies[TARGET_ID]->m_world_pose.m_position - target;
-  return delta.sqnorm();
+  std::vector<std::vector<double>> double_states(states.size());
+  for (int t = 0; t < static_cast<int>(states.size()); ++t) {
+    std::vector<double> double_state(states[t].size());
+    for (int i = 0; i < static_cast<int>(states[t].size()); ++i) {
+      double_state[i] = Utils::getDouble(states[t][i]);
+    }
+    double_states[t] = double_state;
+  }
+  return double_states;
 }
 
-struct CeresFunctional {
-  int steps{300};
+template <typename Scalar1 = double, typename Utils1 = DoubleUtils,
+          typename Scalar2 = double, typename Utils2 = DoubleUtils>
+void visualize_traces(const std::vector<std::vector<Scalar1>> &our_states_raw,
+                      const std::vector<std::vector<Scalar1>> &ini_states_raw,
+                      const std::vector<std::vector<Scalar2>> &ref_states_raw,
+                      int num_states = 10) {
+  auto our_states = to_double_states<Scalar1, Utils1>(our_states_raw);
+  auto ini_states = to_double_states<Scalar1, Utils1>(ini_states_raw);
+  auto ref_states = to_double_states<Scalar2, Utils2>(ref_states_raw);
 
-  template <typename T>
-  bool operator()(const T* const x, T* e) const {
-    typedef ceres::Jet<double, 2> Jet;
-    T fx(x[0]), fy(x[1]);
-    typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils,
-                               CeresUtils<2>>
-        Utils;
-    *e = rollout<T, Utils>(fx, fy, steps);
-    return true;
+  TinyOpenGL3App app(
+      "Trajectories (green = reference, blue = initial, orange = ours)", 1024,
+      768);
+  app.m_renderer->init();
+  app.set_up_axis(2);
+  app.m_renderer->get_active_camera()->set_camera_distance(4);
+  app.m_renderer->get_active_camera()->set_camera_pitch(-30);
+  app.m_renderer->get_active_camera()->set_camera_target_position(0, 0, 0);
+
+  TinyWorld<double, DoubleUtils> world;
+  TinyMultiBody<double, DoubleUtils> *system = world.create_multi_body();
+  system->m_isFloating = true;
+  system->initialize();
+
+  int cube_shape = app.register_cube_shape(1.f, 1.f, 1.f);
+  TinyVector3f ref_color(0.3, 0.8, 0.);
+  TinyVector3f our_color(1.0, 0.6, 0.);
+  TinyVector3f ini_color(0.1, 0.6, 1.);
+  float opacity = 0.5f;
+  float scale = 0.5f;
+  TinyVector3f scaling(scale, scale, scale);
+
+  // show our states
+  int i = 0;
+  int show_every = static_cast<int>(our_states.size()) / num_states + 1;
+  for (const std::vector<double> &state : our_states) {
+    if (i++ % show_every != 0) {
+      continue;
+    }
+    TinyVector3f pos(state[4], state[5], state[6]);
+    TinyQuaternionf orn(state[0], state[1], state[2], state[3]);
+    app.m_renderer->register_graphics_instance(cube_shape, pos, orn, our_color,
+                                               scaling, opacity);
+  }
+
+  // show reference states
+  i = 0;
+  for (const std::vector<double> &state : ref_states) {
+    if (i++ % show_every != 0) {
+      continue;
+    }
+    TinyVector3f pos(state[4], state[5], state[6]);
+    TinyQuaternionf orn(state[0], state[1], state[2], state[3]);
+    app.m_renderer->register_graphics_instance(cube_shape, pos, orn, ref_color,
+                                               scaling, opacity);
+  }
+
+  // show initial states
+  i = 0;
+  for (const std::vector<double> &state : ini_states) {
+    if (i++ % show_every != 0) {
+      continue;
+    }
+    TinyVector3f pos(state[4], state[5], state[6]);
+    TinyQuaternionf orn(state[0], state[1], state[2], state[3]);
+    app.m_renderer->register_graphics_instance(cube_shape, pos, orn, ini_color,
+                                               scaling, opacity);
+  }
+
+  while (!app.m_window->requested_exit()) {
+    app.m_renderer->update_camera(2);
+    DrawGridData data;
+    data.upAxis = 2;
+    app.draw_grid(data);
+
+    app.m_renderer->render_scene();
+    app.m_renderer->write_transforms();
+    app.swap_buffer();
+  }
+}
+
+template <typename Scalar = double, typename Utils = DoubleUtils>
+void visualize_trajectory(const std::vector<std::vector<Scalar>> &states_raw,
+                          const Scalar &dt, const char *window_title) {
+  auto states = to_double_states<Scalar, Utils>(states_raw);
+
+  TinyOpenGL3App app(window_title, 1024, 768);
+  app.m_renderer->init();
+  app.set_up_axis(2);
+  app.m_renderer->get_active_camera()->set_camera_distance(4);
+  app.m_renderer->get_active_camera()->set_camera_pitch(-30);
+  app.m_renderer->get_active_camera()->set_camera_target_position(0, 0, 0);
+
+  TinyWorld<double, DoubleUtils> world;
+  TinyMultiBody<double, DoubleUtils> *system = world.create_multi_body();
+  system->m_isFloating = true;
+  system->initialize();
+
+  int cube_shape = app.register_cube_shape(1.f, 1.f, 1.f);
+
+  const std::vector<double> &state0 = states[0];
+  TinyVector3f pos(0, 0, 0);
+  TinyQuaternionf orn(0, 0, 0, 1);
+  TinyVector3f color(0.2, 0.6, 1);
+  float scale = 0.5f;
+  TinyVector3f scaling(scale, scale, scale);
+  int cube_id = app.m_renderer->register_graphics_instance(cube_shape, pos, orn,
+                                                           color, scaling);
+  for (const std::vector<double> &state : states) {
+    app.m_renderer->update_camera(2);
+    DrawGridData data;
+    data.upAxis = 2;
+    app.draw_grid(data);
+    for (int i = 0; i < 7; ++i) {
+      system->m_q[i] = state[i];
+    }
+    system->forward_kinematics();
+    // system->print_state();
+
+    std::this_thread::sleep_for(
+        std::chrono::duration<double>(Utils::getDouble(dt)));
+    // sync transform
+    TinyQuaternion<double, DoubleUtils> rot;
+    const TinySpatialTransform<double, DoubleUtils> &geom_X_world =
+        system->m_base_X_world;
+    TinyVector3f base_pos(geom_X_world.m_translation.getX(),
+                          geom_X_world.m_translation.getY(),
+                          geom_X_world.m_translation.getZ());
+    geom_X_world.m_rotation.getRotation(rot);
+    TinyQuaternionf base_orn(rot.getX(), rot.getY(), rot.getZ(), rot.getW());
+    app.m_renderer->write_single_instance_transform_to_cpu(base_pos, base_orn,
+                                                           cube_id);
+    app.m_renderer->render_scene();
+    app.m_renderer->write_transforms();
+    app.swap_buffer();
+  }
+}
+
+struct rollout_dynamics {
+  int call_counter{0};
+
+  TinySystemConstructor<> constructor;
+  rollout_dynamics(const std::string &urdf_filename,
+                   const std::string &plane_filename)
+      : constructor(urdf_filename, plane_filename) {
+    constructor.m_is_floating = true;
+  }
+
+  /**
+   * Roll-out cube contact dynamics, and compute states [q, qd].
+   */
+  template <typename Scalar = double, typename Utils = DoubleUtils>
+  void operator()(const std::vector<Scalar> &params,
+                  std::vector<std::vector<Scalar>> &output_states,
+                  int time_steps, double dt) {
+    TinyVector3<Scalar, Utils> gravity(Utils::zero(), Utils::zero(),
+                                       Utils::fraction(-981, 100));
+    output_states.resize(time_steps);
+    TinyWorld<Scalar, Utils> world;
+    TinyMultiBody<Scalar, Utils> *mb;
+    constructor(world, &mb);
+
+    world.set_gravity(gravity);
+
+    if constexpr (is_neural_scalar<Scalar, Utils>::value) {
+      if (!params.empty()) {
+        // use a spring-based contact model if neural network parameters are
+        // given
+        delete world.m_mb_constraint_solver;
+        auto *contact_model =
+            new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
+        contact_model->friction_model = FRICTION_NEURAL;
+        contact_model->spring_k = params[0].evaluate();
+        contact_model->damper_d = params[1].evaluate();
+        world.m_mb_constraint_solver = contact_model;
+
+        // neural network for contact friction force
+        Scalar::clear_all_blueprints();
+        typedef typename Scalar::NeuralNetworkType NeuralNetwork;
+        NeuralNetwork net_contact_friction(2);  // # inputs
+        net_contact_friction.add_linear_layer(NN_ACT_ELU, 3, true);
+        net_contact_friction.add_linear_layer(NN_ACT_IDENTITY, 2, true);
+        net_contact_friction.add_linear_layer(NN_ACT_IDENTITY, 1, true);
+        net_contact_friction.initialize();
+        Scalar::add_blueprint(
+            "contact_friction_force/force",
+            {"contact_friction_force/fn", "contact_friction_force/v"},
+            net_contact_friction);
+
+        std::vector<typename Scalar::InnerScalarType> blueprint_params(
+            neural_param_dim);
+        for (int i = 0; i < neural_param_dim; ++i) {
+          blueprint_params[i] = params[i + analytical_param_dim].evaluate();
+        }
+        Scalar::set_blueprint_parameters(blueprint_params);
+      }
+    }
+
+    int x0_size = static_cast<int>(start_state.size());
+    if (x0_size >= mb->dof()) {
+      for (int i = 0; i < mb->dof(); ++i) {
+        mb->m_q[i] = Utils::scalar_from_double(start_state[i]);
+      }
+      if (x0_size >= mb->dof() + mb->dof_qd()) {
+        for (int i = 0; i < mb->dof_qd(); ++i) {
+          mb->m_qd[i] = Utils::scalar_from_double(start_state[i + mb->dof()]);
+        }
+      }
+    }
+    for (int t = 0; t < time_steps; ++t) {
+#if STATE_INCLUDES_QD
+      output_states[t].resize(mb->dof() + mb->dof_qd());
+#else
+      output_states[t].resize(mb->dof());
+#endif
+      for (int i = 0; i < mb->dof(); ++i) {
+        output_states[t][i] = mb->m_q[i];
+      }
+#if STATE_INCLUDES_QD
+      for (int i = 0; i < mb->dof_qd(); ++i) {
+        output_states[t][i + mb->dof()] = mb->m_qd[i];
+      }
+#endif
+      mb->forward_dynamics(gravity);
+      mb->clear_forces();
+      mb->integrate_q(Utils::scalar_from_double(dt));
+      world.step(Utils::scalar_from_double(dt));
+      mb->integrate(Utils::scalar_from_double(dt));
+      // mb->print_state();
+    }
+
+#if !USE_PBH
+    // if (call_counter++ % 100 == 0) {
+    //   visualize_trajectory<Scalar, Utils>(output_states,
+    //                                       Utils::scalar_from_double(dt));
+    // }
+#endif
   }
 };
 
-ceres::AutoDiffCostFunction<CeresFunctional, 1, 2> cost_function(
-    new CeresFunctional);
-double* parameters = new double[2];
-double* gradient = new double[2];
+template <ResidualMode ResMode>
+class ContactEstimator
+    : public TinyCeresEstimator<param_dim, 7 + STATE_INCLUDES_QD * 6, ResMode> {
+ public:
+  typedef TinyCeresEstimator<param_dim, 7 + STATE_INCLUDES_QD * 6, ResMode>
+      CeresEstimator;
+  using CeresEstimator::kStateDim, CeresEstimator::kParameterDim;
+  using CeresEstimator::parameters;
+  using typename CeresEstimator::ADScalar;
 
-void grad_ceres(double force_x, double force_y, double* cost, double* d_force_x,
-                double* d_force_y, int steps = 300) {
-  parameters[0] = force_x;
-  parameters[1] = force_y;
-  double const* const* params = &parameters;
-  cost_function.Evaluate(params, cost, &gradient);
-  *d_force_x = gradient[0];
-  *d_force_y = gradient[1];
-}
+  std::vector<double> initial_params;
 
-int main(int argc, char* argv[]) {
-  // TinyFileUtils::find_file("sphere2red.urdf", sphere2red);
-  TinyFileUtils::find_file("sphere2red.urdf", sphere2red);
-  TinyFileUtils::find_file("sphere8cube.urdf", box);
-  std::string connection_mode = "gui";
+  int time_steps;
 
-  using namespace std::chrono;
+  rollout_dynamics *sampler;
 
-  visualizer = new VisualizerAPI;
-  visualizer->setTimeOut(1e30);
-  printf("mode=%s\n", const_cast<char*>(connection_mode.c_str()));
-  int mode = eCONNECT_GUI;
-  if (connection_mode == "direct") mode = eCONNECT_DIRECT;
-  if (connection_mode == "shared_memory") mode = eCONNECT_SHARED_MEMORY;
-  mode = eCONNECT_SHARED_MEMORY; //force shared memory (requires pybullet server to be running in the background)
-  visualizer->connect(mode);
-
-  visualizer->resetSimulation();
-
-  double init_force_x = 0., init_force_y = 500.;
-  int steps = 300;
-  int gd_steps = 100; // gradient_descent_steps
-  double learning_rate = 3e1;
-  rollout<double, DoubleUtils>(init_force_x, init_force_y, steps, visualizer);
-
-  {
-    auto start = high_resolution_clock::now();
-    double cost, d_force_x, d_force_y;
-    // double learning_rate = 1e2;
-    double force_x = init_force_x, force_y = init_force_y;
-    for (int iter = 0; iter < gd_steps; ++iter) {
-      grad_ceres(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
-             force_x, force_y);
-      force_x -= learning_rate * d_force_x;
-      force_y -= learning_rate * d_force_y;
+  ContactEstimator(int time_steps, double dt)
+      : CeresEstimator(dt), time_steps(time_steps) {
+    std::string urdf_filename, plane_filename;
+    TinyFileUtils::find_file("sphere8cube.urdf", urdf_filename);
+    TinyFileUtils::find_file("plane_implicit.urdf", plane_filename);
+    sampler = new rollout_dynamics(urdf_filename, plane_filename);
+    parameters[0] = {"spring_k", 0., 0., 20000.};
+    parameters[1] = {"damper_d", 0., 0., 20000.};
+    for (int i = 0; i < neural_param_dim; ++i) {
+      double regularization = 1;
+      parameters[i + analytical_param_dim] = {"nn_weight_" + std::to_string(i),
+                                              double(rand()) / RAND_MAX, -1.,
+                                              1., regularization};
     }
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>(stop - start);
-    printf("Ceres Jet took %ld microseconds.\n",
-           static_cast<long>(duration.count()));
-    rollout<double, DoubleUtils>(force_x, force_y, steps, visualizer);
+    for (const auto &p : parameters) {
+      initial_params.push_back(p.value);
+    }
   }
 
-  visualizer->disconnect();
-  delete visualizer;
+  void rollout(const std::vector<ADScalar> &params,
+               std::vector<std::vector<ADScalar>> &output_states,
+               double& dt, std::size_t ref_id) const override {
+    typedef CeresUtils<kParameterDim> ADUtils;
+    typedef NeuralScalar<ADScalar, ADUtils> NScalar;
+    typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
+    auto n_params = NUtils::to_neural(params);
+    std::vector<std::vector<NScalar>> n_output_states;
+    sampler->template operator()<NScalar, NUtils>(n_params, n_output_states,
+                                                  time_steps, dt);
+    for (const auto &state : n_output_states) {
+      output_states.push_back(NUtils::from_neural(state));
+    }
+  }
+  void rollout(const std::vector<double> &params,
+               std::vector<std::vector<double>> &output_states,
+               double& dt, std::size_t ref_id) const override {
+    typedef NeuralScalar<double, DoubleUtils> NScalar;
+    typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
+    auto n_params = NUtils::to_neural(params);
+    std::vector<std::vector<NScalar>> n_output_states;
+    sampler->template operator()<NScalar, NUtils>(n_params, n_output_states,
+                                                  time_steps, dt);
+    for (const auto &state : n_output_states) {
+      output_states.push_back(NUtils::from_neural(state));
+    }
+  }
+};
 
-  return 0;
+template <typename Scalar = double, typename Utils = DoubleUtils>
+void print_states(const std::vector<std::vector<Scalar>> &states_raw) {
+  auto states = to_double_states<Scalar, Utils>(states_raw);
+  for (const auto &s : states) {
+    for (double d : s) {
+      printf("%.2f ", d);
+    }
+    printf("\n");
+  }
+}
+
+template <typename Scalar = double, typename Utils = DoubleUtils>
+void save_states(const std::string &filename,
+                 const std::vector<std::vector<Scalar>> &states_raw,
+                 double dt) {
+  auto states = to_double_states<Scalar, Utils>(states_raw);
+  std::ofstream traj_file(filename);
+  int time_steps = static_cast<int>(states.size());
+  for (int t = 0; t < time_steps; ++t) {
+    traj_file << (t * dt);
+    for (double v : states[t]) {
+      traj_file << "\t" << v;
+    }
+    traj_file << "\n";
+  }
+  traj_file.close();
+  printf("Saved %i states to %s.\n", time_steps, filename.c_str());
+}
+
+int main(int argc, char *argv[]) {
+  typedef ContactEstimator<RES_MODE_1D> Estimator;
+
+  const double dt = 1. / 100;
+  const double time_limit = 3;
+  const int time_steps = time_limit / dt;
+  const double initial_height = 1.2;
+  const TinyVector3<double, DoubleUtils> initial_velocity(0.7, 5., 0.);
+  srand(123);
+
+  google::InitGoogleLogging(argv[0]);
+
+  // keep the target_times empty, since target time steps match the model
+  std::vector<double> target_times;
+  std::vector<std::vector<double>> target_states;
+  // rollout pendulum with damping
+  std::vector<double> empty_params;
+  std::string urdf_filename, plane_filename;
+  TinyFileUtils::find_file("sphere8cube.urdf", urdf_filename);
+  TinyFileUtils::find_file("plane_implicit.urdf", plane_filename);
+  rollout_dynamics sampler(urdf_filename, plane_filename);
+  TinyQuaternion<double, DoubleUtils> start_rot;
+  start_rot.set_euler_rpy(TinyVector3<double, DoubleUtils>(0.8, 1.1, 0.9));
+  start_state = {start_rot.x(),
+                 start_rot.y(),
+                 start_rot.z(),
+                 start_rot.w(),
+                 0.,
+                 0.,
+                 initial_height,
+                 0.,
+                 0.,
+                 0.,
+                 initial_velocity.x(),
+                 initial_velocity.y(),
+                 initial_velocity.z()};
+  sampler(empty_params, target_states, time_steps, dt);
+  save_states("neural_contact_ref.csv", target_states, dt);
+  visualize_trajectory(target_states, dt, "Reference trajectory");
+  const std::vector<std::vector<double>> ref_states = target_states;
+
+  std::function<std::unique_ptr<Estimator>()> construct_estimator =
+      [&target_times, &target_states, &time_steps, &dt]() {
+        auto estimator = std::make_unique<Estimator>(time_steps, dt);
+        estimator->target_times = {target_times};
+        estimator->target_trajectories = {target_states};
+        estimator->options.minimizer_progress_to_stdout = !USE_PBH;
+        estimator->options.max_num_consecutive_invalid_steps = 100;
+        estimator->options.max_num_iterations = 200;
+        // divide each cost term by integer time step ^ 2 to reduce gradient
+        // explosion
+        estimator->divide_cost_by_time_factor = 0.;
+        // estimator->divide_cost_by_time_exponent = 1.2;
+        return estimator;
+      };
+
+#if USE_PBH
+  std::array<double, param_dim> initial_guess;
+  for (int i = 0; i < param_dim; ++i) {
+    initial_guess[i] = 0.0;
+  }
+  BasinHoppingEstimator<param_dim, Estimator> bhe(construct_estimator,
+                                                  initial_guess);
+  bhe.time_limit = 100;
+  bhe.run();
+
+  printf("Optimized parameters:");
+  for (int i = 0; i < param_dim; ++i) {
+    printf(" %.8f", bhe.params[i]);
+  }
+  printf("\n");
+
+  printf("Best cost: %f\n", bhe.best_cost());
+
+  std::vector<double> best_params;
+  for (const auto &p : bhe.params) {
+    best_params.push_back(p);
+  }
+  target_states.clear();
+#else
+  std::unique_ptr<Estimator> estimator = construct_estimator();
+  estimator->setup(new ceres::HuberLoss(1.));
+
+  // XXX verify cost is zero for the true network weights
+  double cost;
+  double gradient[param_dim];
+  double my_params[] = {};
+  estimator->compute_loss(my_params, &cost, gradient);
+  for (int i = 0; i < param_dim; ++i) {
+    printf("%.3f  ", gradient[i]);
+  }
+  std::cout << "\nCost: " << cost << "\n";
+  // assert(cost < 1e-4);
+
+  // return 0;
+
+  auto summary = estimator->solve();
+  std::cout << summary.FullReport() << std::endl;
+  std::cout << "Final cost: " << summary.final_cost << "\n";
+
+  std::vector<double> best_params;
+  for (const auto &p : estimator->parameters) {
+    printf("%s: %.3f\n", p.name.c_str(), p.value);
+    best_params.push_back(p.value);
+  }
+
+  std::ofstream file("param_evolution.txt");
+  for (const auto &params : estimator->parameter_evolution()) {
+    for (int i = 0; i < static_cast<int>(params.size()); ++i) {
+      file << params[i];
+      if (i < static_cast<int>(params.size()) - 1) file << "\t";
+    }
+    file << "\n";
+  }
+  file.close();
+#endif
+
+  typedef NeuralScalar<double, DoubleUtils> NScalar;
+  typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
+  std::vector<std::vector<NScalar>> our_states, initial_states;
+  std::vector<NScalar> neural_params(param_dim), initial_params(param_dim);
+#if USE_PBH
+  std::unique_ptr<Estimator> estimator = construct_estimator();
+#endif
+  for (int i = 0; i < param_dim; ++i) {
+    neural_params[i] = NScalar(best_params[i]);
+    initial_params[i] = NScalar(estimator->initial_params[i]);
+  }
+  sampler.template operator()<NScalar, NUtils>(neural_params, our_states,
+                                               time_steps, dt);
+  save_states<NScalar, NUtils>("neural_contact_ours.csv", our_states, dt);
+  sampler.template operator()<NScalar, NUtils>(initial_params, initial_states,
+                                               time_steps, dt);
+  save_states<NScalar, NUtils>("neural_contact_initial.csv", initial_states,
+                               dt);
+
+  visualize_trajectory(ref_states, dt, "Reference trajectory");
+  // print_states<NScalar, NUtils>(our_states);
+  visualize_trajectory<NScalar, NUtils>(our_states, dt,
+                                        "Simulated trajectory after Sys ID");
+  visualize_traces<NScalar, NUtils>(our_states, initial_states, ref_states);
+
+  return EXIT_SUCCESS;
 }

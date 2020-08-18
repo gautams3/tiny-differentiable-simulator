@@ -118,11 +118,6 @@ if (Bullet_FOUND)
                 ${CERES_LIBRARIES})
         target_compile_definitions(billiard_opt_simple PRIVATE STAN_MATH)
 
-        add_executable(box_opt_simple box_opt_simple.cpp ${TDS_HDRS})
-        target_link_libraries(box_opt_simple pybullet_visualizer_api ${DL}
-                ${CERES_LIBRARIES})
-        target_compile_definitions(box_opt_simple PRIVATE STAN_MATH)
-
         add_executable(cartpole_opt cartpole_opt.cpp ${TDS_HDRS})
         target_link_libraries(cartpole_opt pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES})
@@ -263,6 +258,10 @@ if (tinyxml2_FOUND)
 if (Ceres_FOUND)
     add_executable(neural_contact neural_contact.cpp ${TDS_HDRS})
     target_link_libraries(neural_contact opengl_window ${DL}
+            ${CERES_LIBRARIES} ${MESHCAT_LIBRARIES} python2.7 tinyxml2)
+
+  add_executable(box_opt_simple box_opt_simple.cpp ${TDS_HDRS})
+    target_link_libraries(box_opt_simple opengl_window ${DL}
             ${CERES_LIBRARIES} ${MESHCAT_LIBRARIES} python2.7 tinyxml2)
 endif (Ceres_FOUND)
 endif (tinyxml2_FOUND)
