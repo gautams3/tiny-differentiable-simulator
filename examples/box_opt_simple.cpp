@@ -1,6 +1,5 @@
 #include <fstream>
 
-#include "neural_scalar.h"
 #include "opengl_window/tiny_opengl3_app.h"
 #include "pendulum.h"
 #include "tiny_ceres_estimator.h"
@@ -10,8 +9,6 @@
 #include "tiny_system_constructor.h"
 #include "tiny_world.h"
 
-// whether to use Parallel Basin Hopping
-#define USE_PBH true
 // whether the state consists of [q qd] or just q
 #define STATE_INCLUDES_QD true
 std::vector<double> start_state;
@@ -218,6 +215,7 @@ struct rollout_dynamics {
     constructor(world, &mb);
 
     world.set_gravity(gravity);
+    world.default_friction = Utils::zero();
 
     if constexpr (is_neural_scalar<Scalar, Utils>::value) {
       if (!params.empty()) {
@@ -229,7 +227,7 @@ struct rollout_dynamics {
         contact_model->friction_model = FRICTION_NEURAL;
         contact_model->spring_k = params[0].evaluate();
         contact_model->damper_d = params[1].evaluate();
-        world.m_mb_constraint_solver = contact_model;
+        // world.m_mb_constraint_solver = contact_model;
 
         // neural network for contact friction force
         Scalar::clear_all_blueprints();
@@ -285,13 +283,6 @@ struct rollout_dynamics {
       mb->integrate(Utils::scalar_from_double(dt));
       // mb->print_state();
     }
-
-#if !USE_PBH
-    // if (call_counter++ % 100 == 0) {
-    //   visualize_trajectory<Scalar, Utils>(output_states,
-    //                                       Utils::scalar_from_double(dt));
-    // }
-#endif
   }
 };
 
@@ -394,8 +385,8 @@ int main(int argc, char *argv[]) {
   const double dt = 1. / 100;
   const double time_limit = 3;
   const int time_steps = time_limit / dt;
-  const double initial_height = 1.2;
-  const TinyVector3<double, DoubleUtils> initial_velocity(0.7, 5., 0.);
+  const double initial_height = 0.4; //box on floor
+  const TinyVector3<double, DoubleUtils> initial_velocity(3., 0., 0.);
   srand(123);
 
   google::InitGoogleLogging(argv[0]);
@@ -410,7 +401,7 @@ int main(int argc, char *argv[]) {
   TinyFileUtils::find_file("plane_implicit.urdf", plane_filename);
   rollout_dynamics sampler(urdf_filename, plane_filename);
   TinyQuaternion<double, DoubleUtils> start_rot;
-  start_rot.set_euler_rpy(TinyVector3<double, DoubleUtils>(0.8, 1.1, 0.9));
+  start_rot.set_euler_rpy(TinyVector3<double, DoubleUtils>(0., 0., 0.));
   start_state = {start_rot.x(),
                  start_rot.y(),
                  start_rot.z(),
@@ -425,110 +416,8 @@ int main(int argc, char *argv[]) {
                  initial_velocity.y(),
                  initial_velocity.z()};
   sampler(empty_params, target_states, time_steps, dt);
-  save_states("neural_contact_ref.csv", target_states, dt);
+  save_states("simple_box_ref.csv", target_states, dt);
   visualize_trajectory(target_states, dt, "Reference trajectory");
   const std::vector<std::vector<double>> ref_states = target_states;
-
-  std::function<std::unique_ptr<Estimator>()> construct_estimator =
-      [&target_times, &target_states, &time_steps, &dt]() {
-        auto estimator = std::make_unique<Estimator>(time_steps, dt);
-        estimator->target_times = {target_times};
-        estimator->target_trajectories = {target_states};
-        estimator->options.minimizer_progress_to_stdout = !USE_PBH;
-        estimator->options.max_num_consecutive_invalid_steps = 100;
-        estimator->options.max_num_iterations = 200;
-        // divide each cost term by integer time step ^ 2 to reduce gradient
-        // explosion
-        estimator->divide_cost_by_time_factor = 0.;
-        // estimator->divide_cost_by_time_exponent = 1.2;
-        return estimator;
-      };
-
-#if USE_PBH
-  std::array<double, param_dim> initial_guess;
-  for (int i = 0; i < param_dim; ++i) {
-    initial_guess[i] = 0.0;
-  }
-  BasinHoppingEstimator<param_dim, Estimator> bhe(construct_estimator,
-                                                  initial_guess);
-  bhe.time_limit = 100;
-  bhe.run();
-
-  printf("Optimized parameters:");
-  for (int i = 0; i < param_dim; ++i) {
-    printf(" %.8f", bhe.params[i]);
-  }
-  printf("\n");
-
-  printf("Best cost: %f\n", bhe.best_cost());
-
-  std::vector<double> best_params;
-  for (const auto &p : bhe.params) {
-    best_params.push_back(p);
-  }
-  target_states.clear();
-#else
-  std::unique_ptr<Estimator> estimator = construct_estimator();
-  estimator->setup(new ceres::HuberLoss(1.));
-
-  // XXX verify cost is zero for the true network weights
-  double cost;
-  double gradient[param_dim];
-  double my_params[] = {};
-  estimator->compute_loss(my_params, &cost, gradient);
-  for (int i = 0; i < param_dim; ++i) {
-    printf("%.3f  ", gradient[i]);
-  }
-  std::cout << "\nCost: " << cost << "\n";
-  // assert(cost < 1e-4);
-
-  // return 0;
-
-  auto summary = estimator->solve();
-  std::cout << summary.FullReport() << std::endl;
-  std::cout << "Final cost: " << summary.final_cost << "\n";
-
-  std::vector<double> best_params;
-  for (const auto &p : estimator->parameters) {
-    printf("%s: %.3f\n", p.name.c_str(), p.value);
-    best_params.push_back(p.value);
-  }
-
-  std::ofstream file("param_evolution.txt");
-  for (const auto &params : estimator->parameter_evolution()) {
-    for (int i = 0; i < static_cast<int>(params.size()); ++i) {
-      file << params[i];
-      if (i < static_cast<int>(params.size()) - 1) file << "\t";
-    }
-    file << "\n";
-  }
-  file.close();
-#endif
-
-  typedef NeuralScalar<double, DoubleUtils> NScalar;
-  typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
-  std::vector<std::vector<NScalar>> our_states, initial_states;
-  std::vector<NScalar> neural_params(param_dim), initial_params(param_dim);
-#if USE_PBH
-  std::unique_ptr<Estimator> estimator = construct_estimator();
-#endif
-  for (int i = 0; i < param_dim; ++i) {
-    neural_params[i] = NScalar(best_params[i]);
-    initial_params[i] = NScalar(estimator->initial_params[i]);
-  }
-  sampler.template operator()<NScalar, NUtils>(neural_params, our_states,
-                                               time_steps, dt);
-  save_states<NScalar, NUtils>("neural_contact_ours.csv", our_states, dt);
-  sampler.template operator()<NScalar, NUtils>(initial_params, initial_states,
-                                               time_steps, dt);
-  save_states<NScalar, NUtils>("neural_contact_initial.csv", initial_states,
-                               dt);
-
-  visualize_trajectory(ref_states, dt, "Reference trajectory");
-  // print_states<NScalar, NUtils>(our_states);
-  visualize_trajectory<NScalar, NUtils>(our_states, dt,
-                                        "Simulated trajectory after Sys ID");
-  visualize_traces<NScalar, NUtils>(our_states, initial_states, ref_states);
-
   return EXIT_SUCCESS;
 }
