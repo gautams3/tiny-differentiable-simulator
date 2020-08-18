@@ -13,9 +13,7 @@
 #define STATE_INCLUDES_QD true
 std::vector<double> start_state;
 const int analytical_param_dim = 2;
-const int neural_param_dim = 22;
-
-const int param_dim = analytical_param_dim + neural_param_dim;
+const int param_dim = analytical_param_dim;
 
 #ifdef USE_MATPLOTLIB
 template <typename T>
@@ -217,40 +215,6 @@ struct rollout_dynamics {
     world.set_gravity(gravity);
     world.default_friction = Utils::zero();
 
-    if constexpr (is_neural_scalar<Scalar, Utils>::value) {
-      if (!params.empty()) {
-        // use a spring-based contact model if neural network parameters are
-        // given
-        delete world.m_mb_constraint_solver;
-        auto *contact_model =
-            new TinyMultiBodyConstraintSolverSpring<Scalar, Utils>;
-        contact_model->friction_model = FRICTION_NEURAL;
-        contact_model->spring_k = params[0].evaluate();
-        contact_model->damper_d = params[1].evaluate();
-        // world.m_mb_constraint_solver = contact_model;
-
-        // neural network for contact friction force
-        Scalar::clear_all_blueprints();
-        typedef typename Scalar::NeuralNetworkType NeuralNetwork;
-        NeuralNetwork net_contact_friction(2);  // # inputs
-        net_contact_friction.add_linear_layer(NN_ACT_ELU, 3, true);
-        net_contact_friction.add_linear_layer(NN_ACT_IDENTITY, 2, true);
-        net_contact_friction.add_linear_layer(NN_ACT_IDENTITY, 1, true);
-        net_contact_friction.initialize();
-        Scalar::add_blueprint(
-            "contact_friction_force/force",
-            {"contact_friction_force/fn", "contact_friction_force/v"},
-            net_contact_friction);
-
-        std::vector<typename Scalar::InnerScalarType> blueprint_params(
-            neural_param_dim);
-        for (int i = 0; i < neural_param_dim; ++i) {
-          blueprint_params[i] = params[i + analytical_param_dim].evaluate();
-        }
-        Scalar::set_blueprint_parameters(blueprint_params);
-      }
-    }
-
     int x0_size = static_cast<int>(start_state.size());
     if (x0_size >= mb->dof()) {
       for (int i = 0; i < mb->dof(); ++i) {
@@ -310,42 +274,8 @@ class ContactEstimator
     sampler = new rollout_dynamics(urdf_filename, plane_filename);
     parameters[0] = {"spring_k", 0., 0., 20000.};
     parameters[1] = {"damper_d", 0., 0., 20000.};
-    for (int i = 0; i < neural_param_dim; ++i) {
-      double regularization = 1;
-      parameters[i + analytical_param_dim] = {"nn_weight_" + std::to_string(i),
-                                              double(rand()) / RAND_MAX, -1.,
-                                              1., regularization};
-    }
     for (const auto &p : parameters) {
       initial_params.push_back(p.value);
-    }
-  }
-
-  void rollout(const std::vector<ADScalar> &params,
-               std::vector<std::vector<ADScalar>> &output_states,
-               double& dt, std::size_t ref_id) const override {
-    typedef CeresUtils<kParameterDim> ADUtils;
-    typedef NeuralScalar<ADScalar, ADUtils> NScalar;
-    typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
-    auto n_params = NUtils::to_neural(params);
-    std::vector<std::vector<NScalar>> n_output_states;
-    sampler->template operator()<NScalar, NUtils>(n_params, n_output_states,
-                                                  time_steps, dt);
-    for (const auto &state : n_output_states) {
-      output_states.push_back(NUtils::from_neural(state));
-    }
-  }
-  void rollout(const std::vector<double> &params,
-               std::vector<std::vector<double>> &output_states,
-               double& dt, std::size_t ref_id) const override {
-    typedef NeuralScalar<double, DoubleUtils> NScalar;
-    typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
-    auto n_params = NUtils::to_neural(params);
-    std::vector<std::vector<NScalar>> n_output_states;
-    sampler->template operator()<NScalar, NUtils>(n_params, n_output_states,
-                                                  time_steps, dt);
-    for (const auto &state : n_output_states) {
-      output_states.push_back(NUtils::from_neural(state));
     }
   }
 };
