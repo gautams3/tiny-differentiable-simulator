@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+
 // #include "enoki_algebra.hpp"
 #include "spatial_vector.hpp"
 
@@ -216,6 +218,45 @@ struct ArticulatedBodyInertia {
     Algebra::assign_block(m, Algebra::transpose(H), 3, 0);
     Algebra::assign_block(m, M, 3, 3);
     return m;
+  }
+
+  Scalar &operator()(int i, int j) {
+    assert(0 <= i && i < 6);
+    assert(0 <= j && j < 6);
+
+    if (i < 3) {
+      if (j < 3) {
+        return I(i, j);
+      } else {
+        // need to transpose H here
+        return H(j - 3, i);
+      }
+    } else {
+      if (j < 3) {
+        return H(i - 3, j);
+      } else {
+        return M(i - 3, j - 3);
+      }
+    }
+  }
+  const Scalar &operator()(int i, int j) const {
+    assert(0 <= i && i < 6);
+    assert(0 <= j && j < 6);
+
+    if (i < 3) {
+      if (j < 3) {
+        return I(i, j);
+      } else {
+        // need to transpose H here
+        return H(j - 3, i);
+      }
+    } else {
+      if (j < 3) {
+        return H(i - 3, j);
+      } else {
+        return M(i - 3, j - 3);
+      }
+    }
   }
 
   /**

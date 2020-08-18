@@ -80,6 +80,11 @@ set(CMAKE_CXX_STANDARD_LIBRARIES ${CMAKE_CXX_STANDARD_LIBRARIES})
 
 
 
+include_directories(third_party/rbdl/include)
+include_directories(third_party/rbdl/build/include)
+subdirs(third_party/rbdl)
+
+
 
 SUBDIRS(third_party/cpp_base64)
 

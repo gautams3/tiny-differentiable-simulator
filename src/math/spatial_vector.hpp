@@ -54,11 +54,11 @@ struct SpatialVector {
     double x = Algebra::to_double(top[0]);
     double y = Algebra::to_double(top[1]);
     double z = Algebra::to_double(top[2]);
-    printf("%.6f,%.6f,%.6f,    ", x, y, z);
+    printf("%.16f,%.16f,%.16f,    ", x, y, z);
     x = Algebra::to_double(bottom[0]);
     y = Algebra::to_double(bottom[1]);
     z = Algebra::to_double(bottom[2]);
-    printf("%.6f,%.6f,%.6f\n", x, y, z);
+    printf("%.16f,%.16f,%.16f\n", x, y, z);
   }
 
   //   ENOKI_STRUCT(SpatialVector, top, bottom)
