@@ -210,25 +210,6 @@ bool is_equal(const SpatialVector<Algebra> &a,
 }
 
 template <typename Algebra>
-bool is_equal(const ArticulatedBodyInertia<Algebra> &a,
-              const RigidBodyDynamics::Math::SpatialMatrix &b) {
-  for (int i = 0; i < 6; ++i) {
-    for (int j = 0; j < 6; ++j) {
-      if (std::abs(Algebra::to_double(a(i, j)) - b(i, j)) > 1e-6) {
-        std::cout << "a[" << i << "," << j
-                  << "] = " << Algebra::to_double(a(i, j));
-        std::cout << "\tb[" << i << "," << j << "] = " << b(i, j);
-        std::cout << "\terror = "
-                  << std::abs(Algebra::to_double(a(i, j)) - b(i, j))
-                  << std::endl;
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-template <typename Algebra>
 bool is_equal(const typename Algebra::Vector3 &a,
               const RigidBodyDynamics::Math::Vector3d &b) {
   for (int i = 0; i < 3; ++i) {
@@ -267,6 +248,25 @@ bool is_equal(const Transform<Algebra> &a,
               const RigidBodyDynamics::Math::SpatialTransform &b) {
   return is_equal<Algebra>(a.translation, b.r) &&
          is_equal<Algebra>(a.rotation, b.E);
+}
+
+template <typename Algebra>
+bool is_equal(const ArticulatedBodyInertia<Algebra> &a,
+              const RigidBodyDynamics::Math::SpatialMatrix &b) {
+  for (int i = 0; i < 6; ++i) {
+    for (int j = 0; j < 6; ++j) {
+      if (std::abs(Algebra::to_double(a(i, j)) - b(i, j)) > 1e-6) {
+        std::cout << "a[" << i << "," << j
+                  << "] = " << Algebra::to_double(a(i, j));
+        std::cout << "\tb[" << i << "," << j << "] = " << b(i, j);
+        std::cout << "\terror = "
+                  << std::abs(Algebra::to_double(a(i, j)) - b(i, j))
+                  << std::endl;
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 template <typename Algebra>
@@ -310,7 +310,7 @@ bool is_equal(const MultiBody<Algebra> &tds,
       // return false;
     }
     if (!is_equal<Algebra>(tds.links[j].abi, rbdl.IA[j + 1])) {
-      fprintf(stderr, "Mismatch in IA at link %i.\n", static_cast<int>(j));
+      fprintf(stderr, "Mismatch in ABI at link %i.\n", static_cast<int>(j));
       Algebra::print("TDS:  ", tds.links[j].abi);
       std::cerr << "RBDL:\n" << rbdl.IA[j + 1] << std::endl;
       // return false;
@@ -392,7 +392,10 @@ int main(int argc, char **argv) {
 
     {
       mb = new MultiBody<Algebra>;
-      double mass = 1.;
+      mb->base_rbi.mass = 0;
+      mb->base_rbi.com = Algebra::zero3();
+      mb->base_rbi.inertia = Algebra::zero33();
+      double mass = 0.5;
       Vector3 com(0., 0., 1.);
       Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));
       Link<Algebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
@@ -404,6 +407,7 @@ int main(int argc, char **argv) {
       mb->initialize();
 
       mb->q = VectorX({M_PI_2, 0.0});
+      // mb->q = VectorX({M_PI_2});
       mb->forward_kinematics();
     }
 
@@ -426,7 +430,7 @@ int main(int argc, char **argv) {
       // return 0;
 
       double dt = 0.001;
-      for (int i = 0; i < 2; ++i) {
+      for (int i = 0; i < 20; ++i) {
         printf("\n\n\nt: %i\n", i);
         // mb->forward_kinematics();
         // traj.push_back(mb->q);

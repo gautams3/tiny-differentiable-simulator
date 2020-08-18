@@ -30,11 +30,10 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
       base_velocity.set_zero();
     }
 
-    ForceVector I0_mul_v0 = base_rbi * base_velocity;
+    base_abi = base_rbi;
+    ForceVector I0_mul_v0 = base_abi * base_velocity;
     base_bias_force =
         Algebra::cross(base_velocity, I0_mul_v0) - base_applied_force;
-
-    base_abi = base_rbi;
   }
   
   Algebra::set_zero(base_bias_force);
@@ -55,6 +54,7 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
       const Transform &parent_X_world =
           parent >= 0 ? links[parent].X_world : base_X_world;
       link.X_world = parent_X_world * link.X_parent;
+      // link.X_world = link.X_parent * parent_X_world;  // RBDL style
       const MotionVector &parentVelocity =
           parent >= 0 ? links[parent].v : base_velocity;
       MotionVector xv = link.X_parent.apply(parentVelocity);
@@ -67,7 +67,7 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
     link.c = v_x_vJ /*+link.c_J[i]*/;
 
     link.abi = link.rbi;
-    ForceVector I_mul_v = link.rbi * link.v;
+    ForceVector I_mul_v = link.abi * link.v;
     ForceVector f_ext = link.X_world.apply_inverse(link.f_ext);
 
     // #ifdef NEURAL_SIM
