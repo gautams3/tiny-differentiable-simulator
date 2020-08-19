@@ -31,7 +31,7 @@ namespace plt = matplotlibcpp;
 template <typename Algebra>
 void plot_trajectory(const std::vector<typename Algebra::VectorX> &states,
                      const std::string &title = "Figure") {
-  for (int i = 0; i < static_cast<int>(states[0].size()); ++i) {
+  for (int i = 0; i < Algebra::size(states[0]); ++i) {
     std::vector<double> traj(states.size());
     for (int t = 0; t < static_cast<int>(states.size()); ++t) {
       traj[t] = Algebra::to_double(states[t][i]);
@@ -358,8 +358,8 @@ int main(int argc, char **argv) {
   // }
 
   {
-    // using Algebra = TinyAlgebra<double, DoubleUtils>;
-    using Algebra = EnokiAlgebra;
+    using Algebra = TinyAlgebra<double, DoubleUtils>;
+    // using Algebra = EnokiAlgebra;
     using Tf = Transform<Algebra>;
     using Vector3 = Algebra::Vector3;
     using VectorX = typename Algebra::VectorX;

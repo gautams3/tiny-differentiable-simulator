@@ -285,6 +285,10 @@ struct TinyAlgebra {
     return TinyConstants::getDouble(s);
   }
 
+  static void print(const std::string &title, const Scalar& s) {
+    printf("%s %.12f\n", title.c_str(), to_double(s));
+  }
+
   template <typename T>
   static void print(const std::string &title, T object) {
     object.print(title.c_str());
