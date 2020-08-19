@@ -87,8 +87,18 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
 #ifdef DEBUG
     Algebra::print("delta_pA", delta_pA);
 #endif
-    ArticulatedBodyInertia delta_I = link.X_parent.apply(Ia);
+    // ArticulatedBodyInertia delta_I = link.X_parent.apply(Ia);
+    ArticulatedBodyInertia delta_I =
+        link.X_parent.matrix_transpose() * Ia.matrix() * link.X_parent.matrix();
     if (parent >= 0) {
+      // Algebra::print(
+      //     ("TDS ABI at parent of " + std::to_string(link.index) + ":").c_str(),
+      //     links[parent].abi);
+      // Algebra::print(
+      //     ("TDS Ia at link " + std::to_string(link.index) + ":").c_str(), Ia);
+      // Algebra::print(
+      //     ("TDS X_parent at link " + std::to_string(link.index) + ":").c_str(),
+      //     link.X_parent);
       links[parent].pA += delta_pA;
       links[parent].abi += delta_I;
 #ifdef DEBUG

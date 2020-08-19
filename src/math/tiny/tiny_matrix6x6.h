@@ -35,9 +35,9 @@ struct TinyMatrix6x6 {
   //
   TinyMatrix6x6() { setIdentity(); }
   TinyMatrix6x6(const TinyMatrix3x3& topLeftMat,
-                           const TinyMatrix3x3& topRightMat,
-                           const TinyMatrix3x3& bottomLeftMat,
-                           const TinyMatrix3x3& bottomRightMat) {
+                const TinyMatrix3x3& topRightMat,
+                const TinyMatrix3x3& bottomLeftMat,
+                const TinyMatrix3x3& bottomRightMat) {
     m_topLeftMat = topLeftMat;
     m_topRightMat = topRightMat;
     m_bottomLeftMat = bottomLeftMat;
@@ -170,8 +170,8 @@ struct TinyMatrix6x6 {
     return mT;
   }
 
-  static TinyMatrix6x6 mul(const TinyMatrix6x6& a,
-                                      const TinyMatrix6x6& b) {
+  friend TinyMatrix6x6 operator*(const TinyMatrix6x6& a,
+                                 const TinyMatrix6x6& b) {
     TinyMatrix6x6 res;
     res.m_topLeftMat = (a.m_topLeftMat * b.m_topLeftMat) +
                        (a.m_topRightMat * b.m_bottomLeftMat);
@@ -199,8 +199,8 @@ struct TinyMatrix6x6 {
     tmp[2][2] -= TinyConstants::one();
     TinyMatrix3x3 invI_lower_left = (Binv * tmp);
 
-    return TinyMatrix6x6(invI_upper_right, invI_upper_left,
-                                    invI_lower_right, invI_lower_left);
+    return TinyMatrix6x6(invI_upper_right, invI_upper_left, invI_lower_right,
+                         invI_lower_left);
   }
 
   // Inverse of a symmetric block matrix

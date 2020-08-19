@@ -146,8 +146,8 @@ struct TinyAlgebra {
   TINY_INLINE static Vector3 unit3_y() { return Vector3::makeUnitY(); }
   TINY_INLINE static Vector3 unit3_z() { return Vector3::makeUnitZ(); }
 
-  TINY_INLINE static void assign_block(Matrix3 &output, Matrix6 &input, Index i,
-                                       Index j, Index m, Index n,
+  TINY_INLINE static void assign_block(Matrix3 &output, const Matrix6 &input, Index i,
+                                       Index j, Index m = 3, Index n = 3,
                                        Index input_i = 0, Index input_j = 0) {
     if (input_i == 0) {
       if (input_j == 0) {
@@ -163,8 +163,8 @@ struct TinyAlgebra {
       }
     }
   }
-  TINY_INLINE static void assign_block(Matrix6 &output, Matrix3 &input, Index i,
-                                       Index j, Index m, Index n,
+  TINY_INLINE static void assign_block(Matrix6 &output, const Matrix3 &input, Index i,
+                                       Index j, Index m = 3, Index n = 3,
                                        Index input_i = 0, Index input_j = 0) {
     if (i == 0) {
       if (j == 0) {

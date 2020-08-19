@@ -116,6 +116,22 @@ struct ArticulatedBodyInertia {
     I = rbi.inertia + H * Algebra::transpose(H) * rbi.mass;
     M = Algebra::diagonal3(rbi.mass);
     H = H * rbi.mass;
+    // printf("Creating ABI from RBI:\n");
+    // Algebra::print("RBI", rbi);
+    // Algebra::print("Resulting ABI", *this);
+    return *this;
+  }
+
+  ArticulatedBodyInertia(const Matrix6 &m) {
+    Algebra::assign_block(I, m, 0, 0, 3, 3, 0, 0);
+    Algebra::assign_block(H, m, 0, 0, 3, 3, 0, 3);
+    Algebra::assign_block(M, m, 0, 0, 3, 3, 3, 3);
+  }
+
+  ArticulatedBodyInertia &operator=(const Matrix6 &m) {
+    Algebra::assign_block(I, m, 0, 0, 3, 3, 0, 0);
+    Algebra::assign_block(H, m, 0, 0, 3, 3, 0, 3);
+    Algebra::assign_block(M, m, 0, 0, 3, 3, 3, 3);
     return *this;
   }
 
@@ -231,13 +247,6 @@ struct ArticulatedBodyInertia {
     ArticulatedBodyInertia abi(*this);
     abi -= m;
     return abi;
-  }
-
-  ArticulatedBodyInertia &operator=(const Matrix6 &m) {
-    Algebra::assign_block(I, m, 0, 0, 3, 3, 0, 0);
-    Algebra::assign_block(H, m, 0, 0, 3, 3, 0, 3);
-    Algebra::assign_block(M, m, 0, 0, 3, 3, 3, 3);
-    return *this;
   }
 
   // Matrix6 inverse() const {

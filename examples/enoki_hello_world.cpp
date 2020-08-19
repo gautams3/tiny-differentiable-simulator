@@ -321,6 +321,12 @@ bool is_equal(const MultiBody<Algebra> &tds,
       std::cerr << "RBDL:\n" << rbdl.X_base[j + 1] << std::endl;
       // return false;
     }
+    if (!is_equal<Algebra>(tds.links[j].X_parent, rbdl.X_lambda[j + 1])) {
+      fprintf(stderr, "Mismatch in X_lambda at link %i.\n", static_cast<int>(j));
+      Algebra::print("TDS:  ", tds.links[j].X_parent);
+      std::cerr << "RBDL:\n" << rbdl.X_lambda[j + 1] << std::endl;
+      // return false;
+    }
   }
   return true;
 }
@@ -366,50 +372,50 @@ int main(int argc, char **argv) {
     using Matrix3 = Algebra::Matrix3;
     using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
 
-    Vector3 gravity(0., 0., 0.);
+    Vector3 gravity(0., 0., -9.81);
 
     UrdfCache<Algebra> cache;
     World<Algebra> world;
     MultiBody<Algebra> *mb = nullptr;
 
-    // {
-    //   std::string urdf_filename;
-    //   TinyFileUtils::find_file("swimmer/swimmer05/swimmer05.urdf",
-    //                            urdf_filename);
-    //   mb = cache.construct(urdf_filename, world);
-
-    //   for (std::size_t j = 0; j < mb->links.size(); ++j) {
-    //     std::cout << "link " << j << ":\n";
-    //     Algebra::print("rbi", mb->links[j].rbi);
-    //   }
-    //   std::cout << "\n\n\n";
-    //   mb->forward_kinematics();
-    //   for (std::size_t j = 0; j < mb->links.size(); ++j) {
-    //     std::cout << "link " << j << ":\n";
-    //     Algebra::print("abi", mb->links[j].abi);
-    //   }
-    // }
-
     {
-      mb = new MultiBody<Algebra>;
-      mb->base_rbi.mass = 0;
-      mb->base_rbi.com = Algebra::zero3();
-      mb->base_rbi.inertia = Algebra::zero33();
-      double mass = 0.5;
-      Vector3 com(0., 0., 1.);
-      Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));
-      Link<Algebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
-                           RigidBodyInertia(mass, com, I));
-      Link<Algebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
-                           RigidBodyInertia(mass, com, I));
-      mb->attach(link_a);
-      mb->attach(link_b);
-      mb->initialize();
+      std::string urdf_filename;
+      TinyFileUtils::find_file("swimmer/swimmer05/swimmer05.urdf",
+                               urdf_filename);
+      mb = cache.construct(urdf_filename, world);
 
-      mb->q = VectorX({M_PI_2, 0.0});
-      // mb->q = VectorX({M_PI_2});
+      for (std::size_t j = 0; j < mb->links.size(); ++j) {
+        std::cout << "link " << j << ":\n";
+        Algebra::print("rbi", mb->links[j].rbi);
+      }
+      std::cout << "\n\n\n";
       mb->forward_kinematics();
+      for (std::size_t j = 0; j < mb->links.size(); ++j) {
+        std::cout << "link " << j << ":\n";
+        Algebra::print("abi", mb->links[j].abi);
+      }
     }
+
+    // {
+    //   mb = new MultiBody<Algebra>;
+    //   mb->base_rbi.mass = 0;
+    //   mb->base_rbi.com = Algebra::zero3();
+    //   mb->base_rbi.inertia = Algebra::zero33();
+    //   double mass = 0.5;
+    //   Vector3 com(0.2, 0.5, 1.);
+    //   Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));
+    //   Link<Algebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+    //                        RigidBodyInertia(mass, com, I));
+    //   Link<Algebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+    //                        RigidBodyInertia(mass, com, I));
+    //   mb->attach(link_a);
+    //   mb->attach(link_b);
+    //   mb->initialize();
+
+    //   mb->q = VectorX({M_PI_2, 0.0});
+    //   // mb->q = VectorX({M_PI_2});
+    //   mb->forward_kinematics();
+    // }
 
     {
       RigidBodyDynamics::Model rbdl_model = to_rbdl(*mb);
@@ -421,7 +427,7 @@ int main(int argc, char **argv) {
       VectorND rbdl_qdd = VectorND::Zero(rbdl_model.qdot_size);
       VectorND rbdl_tau = VectorND::Zero(rbdl_model.qdot_size);
 
-      rbdl_q[0] = M_PI_2;
+      // rbdl_q[0] = M_PI_2;
       RigidBodyDynamics::UpdateKinematics(rbdl_model, rbdl_q, rbdl_qd,
                                           rbdl_qdd);
       if (!is_equal<Algebra>(*mb, rbdl_model)) {
@@ -430,7 +436,7 @@ int main(int argc, char **argv) {
       // return 0;
 
       double dt = 0.001;
-      for (int i = 0; i < 20; ++i) {
+      for (int i = 0; i < 50; ++i) {
         printf("\n\n\nt: %i\n", i);
         // mb->forward_kinematics();
         // traj.push_back(mb->q);
@@ -525,16 +531,16 @@ int main(int argc, char **argv) {
       }
       mb->forward_dynamics(gravity);
       mb->print_state();
-      for (auto &link : mb->links) {
-        Algebra::print(("link[" + std::to_string(link.q_index) + "].D").c_str(),
-                       link.D);
-        Algebra::print(("link[" + std::to_string(link.q_index) + "].U").c_str(),
-                       link.U);
-        Algebra::print(("link[" + std::to_string(link.q_index) + "].S").c_str(),
-                       link.S);
-        Algebra::print(("link[" + std::to_string(link.q_index) + "].u").c_str(),
-                       link.u);
-      }
+      // for (auto &link : mb->links) {
+      //   Algebra::print(("link[" + std::to_string(link.q_index) + "].D").c_str(),
+      //                  link.D);
+      //   Algebra::print(("link[" + std::to_string(link.q_index) + "].U").c_str(),
+      //                  link.U);
+      //   Algebra::print(("link[" + std::to_string(link.q_index) + "].S").c_str(),
+      //                  link.S);
+      //   Algebra::print(("link[" + std::to_string(link.q_index) + "].u").c_str(),
+      //                  link.u);
+      // }
       mb->clear_forces();
       mb->integrate(dt);
     }

@@ -8,6 +8,7 @@ struct Transform {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
+  using Matrix6 = typename Algebra::Matrix6;
   using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
   using ArticulatedBodyInertia = ::ArticulatedBodyInertia<Algebra>;
   typedef ::MotionVector<Algebra> MotionVector;
@@ -55,6 +56,27 @@ struct Transform {
     rotation = Algebra::eye3();
   }
 
+  Matrix6 matrix() const {
+    Matrix6 m;
+    Matrix3 mErx = -rotation * Algebra::cross_matrix(translation);
+    Algebra::assign_block(m, rotation, 0, 0);
+    Algebra::assign_block(m, Algebra::zero33(), 0, 3);
+    Algebra::assign_block(m, mErx, 3, 0);
+    Algebra::assign_block(m, rotation, 3, 3);
+    return m;
+  }
+
+  Matrix6 matrix_transpose() const {
+    Matrix6 m;
+    Matrix3 Et = Algebra::transpose(rotation);
+    Matrix3 mErxT = Algebra::transpose(-rotation * Algebra::cross_matrix(translation));
+    Algebra::assign_block(m, Et, 0, 0);
+    Algebra::assign_block(m, mErxT, 0, 3);
+    Algebra::assign_block(m, Algebra::zero33(), 3, 0);
+    Algebra::assign_block(m, Et, 3, 3);
+    return m;
+  }
+
   /**
    * X1*X2 = plx(E1*E2, r2 + E2T*r1)
    */
@@ -64,23 +86,23 @@ struct Transform {
   //   tr.rotation *= t.rotation;
   //   return tr;
   // }
-  Transform operator*(const Transform &t) const {
-    /// XXX this is different from Featherstone: we assume transforms are
-    /// right-associative
-    Transform tr = *this;
-    tr.translation += rotation * t.translation;
-    tr.rotation *= t.rotation;
-    return tr;
-  }
   // Transform operator*(const Transform &t) const {
   //   /// XXX this is different from Featherstone: we assume transforms are
   //   /// right-associative
   //   Transform tr = *this;
-  //   // RBDL style
-  //   tr.translation += Algebra::transpose(rotation) * t.translation;
+  //   tr.translation += rotation * t.translation;
   //   tr.rotation *= t.rotation;
   //   return tr;
   // }
+  Transform operator*(const Transform &t) const {
+    /// XXX this is different from Featherstone: we assume transforms are
+    /// right-associative
+    Transform tr = *this;
+    // RBDL style
+    tr.translation += Algebra::transpose(rotation) * t.translation;
+    tr.rotation *= t.rotation;
+    return tr;
+  }
 
   TINY_INLINE Vector3 apply(const Vector3 &point) const {
     return rotation * point + translation;
@@ -194,21 +216,41 @@ struct Transform {
   /**
    * Computes \f$ X^* I^A X^{-1} \f$.
    */
-  inline ArticulatedBodyInertia apply(const ArticulatedBodyInertia &abi) const {
+  inline ArticulatedBodyInertia apply(
+      const ArticulatedBodyInertia &abi) const {
+        // modified version that matches the output of RBDL
     ArticulatedBodyInertia result;
-    const Matrix3 &E = rotation;
-    const Matrix3 Et = Algebra::transpose(rotation);
+    const Matrix3 E = Algebra::transpose(rotation); // rotation;
+    const Matrix3 Et = rotation; //Algebra::transpose(rotation);
     const Matrix3 rx = Algebra::cross_matrix(translation);
-    // H - rx M
-    const Matrix3 HrxM = abi.H - rx * abi.M;
-    // E (I + rx H^T + (H - rx M) rx) E^T
-    result.I = E * (abi.I + rx * Algebra::transpose(abi.H) + HrxM * rx) * Et;
-    // E (H - rx M) E^T
-    result.H = E * HrxM * Et;
-    // E M E^T
-    result.M = E * abi.M * Et;
+    // M' = E^T M E
+    const Matrix3 Mp = Et * abi.M * E;
+    result.M = Mp;
+    // H' = E^T H E
+    const Matrix3 Hp = Et * abi.H * E;
+    // H' + rx M'
+    const Matrix3 HrxM = Hp + rx * Mp;
+    // E^T I E - rx H'^T - (H' + rx M') rx
+    result.I = Et * abi.I * E - rx * Algebra::transpose(Hp) - HrxM * rx;
+    // H' + rx M'
+    result.H = HrxM;
     return result;
   }
+  // inline ArticulatedBodyInertia apply(const ArticulatedBodyInertia &abi) const {
+  //   ArticulatedBodyInertia result;
+  //   const Matrix3 &E = rotation;
+  //   const Matrix3 Et = Algebra::transpose(rotation);
+  //   const Matrix3 rx = Algebra::cross_matrix(translation);
+  //   // H - rx M
+  //   const Matrix3 HrxM = abi.H - rx * abi.M;
+  //   // E (I + rx H^T + (H - rx M) rx) E^T
+  //   result.I = E * (abi.I + rx * Algebra::transpose(abi.H) + HrxM * rx) * Et;
+  //   // E (H - rx M) E^T
+  //   result.H = E * HrxM * Et;
+  //   // E M E^T
+  //   result.M = E * abi.M * Et;
+  //   return result;
+  // }
 
   /**
    * Computes \f$ X^T I^A X \f$.
