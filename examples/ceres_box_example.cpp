@@ -27,7 +27,7 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
             printf("Friction = %.3f\t", friction);
         }
         states[idx + 0] = states[prev_idx + 0] + states[prev_idx + 1] * T(dt);
-        states[idx + 1] = states[prev_idx + 1] + (inputs[i-1] - friction)/m;
+        states[idx + 1] = states[prev_idx + 1] + (inputs[i-1] - friction)/m * T(dt);
         if (doprint) {
             printf("%lu: x %.3f, xdot %.3f, u %.3f\n", i, states[idx+0], states[idx+1], inputs[i]);            
         }
@@ -61,7 +61,7 @@ struct CeresFunctional
 };
 
 int main(int argc, char** argv) {
-    google::InitGoogleLogging(argv[0]);
+    google::InitGoogleLogging(argv[0]); // TODO: what's the API for glog? using printf for now
 
     Problem problem;
     const int N = 10;
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
     Solve(options, &problem, &summary);
 
     std::cout << summary.BriefReport() << "\n";
-    rollout<double>(inputs, states, 0.1, true);
+    rollout<double>(inputs, states, 0.1, false);
     print_trajectory(states, inputs, N);
     
     return 0;
