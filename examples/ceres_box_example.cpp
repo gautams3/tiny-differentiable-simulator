@@ -1,3 +1,16 @@
+#include <fstream>
+
+#include "neural_scalar.h"
+#include "opengl_window/tiny_opengl3_app.h"
+#include "pendulum.h"
+#include "tiny_ceres_estimator.h"
+#include "tiny_file_utils.h"
+#include "tiny_mb_constraint_solver_spring.h"
+#include "tiny_multi_body.h"
+#include "tiny_system_constructor.h"
+#include "tiny_world.h"
+
+
 #include "ceres/ceres.h"
 #include "glog/logging.h"
 using ceres::AutoDiffCostFunction;
@@ -9,6 +22,33 @@ using ceres::Solver;
 template <typename T> int sign(T val) {
     return (T(0) < val) - (val < T(0));
 }
+#define USE_MATPLOTLIB 1
+
+#ifdef USE_MATPLOTLIB
+#include "third_party/matplotlib-cpp/matplotlibcpp.h"
+namespace plt = matplotlibcpp;
+#endif
+
+#ifdef USE_MATPLOTLIB
+
+template <typename T>
+void plot_trajectory(const T states) {
+  // typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils, 
+  //         CeresUtils<param_dim>> Utils;
+  int state_dim = 2;
+  int traj_length = 10;
+  for (int i = 0; i < state_dim; ++i) {
+      std::vector<double> traj(traj_length);
+      for (int t = 0; t < traj_length; ++t) {
+        traj[t] = static_cast<double>(states[t*state_dim + i]);
+        printf("[%d, %d]: %.3f\n", t, i, traj[t]);
+      }
+      plt::named_plot("state[" + std::to_string(i) + "]", traj);
+  }
+  plt::legend();
+  plt::show();
+}
+#endif
 
 template <typename T>
 T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
@@ -19,7 +59,7 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
     double g = 9.81; // m/s^2
     T goal_position = T(1.0);
     states[0] = T(0.0); // start from 0 position
-    states[1] = T(0.0); //start with 0 velocity
+    states[1] = T(0.0); // start with 0 velocity
     T friction = T(0.0);
 
     for (size_t i = 1; i < N; i++)
@@ -110,6 +150,7 @@ int main(int argc, char** argv) {
     std::cout << summary.BriefReport() << "\n";
     rollout<double>(inputs, states, 0.1, false);
     print_trajectory(states, inputs, N);
+    plot_trajectory(states);
     
     return 0;
 }

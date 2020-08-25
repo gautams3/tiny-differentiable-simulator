@@ -127,7 +127,8 @@ if (Bullet_FOUND)
                 ${CERES_LIBRARIES})
 
         add_executable(ceres_box_example ceres_box_example.cpp ${TDS_HDRS})
-        target_link_libraries(ceres_box_example ${DL} ${CERES_LIBRARIES})
+        target_link_libraries(ceres_box_example ${DL} ${CERES_LIBRARIES} 
+        python2.7 ${PYTHON_LIBRARIES})
 
         set(DUSE_MATPLOTLIB true)
         add_executable(ceres_estimation_real ceres_estimation_real.cpp ${TDS_HDRS})
