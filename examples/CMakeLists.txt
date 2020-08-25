@@ -102,7 +102,7 @@ if (Bullet_FOUND)
             OpenGLWindow  gwen BussIK Bullet3Common pthread ${DL})
 
     if (Ceres_FOUND)
-        FIND_PACKAGE(PythonLibs REQUIRED)
+        FIND_PACKAGE(PythonLibs 2.7 REQUIRED)
         INCLUDE_DIRECTORIES( 
             ${PYTHON_INCLUDE_DIRS}
             ${PYTHON_NUMPY_INCLUDE_DIR}

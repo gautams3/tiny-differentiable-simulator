@@ -19,9 +19,16 @@ using ceres::Problem;
 using ceres::Solve;
 using ceres::Solver;
 
-template <typename T> int sign(T val) {
-    return (T(0) < val) - (val < T(0));
+template<typename T> T sign(const T& x) {
+  if (x > T(0)) {
+    return T(1);
+  } else if (x < T(0)) {
+    return T(-1);
+  } else {
+    return T(0);
+  }
 }
+
 #define USE_MATPLOTLIB 1
 
 #ifdef USE_MATPLOTLIB
@@ -33,15 +40,12 @@ namespace plt = matplotlibcpp;
 
 template <typename T>
 void plot_trajectory(const T states) {
-  // typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils, 
-  //         CeresUtils<param_dim>> Utils;
   int state_dim = 2;
   int traj_length = 10;
   for (int i = 0; i < state_dim; ++i) {
       std::vector<double> traj(traj_length);
       for (int t = 0; t < traj_length; ++t) {
         traj[t] = static_cast<double>(states[t*state_dim + i]);
-        printf("[%d, %d]: %.3f\n", t, i, traj[t]);
       }
       plt::named_plot("state[" + std::to_string(i) + "]", traj);
   }
@@ -66,12 +70,12 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
     {
         size_t idx = i * state_dim, prev_idx = (i-1) * state_dim;
         T v_prev = states[prev_idx + 1], x_prev = states[prev_idx + 0];
-        if (sign(v_prev) == 0) { //static friction: opposite to force
-            friction = T(-sign(inputs[i-1])) * std::min(inputs[i-1], T(mu * m * g));
+        if (v_prev == T(0)) { //static friction: opposite to force
+            friction = -sign(inputs[i-1]) * std::min(inputs[i-1], T(mu * m * g));
         }
         else {  //kinetic friction: opposite to motion
-            friction = T(-sign(v_prev) * mu * m * g);
-        }        
+            friction = -sign(v_prev) * T(mu * m * g);
+        }
         states[idx + 0] = x_prev + v_prev * T(dt);
         states[idx + 1] = v_prev + (inputs[i-1] + friction)/m * T(dt);
         if (abs(friction) > abs(inputs[i-1])) {
@@ -137,7 +141,7 @@ int main(int argc, char** argv) {
     }
     printf("Initialize Trajectory\n");
     print_trajectory(states, inputs, N);
-    
+
     CostFunction* cost_function = new AutoDiffCostFunction<CeresFunctional, 1, N>(new CeresFunctional);
 
     problem.AddResidualBlock(cost_function, NULL, inputs);
@@ -151,6 +155,6 @@ int main(int argc, char** argv) {
     rollout<double>(inputs, states, 0.1, false);
     print_trajectory(states, inputs, N);
     plot_trajectory(states);
-    
+
     return 0;
 }
