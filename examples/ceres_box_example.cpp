@@ -25,20 +25,24 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
     for (size_t i = 1; i < N; i++)
     {
         size_t idx = i * state_dim, prev_idx = (i-1) * state_dim;
-        T v_curr = states[idx + 1], v_prev = states[prev_idx + 1];
+        T v_prev = states[prev_idx + 1], x_prev = states[prev_idx + 0];
         if (sign(v_prev) == 0) { //static friction: opposite to force
             friction = T(-sign(inputs[i-1])) * std::min(inputs[i-1], T(mu * m * g));
         }
         else {  //kinetic friction: opposite to motion
             friction = T(-sign(v_prev) * mu * m * g);
         }        
-        if (doprint) {
-            printf("Friction = %.3f\t", friction);
+        states[idx + 0] = x_prev + v_prev * T(dt);
+        states[idx + 1] = v_prev + (inputs[i-1] + friction)/m * T(dt);
+        if (abs(friction) > abs(inputs[i-1])) {
+            if(doprint && (states[idx + 1] < T(0))) {
+                printf("Friction moving body in opposite direction! Clip velocity %.3f below to 0", states[idx + 1]);
+            }
+            states[idx + 1] = std::max(states[idx + 1], T(0));
         }
-        states[idx + 0] = states[prev_idx + 0] + states[prev_idx + 1] * T(dt);
-        states[idx + 1] = states[prev_idx + 1] + (inputs[i-1] + friction)/m * T(dt);
         if (doprint) {
-            printf("%lu: x %.3f, xdot %.3f, u %.3f\n", i, states[idx+0], states[idx+1], inputs[i]);
+            printf("%lu: x %.3f, xdot %.3f, u %.3f\t", i, states[idx+0], states[idx+1], inputs[i]);
+            printf("Friction = %.3f\n", friction);
         }
     }
 
