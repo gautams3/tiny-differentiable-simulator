@@ -69,7 +69,7 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
     //Account for friction having a larger effect due to time discretization
     if (abs(friction) > abs(inputs[i-1])) {
       if(doprint && (states[idx + 1] < T(0))) {
-        printf("Friction moving body in opposite direction! Clip velocity %.3f below to 0", states[idx + 1]);
+        printf("Friction moving body in opposite direction! Clip velocity %.3f below to 0\n", states[idx + 1]);
       }
       states[idx + 1] = std::max(states[idx + 1], T(0));
     }
@@ -77,14 +77,14 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
     //Logging
     if (doprint) {
       printf("%lu: x %.3f, xdot %.3f, accn %.3f, u %.3f\t", i, states[idx+0], states[idx+1], (inputs[i-1] + friction)/m, inputs[i]);
-      printf("Friction = %.3f\n", friction);
+      printf("friction = %.3f\n", friction);
     }
   }
 
-  T error_goal = pow(states[(N-1) * state_dim + 0] - goal_position, 2.0);
+  T error_pos = pow(states[(N-1) * state_dim + 0] - goal_position, 2.0);
   T error_vel = pow(states[(N-1) * state_dim + 1] - goal_velocity, 2.0);
   T error = T(0.0);
-  error += error_goal; 
+  error += error_pos; 
   error += T(0.0002) * error_vel;
   error += T(0.000002) * reg_input;
 
