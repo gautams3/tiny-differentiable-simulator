@@ -6,6 +6,10 @@ using ceres::Problem;
 using ceres::Solve;
 using ceres::Solver;
 
+template <typename T> int sign(T val) {
+    return (T(0) < val) - (val < T(0));
+}
+
 template <typename T>
 T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
     size_t state_dim = 2; // x, xdot
@@ -16,20 +20,25 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
     T goal_position = T(1.0);
     states[0] = T(0.0); // start from 0 position
     states[1] = T(0.0); //start with 0 velocity
-    T friction = T(mu * m * g);
+    T friction = T(0.0);
 
     for (size_t i = 1; i < N; i++)
     {
-        size_t idx = i * state_dim;
-        size_t prev_idx = (i-1) * state_dim;
-        // friction = std::min(inputs[i-1], T(mu * m * g));
+        size_t idx = i * state_dim, prev_idx = (i-1) * state_dim;
+        T v_curr = states[idx + 1], v_prev = states[prev_idx + 1];
+        if (sign(v_prev) == 0) { //static friction: opposite to force
+            friction = T(-sign(inputs[i-1])) * std::min(inputs[i-1], T(mu * m * g));
+        }
+        else {  //kinetic friction: opposite to motion
+            friction = T(-sign(v_prev) * mu * m * g);
+        }        
         if (doprint) {
             printf("Friction = %.3f\t", friction);
         }
         states[idx + 0] = states[prev_idx + 0] + states[prev_idx + 1] * T(dt);
-        states[idx + 1] = states[prev_idx + 1] + (inputs[i-1] - friction)/m * T(dt);
+        states[idx + 1] = states[prev_idx + 1] + (inputs[i-1] + friction)/m * T(dt);
         if (doprint) {
-            printf("%lu: x %.3f, xdot %.3f, u %.3f\n", i, states[idx+0], states[idx+1], inputs[i]);            
+            printf("%lu: x %.3f, xdot %.3f, u %.3f\n", i, states[idx+0], states[idx+1], inputs[i]);
         }
     }
 
