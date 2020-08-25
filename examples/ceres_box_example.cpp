@@ -1,16 +1,5 @@
 #include <fstream>
-
-#include "neural_scalar.h"
-#include "opengl_window/tiny_opengl3_app.h"
-#include "pendulum.h"
-#include "tiny_ceres_estimator.h"
-#include "tiny_file_utils.h"
-#include "tiny_mb_constraint_solver_spring.h"
-#include "tiny_multi_body.h"
-#include "tiny_system_constructor.h"
-#include "tiny_world.h"
-
-
+#include "math.h"
 #include "ceres/ceres.h"
 #include "glog/logging.h"
 using ceres::AutoDiffCostFunction;
@@ -18,6 +7,8 @@ using ceres::CostFunction;
 using ceres::Problem;
 using ceres::Solve;
 using ceres::Solver;
+
+#define USE_MATPLOTLIB 1
 
 template<typename T> T sign(const T& x) {
   if (x > T(0)) {
@@ -29,14 +20,9 @@ template<typename T> T sign(const T& x) {
   }
 }
 
-#define USE_MATPLOTLIB 1
-
 #ifdef USE_MATPLOTLIB
 #include "third_party/matplotlib-cpp/matplotlibcpp.h"
 namespace plt = matplotlibcpp;
-#endif
-
-#ifdef USE_MATPLOTLIB
 
 template <typename T>
 void plot_trajectory(const T states) {
@@ -62,12 +48,15 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
     double mu = 0.5;
     double g = 9.81; // m/s^2
     T goal_position = T(1.0);
+    T goal_velocity = T(0.0);
     states[0] = T(0.0); // start from 0 position
     states[1] = T(0.0); // start with 0 velocity
     T friction = T(0.0);
+    T reg_input = T(0.0); //input regularization
 
     for (size_t i = 1; i < N; i++)
     {
+        reg_input = reg_input + pow(inputs[i-1], 2.0);
         size_t idx = i * state_dim, prev_idx = (i-1) * state_dim;
         T v_prev = states[prev_idx + 1], x_prev = states[prev_idx + 0];
         if (v_prev == T(0)) { //static friction: opposite to force
@@ -78,19 +67,28 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
         }
         states[idx + 0] = x_prev + v_prev * T(dt);
         states[idx + 1] = v_prev + (inputs[i-1] + friction)/m * T(dt);
+
+        //Account for friction having a larger effect due to time discretization
         if (abs(friction) > abs(inputs[i-1])) {
             if(doprint && (states[idx + 1] < T(0))) {
                 printf("Friction moving body in opposite direction! Clip velocity %.3f below to 0", states[idx + 1]);
             }
             states[idx + 1] = std::max(states[idx + 1], T(0));
         }
+
+        //Logging
         if (doprint) {
-            printf("%lu: x %.3f, xdot %.3f, u %.3f\t", i, states[idx+0], states[idx+1], inputs[i]);
+            printf("%lu: x %.3f, xdot %.3f, accn %.3f, u %.3f\t", i, states[idx+0], states[idx+1], (inputs[i-1] + friction)/m, inputs[i]);
             printf("Friction = %.3f\n", friction);
         }
     }
 
-    T error = states[(N-1) * state_dim + 0] - goal_position;
+    T error_goal = pow(states[(N-1) * state_dim + 0] - goal_position, 2.0);
+    T error_vel = pow(states[(N-1) * state_dim + 1] - goal_velocity, 2.0);
+    T error = T(0.0);
+    error += error_goal; 
+    error += T(0.0002) * error_vel;
+    error += T(0.000002) * reg_input;
 
     return error;
 }
