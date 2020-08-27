@@ -45,7 +45,7 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
   size_t state_dim = 2; // x, xdot
   int N = ceil(1.0/dt);
   double m = 1.0; // unit mass
-  double mu = 0.5;
+  double mu = 0.0;
   double g = 9.81; // m/s^2
   T goal_position = T(1.0);
   T goal_velocity = T(0.0);
@@ -85,8 +85,8 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
   T error_vel = pow(states[(N-1) * state_dim + 1] - goal_velocity, 2.0);
   T error = T(0.0);
   error += error_pos; 
-  error += T(0.0002) * error_vel;
-  error += T(0.000002) * reg_input;
+  error += T(0.02) * error_vel;
+  error += T(0.0002) * reg_input;
 
   return error;
 }
@@ -142,6 +142,7 @@ int main(int argc, char** argv) {
 
   Solver::Options options;
   options.minimizer_progress_to_stdout = true;
+  options.max_num_iterations = 300;
   Solver::Summary summary;
   Solve(options, &problem, &summary);
 
