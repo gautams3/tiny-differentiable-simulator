@@ -59,7 +59,7 @@ T rollout(const T* inputs, T* states, double dt, bool doprint = false) {
     size_t idx = i * state_dim, prev_idx = (i-1) * state_dim;
     T v_prev = states[prev_idx + 1], x_prev = states[prev_idx + 0];
     if (v_prev == T(0)) { //static friction: opposite to force
-      friction = -sign(inputs[i-1]) * std::min(inputs[i-1], T(mu * m * g));
+      friction = -sign(inputs[i-1]) * std::min(abs(inputs[i-1]), T(mu * m * g));
     } else {  //kinetic friction: opposite to motion
       friction = -sign(v_prev) * T(mu * m * g);
     }
