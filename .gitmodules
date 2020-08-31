@@ -13,3 +13,6 @@
 [submodule "third_party/rbdl"]
 	path = third_party/rbdl
 	url = git@github.com:rbdl/rbdl.git
+[submodule "tools/vcpkg"]
+	path = tools/vcpkg
+	url = https://github.com/microsoft/vcpkg.git

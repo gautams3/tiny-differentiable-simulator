@@ -18,23 +18,29 @@ visualizer.
 ![](https://github.com/erwincoumans/tiny-differentiable-simulator/blob/master/data/trb_meshcat.jpg)
 
 ## Getting started
+
 The open-source version builds using CMake and requires a compiler with C++17 support.
 
 ```
-mkdir build
-cd build
-cmake ..
-make -j
+./tools/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+./tools/vcpkg/vcpkg --feature-flags=manifests install
+cmake \
+  -DCMAKE_TOOLCHAIN_FILE=./tools/vcpkg/scripts/buildsystems/vcpkg.cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -B build \
+  -S .
+cmake --build build
 ```
 
 ## Examples
 
 For visualization, two options are supported:
 
-* MeshCat, a web-based visualizer that uses WebGL
+- MeshCat, a web-based visualizer that uses WebGL
 
-Before running the example, install python, pip and meshcat, run the meshcat-server 
+Before running the example, install python, pip and meshcat, run the meshcat-server
 and open the web browser (Chrome is recommended for a good three.js experience.)
+
 ```
 pip install meshcat
 meshcat-server --open
@@ -42,22 +48,25 @@ This should open Chrome at http://localhost:7000/static/
 Then compile and run tiny_urdf_parser_meshcat_example in optimized/release build.
 ```
 
-* PyBullet visualization, a cross-platform solution that visualizes in a native OpenGL window
+- PyBullet visualization, a cross-platform solution that visualizes in a native OpenGL window
 
 URDF files can be loaded either throught the PyBullet interface or a provided parser based on TinyXML2. All simulation features are therefore available without requiring PyBullet.
 
 Several examples (see `examples/` folder) use either Ceres or Control Toolbox. To install:
 
-* Ceres Solver (optional) >1.14.0
-* Control Toolbox (optional) >3.0.2
+- Ceres Solver (optional) >1.14.0
+- Control Toolbox (optional) >3.0.2
 
 ### Ceres Solver
+
 Check out the [installation](http://ceres-solver.org/installation.html) page from the manual.
-Make sure the following dependencies are met: 
-* Eigen 3 (install `libeigen3-dev`)
-* BLAS and LAPACK via ATLAS >3.10.3 (install `libatlas-base-dev`)
-* (optionally) SuiteSparse >5.1.2 (install `libsuitesparse-dev`)
-* Google glog and gflags (install `libgoogle-glog-dev`)
+Make sure the following dependencies are met:
+
+- Eigen 3 (install `libeigen3-dev`)
+- BLAS and LAPACK via ATLAS >3.10.3 (install `libatlas-base-dev`)
+- (optionally) SuiteSparse >5.1.2 (install `libsuitesparse-dev`)
+- Google glog and gflags (install `libgoogle-glog-dev`)
+
 ```
 git clone https://github.com/ceres-solver/ceres-solver.git
 cd ceres-solver
@@ -70,7 +79,9 @@ make install
 ```
 
 ### Control Toolbox
+
 It is recommended to first set up BLASFEO and HPIPM for more efficient solvers that can also handle constraints in the optimization problems:
+
 ```
 git clone https://github.com/giaf/blasfeo.git
 cd blasfeo
@@ -80,6 +91,7 @@ cmake ..
 make
 make install
 ```
+
 ```
 git clone https://github.com/giaf/hpipm.git
 cd hpipm
@@ -89,7 +101,9 @@ cmake ..
 make
 make install
 ```
+
 Next, install CppAD:
+
 ```
 git clone https://github.com/coin-or/CppAD.git
 cd CppAD
@@ -99,7 +113,9 @@ cmake ..
 make
 make install
 ```
+
 Then install CppADCodeGen (we don't really need it but CT requires the CPPADCG flag to use the linearizers).
+
 ```
 git clone https://github.com/joaoleal/CppADCodeGen.git
 cd CppADCodeGen
@@ -111,9 +127,11 @@ make install
 ```
 
 For the trajectory optimization experiments, the following modules from Control Toolbox are needed:
-* `ct_core`
-* `ct_optcon`
-To build these, make sure Eigen and Boost (`libboost-dev` ~1.65) are installed. Next, issue the following commands:
+
+- `ct_core`
+- `ct_optcon`
+  To build these, make sure Eigen and Boost (`libboost-dev` ~1.65) are installed. Next, issue the following commands:
+
 ```
 git clone https://github.com/ethz-adrl/control-toolbox.git
 cd ct_core
@@ -131,17 +149,21 @@ make install
 ```
 
 ### MeshCat Visualization
+
 To support visualization through the web-based visualizer MeshCat, the following packages need to be installed:
-* [zero/libzmq](https://github.com/zeromq/libzmq) ~4.3.2
-* [zeromq/cppzmq](https://github.com/zeromq/cppzmq) ~4.6.0
-* [graeme-hill/crossguid](https://github.com/graeme-hill/crossguid) ~0.2.2
-* [nlohmann/json](https://github.com/nlohmann/json) ~3.7.3
-* [eric-heiden/cpp-base64](https://github.com/eric-heiden/cpp-base64)
+
+- [zero/libzmq](https://github.com/zeromq/libzmq) ~4.3.2
+- [zeromq/cppzmq](https://github.com/zeromq/cppzmq) ~4.6.0
+- [graeme-hill/crossguid](https://github.com/graeme-hill/crossguid) ~0.2.2
+- [nlohmann/json](https://github.com/nlohmann/json) ~3.7.3
+- [eric-heiden/cpp-base64](https://github.com/eric-heiden/cpp-base64)
 
 #### libzmq
+
 It is recommended to install the binary packages, as shown on the [ZeroMQ README file](https://github.com/zeromq/libzmq/blob/master/README.md).
 
 #### cppzmq
+
 ```
 git clone https://github.com/zeromq/cppzmq.git
 cd cppzmq
@@ -153,6 +175,7 @@ make install
 ```
 
 #### crossguid
+
 ```
 apt install uuid-dev
 
@@ -165,6 +188,7 @@ make -j
 ```
 
 #### json
+
 ```
 git clone https://github.com/nlohmann/json.git
 cd json
@@ -176,6 +200,7 @@ make install
 ```
 
 #### base64
+
 ```
 git clone https://github.com/eric-heiden/cpp-base64.git
 cd cpp-base64
@@ -186,17 +211,23 @@ make install
 ```
 
 #### MeshCat server
+
 To install the MeshCat server, issue
+
 ```
 pip install meshcat
 ```
+
 To start the server and open the visualization in the browser, run
+
 ```
 meshcat-server --open
 ```
+
 This will start MeshCat with ZMQ listening on port 7000 which is the default setting in the C++ MeshCat visualization client.
 
 ### PyBullet visualization
+
 ```
 git clone https://github.com/bulletphysics/bullet3.git
 cd bullet3
@@ -204,18 +235,24 @@ cd bullet3
 cd build_cmake
 make install
 ```
+
 To install the visualizer server to be able to run the visualizer window in shared-memory mode, issue
+
 ```
 pip install pybullet
 ```
+
 If the simulator is running with PyBullet visualization in shared-memory mode,
 first open the visualizer server using
+
 ```
 python -m pybullet_utils.runServer
 ```
 
 ### TinyXML2
+
 To load URDF models without pybullet, our C++-based importer requires TinyXML2 which is installed as follows:
+
 ```
 git clone https://github.com/leethomason/tinyxml2.git
 cd tinyxml2
@@ -226,13 +263,17 @@ make install
 ```
 
 ### HDF5
+
 This dependency is only necessary for Sim2Real experiments with the MIT Push Dataset.
 
 On Ubuntu, install the HDF5 libraries via
+
 ```
 sudo apt-get install libhdf5-dev
 ```
-In `third_party/`, clone the [HighFive](https://github.com/BlueBrain/HighFive) submodule (`v2.2`) and build via 
+
+In `third_party/`, clone the [HighFive](https://github.com/BlueBrain/HighFive) submodule (`v2.2`) and build via
+
 ```
 mkdir build && cd build
 cmake .. -DHIGHFIVE_USE_BOOST=OFF
@@ -255,11 +296,13 @@ make install
 ## Docker Instructions
 
 Build the Docker image
+
 ```sh
 docker build -t tds .
 ```
 
 Run the image
+
 ```sh
 docker run -p 8888:8888 -v $(pwd):/root/code/tiny-differentiable-simulator -it tds
 ```
@@ -278,5 +321,4 @@ https://linuxize.com/post/how-to-install-gcc-compiler-on-ubuntu-18-04/
 
 ---
 
-*Disclaimer: This is not an official Google product.*
-
+_Disclaimer: This is not an official Google product._
