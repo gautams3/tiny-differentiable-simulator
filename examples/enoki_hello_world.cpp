@@ -9,7 +9,7 @@
 
 #include "opengl_window/tiny_opengl3_app.h"
 
-#define USE_MATPLOTLIB 1
+// #define USE_MATPLOTLIB 1
 
 #ifdef USE_MATPLOTLIB
 #include "third_party/matplotlib-cpp/matplotlibcpp.h"
@@ -20,12 +20,15 @@ namespace plt = matplotlibcpp;
 #include "math/tiny/tiny_algebra.hpp"
 #include "math/tiny/tiny_double_utils.h"
 #include "multi_body.hpp"
-#include "rbdl/Dynamics.h"
-#include "rbdl/Model.h"
-#include "rbdl/rbdl.h"
 #include "urdf/tiny_system_constructor.h"
 #include "utils/tiny_file_utils.h"
 #include "world.hpp"
+
+#if USE_RBDL
+#include "rbdl/Dynamics.h"
+#include "rbdl/Model.h"
+#include "rbdl/rbdl.h"
+#endif
 
 #ifdef USE_MATPLOTLIB
 template <typename Algebra>
@@ -133,6 +136,7 @@ bool equals(const typename EnokiAlgebra::Matrix3 &e,
   return true;
 }
 
+#if USE_RBDL
 template <typename Algebra>
 RigidBodyDynamics::Math::Vector3d to_rbdl(const typename Algebra::Vector3 &v) {
   return RigidBodyDynamics::Math::Vector3d(Algebra::to_double(v[0]),
@@ -322,7 +326,8 @@ bool is_equal(const MultiBody<Algebra> &tds,
       // return false;
     }
     if (!is_equal<Algebra>(tds.links[j].X_parent, rbdl.X_lambda[j + 1])) {
-      fprintf(stderr, "Mismatch in X_lambda at link %i.\n", static_cast<int>(j));
+      fprintf(stderr, "Mismatch in X_lambda at link %i.\n",
+              static_cast<int>(j));
       Algebra::print("TDS:  ", tds.links[j].X_parent);
       std::cerr << "RBDL:\n" << rbdl.X_lambda[j + 1] << std::endl;
       // return false;
@@ -330,10 +335,13 @@ bool is_equal(const MultiBody<Algebra> &tds,
   }
   return true;
 }
+#endif
 
 int main(int argc, char **argv) {
+#if !defined(_MSC_VER)
   // Set NaN trap
   feenableexcept(FE_INVALID | FE_OVERFLOW);
+#endif
 
   // {
   //   using TinyAlgebra = ::TinyAlgebra<double, DoubleUtils>;
@@ -417,6 +425,7 @@ int main(int argc, char **argv) {
     //   mb->forward_kinematics();
     // }
 
+#if USE_RBDL
     {
       RigidBodyDynamics::Model rbdl_model = to_rbdl(*mb);
       rbdl_model.gravity = to_rbdl<Algebra>(gravity);
@@ -482,6 +491,7 @@ int main(int argc, char **argv) {
 
       return 0;
     }
+#endif
 
     // {
     //   double mass = .001;
@@ -532,20 +542,26 @@ int main(int argc, char **argv) {
       mb->forward_dynamics(gravity);
       mb->print_state();
       // for (auto &link : mb->links) {
-      //   Algebra::print(("link[" + std::to_string(link.q_index) + "].D").c_str(),
+      //   Algebra::print(("link[" + std::to_string(link.q_index) +
+      //   "].D").c_str(),
       //                  link.D);
-      //   Algebra::print(("link[" + std::to_string(link.q_index) + "].U").c_str(),
+      //   Algebra::print(("link[" + std::to_string(link.q_index) +
+      //   "].U").c_str(),
       //                  link.U);
-      //   Algebra::print(("link[" + std::to_string(link.q_index) + "].S").c_str(),
+      //   Algebra::print(("link[" + std::to_string(link.q_index) +
+      //   "].S").c_str(),
       //                  link.S);
-      //   Algebra::print(("link[" + std::to_string(link.q_index) + "].u").c_str(),
+      //   Algebra::print(("link[" + std::to_string(link.q_index) +
+      //   "].u").c_str(),
       //                  link.u);
       // }
       mb->clear_forces();
       mb->integrate(dt);
     }
 
+#ifdef USE_MATPLOTLIB
     plot_trajectory<Algebra>(traj, "Trajectory");
+#endif
     visualize_trajectory<Algebra>(traj, *mb, dt);
   }
 

@@ -2,7 +2,6 @@
 
 #include <enoki/autodiff.h>
 #include <enoki/cuda.h>
-#include <enoki/dynamic.h>
 #include <enoki/quaternion.h>
 #include <enoki/special.h>  // for erf()
 

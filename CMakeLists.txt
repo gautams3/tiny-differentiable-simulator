@@ -78,11 +78,12 @@ set(CMAKE_CXX_STANDARD_LIBRARIES ${CMAKE_CXX_STANDARD_LIBRARIES})
 # set(CMAKE_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS})
 
 
-
-
+OPTION (USE_RBDL "Compare against RBDL" OFF)
+if(USE_RBDL)
 include_directories(third_party/rbdl/include)
 include_directories(third_party/rbdl/build/include)
 subdirs(third_party/rbdl)
+endif(USE_RBDL)
 
 
 
