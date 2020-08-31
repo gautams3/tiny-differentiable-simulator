@@ -12,7 +12,7 @@ constexpr std::size_t kTimesteps = 20;
 constexpr double dt = 1.0/ kTimesteps;
 constexpr std::size_t state_dim = 2; // x, xdot
 constexpr double m = 1.0; // unit mass
-constexpr double mu = 0.0;
+constexpr double mu = 0.5;
 constexpr double g = 9.81; // m/s^2
 
 constexpr double init_x = 0.0;
@@ -32,6 +32,8 @@ template<typename T> T sign(const T& x) {
 #ifdef USE_MATPLOTLIB
 #include "third_party/matplotlib-cpp/matplotlibcpp.h"
 namespace plt = matplotlibcpp;
+std::string colours[] = {"b","orange","y","g"};
+size_t colours_size = 4;
 
 template <typename T>
 void plot_trajectory(const std::vector<std::vector<T>> states) {
@@ -39,11 +41,15 @@ void plot_trajectory(const std::vector<std::vector<T>> states) {
   int state_dim = states[0].size();
   for (int i = 0; i < state_dim; ++i) {
     std::vector<double> traj(traj_length);
+    std::vector<double> time_s(traj_length);
     for (int t = 0; t < traj_length; ++t) {
       traj[t] = static_cast<double>(states[t][i]);
+      time_s[t] = t*dt;
     }
-    plt::named_plot("state[" + std::to_string(i) + "]", traj);
+    plt::named_plot("state[" + std::to_string(i) + "]", time_s, traj, colours[i % colours_size]);
   }
+  plt::xlabel("Time (s)");
+  plt::title("pos(0) and vel(1)");
   plt::legend();
   plt::show();
 }
@@ -90,8 +96,8 @@ T rollout(const std::vector<T> &inputs, std::vector<std::vector<T>> &states, con
   T error_vel = pow(states[kTimesteps-1][1] - goal_velocity, 2.0);
   T error = T(0.0);
   error += error_pos; 
-  error += T(0.02) * error_vel;
-  error += T(0.0002) * reg_input;
+  error += T(0.00006) * error_vel;
+  error += T(0.00006) * reg_input;
 
   return error;
 }
@@ -128,7 +134,13 @@ int main(int argc, char** argv) {
   ceres::CostFunction* cost_function = new ceres::AutoDiffCostFunction<CeresFunctional, 1, kTimesteps>(new CeresFunctional);
 
   problem.AddResidualBlock(cost_function, NULL, inputs.data());
-
+  double max_force = m * g;
+  for (size_t i = 0; i < inputs.size(); i++)
+  {
+    problem.SetParameterLowerBound(inputs.data(), i, -max_force);
+    problem.SetParameterUpperBound(inputs.data(), i, max_force);
+  }
+  
   ceres::Solver::Options options;
   options.minimizer_progress_to_stdout = true;
   options.max_num_iterations = 500;
