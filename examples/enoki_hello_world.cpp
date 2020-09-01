@@ -24,7 +24,7 @@ namespace plt = matplotlibcpp;
 #include "math/tiny/tiny_double_utils.h"
 #include "multi_body.hpp"
 #include "urdf/urdf_cache.hpp"
-#include "utils/tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "world.hpp"
 
 #if USE_RBDL
@@ -394,8 +394,7 @@ int main(int argc, char **argv) {
 
     {
       std::string urdf_filename;
-      TinyFileUtils::find_file("swimmer/swimmer05/swimmer05.urdf",
-                               urdf_filename);
+      FileUtils::find_file("swimmer/swimmer05/swimmer05.urdf", urdf_filename);
       mb = cache.construct(urdf_filename, world);
 
       for (std::size_t j = 0; j < mb->size(); ++j) {
