@@ -1,92 +1,155 @@
 #pragma once
 
+#include <vector>
+
 #include "link.hpp"
 
+namespace tds {
 template <typename Algebra>
 class MultiBody {
+  template <typename>
+  friend struct UrdfToMultiBody;
+
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using VectorX = typename Algebra::VectorX;
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix6 = typename Algebra::Matrix6;
   using Quaternion = typename Algebra::Quaternion;
-  typedef ::Transform<Algebra> Transform;
-  typedef ::MotionVector<Algebra> MotionVector;
-  typedef ::ForceVector<Algebra> ForceVector;
-  typedef ::Link<Algebra> Link;
-  typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
-  typedef ::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
+  typedef tds::Transform<Algebra> Transform;
+  typedef tds::MotionVector<Algebra> MotionVector;
+  typedef tds::ForceVector<Algebra> ForceVector;
+  typedef tds::Link<Algebra> Link;
+  typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
+  typedef tds::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
+  typedef std::vector<Link> LinkCollection;
 
   /**
    * Number of degrees of freedom, excluding floating-base coordinates.
    */
   int dof_{0};
 
- public:
-  std::vector<Link> links;
+  LinkCollection links_;
 
   /**
-   * Dimensionality of joint positions q (including 7-DoF floating-base
-   * coordinates if this system is floating-base).
+   * Whether this system is floating or fixed to the world frame.
    */
-  TINY_INLINE int dof() const { return is_floating ? dof_ + 7 : dof_; }
-  /**
-   * Dimensionality of joint velocities qd and accelerations qdd (including
-   * 6-DoF base velocity and acceleration, if this system is floating-base).
-   */
-  TINY_INLINE int dof_qd() const { return is_floating ? dof_ + 6 : dof_; }
+  bool is_floating_{false};
 
   /**
    * Indices in `tau` that are controllable, i.e. actuated.
    * For floating-base system, the index 0 corresponds to the first degree of
    * freedom not part of the 6D floating-base coordinates.
    */
-  std::vector<int> control_indices;
-  /**
-   * Dimensionality of control input, i.e. number of actuated DOFs.
-   */
-  TINY_INLINE int dof_actuated() const {
-    return static_cast<int>(control_indices.size());
-  }
-
-  /**
-   * Whether this system is floating or fixed to the world frame.
-   */
-  bool is_floating{false};
+  std::vector<int> control_indices_;
 
   // quantities related to floating base
-  mutable MotionVector base_velocity;       // v_0
-  mutable MotionVector base_acceleration;   // a_0
-  ForceVector base_applied_force;           // f_ext_0 in world frame
-  mutable ForceVector base_force;           // f_0 (used by RNEA)
-  mutable ForceVector base_bias_force;      // pA_0
-  RigidBodyInertia base_rbi;                // I_0
-  mutable ArticulatedBodyInertia base_abi;  // IA_0
-  mutable Transform base_X_world;
+  mutable MotionVector base_velocity_;       // v_0
+  mutable MotionVector base_acceleration_;   // a_0
+  ForceVector base_applied_force_;           // f_ext_0 in world frame
+  mutable ForceVector base_force_;           // f_0 (used by RNEA)
+  mutable ForceVector base_bias_force_;      // pA_0
+  RigidBodyInertia base_rbi_;                // I_0
+  mutable ArticulatedBodyInertia base_abi_;  // IA_0
+  mutable Transform base_X_world_;
 
-  std::vector<int> visual_uids1;
-  std::vector<int> visual_uids2;
+  std::vector<int> visual_ids_;
   // offset of geometry (relative to the base frame)
-  std::vector<Transform> X_visuals;
+  std::vector<Transform> X_visuals_;
 
   // std::vector<const TinyGeometry<Scalar, Algebra> *>
   //     collision_geometries;
   // offset of collision geometries (relative to this link frame)
-  std::vector<Transform> X_collisions;
+  std::vector<Transform> X_collisions_;
 
-  VectorX q, qd, qdd, tau;
+  VectorX q_, qd_, qdd_, tau_;
 
-  explicit MultiBody(bool isFloating = false) : is_floating(isFloating) {}
+ public:
+  explicit MultiBody(bool isFloating = false) : is_floating_(isFloating) {}
+
+  TINY_INLINE const LinkCollection &links() const { return links_; }
+  TINY_INLINE std::size_t size() const { return links_.size(); }
+  TINY_INLINE const Link &operator[](std::size_t i) const { return links_[i]; }
+  TINY_INLINE Link &operator[](std::size_t i) { return links_[i]; }
+  TINY_INLINE typename LinkCollection::iterator begin() {
+    return links_.begin();
+  }
+  TINY_INLINE typename LinkCollection::iterator end() { return links_.end(); }
+  TINY_INLINE typename LinkCollection::const_iterator cbegin() const {
+    return links_.cbegin();
+  }
+  TINY_INLINE typename LinkCollection::const_iterator cend() const {
+    return links_.cend();
+  }
+
+  /**
+   * Dimensionality of joint positions q (including 7-DoF floating-base
+   * coordinates if this system is floating-base).
+   */
+  TINY_INLINE int dof() const { return is_floating_ ? dof_ + 7 : dof_; }
+  /**
+   * Dimensionality of joint velocities qd and accelerations qdd (including
+   * 6-DoF base velocity and acceleration, if this system is floating-base).
+   */
+  TINY_INLINE int dof_qd() const { return is_floating_ ? dof_ + 6 : dof_; }
+
+  /**
+   * Dimensionality of control input, i.e. number of actuated DOFs.
+   */
+  TINY_INLINE int dof_actuated() const {
+    return static_cast<int>(control_indices_.size());
+  }
+
+  TINY_INLINE bool is_floating() const { return is_floating_; }
+  void set_floating_base(bool is_floating = true) {
+    is_floating_ = is_floating;
+  }
+
+  TINY_INLINE VectorX &q() { return q_; }
+  TINY_INLINE const VectorX &q() const { return q_; }
+  TINY_INLINE VectorX &qd() { return qd_; }
+  TINY_INLINE const VectorX &qd() const { return qd_; }
+  TINY_INLINE VectorX &qdd() { return qdd_; }
+  TINY_INLINE const VectorX &qdd() const { return qdd_; }
+  TINY_INLINE VectorX &tau() { return tau_; }
+  TINY_INLINE const VectorX &tau() const { return tau_; }
+
+  TINY_INLINE MotionVector &base_velocity() { return base_velocity_; }
+  TINY_INLINE const MotionVector &base_velocity() const {
+    return base_velocity_;
+  }
+  TINY_INLINE MotionVector &base_acceleration() { return base_acceleration_; }
+  TINY_INLINE const MotionVector &base_acceleration() const {
+    return base_acceleration_;
+  }
+  TINY_INLINE ForceVector &base_applied_force() { return base_applied_force_; }
+  TINY_INLINE const ForceVector &base_applied_force() const {
+    return base_applied_force_;
+  }
+  TINY_INLINE ForceVector &base_force() { return base_force_; }
+  TINY_INLINE const ForceVector &base_force() const { return base_force_; }
+  TINY_INLINE ForceVector &base_bias_force() { return base_bias_force_; }
+  TINY_INLINE const ForceVector &base_bias_force() const {
+    return base_bias_force_;
+  }
+  TINY_INLINE RigidBodyInertia &base_rbi() { return base_rbi_; }
+  TINY_INLINE const RigidBodyInertia &base_rbi() const { return base_rbi_; }
+  TINY_INLINE ArticulatedBodyInertia &base_abi() { return base_abi_; }
+  TINY_INLINE const ArticulatedBodyInertia &base_abi() const {
+    return base_abi_;
+  }
+  TINY_INLINE Transform &base_X_world() { return base_X_world_; }
+  TINY_INLINE const Transform &base_X_world() const { return base_X_world_; }
 
   /**
    * Set 3D base position in world coordinates.
    */
   void set_position(const Vector3 &initial_position) {
-    base_X_world.translation = initial_position;
-    if (is_floating) {
-      q[4] = initial_position[0];
-      q[5] = initial_position[1];
-      q[6] = initial_position[2];
+    base_X_world_.translation = initial_position;
+    if (is_floating_) {
+      q_[4] = initial_position[0];
+      q_[5] = initial_position[1];
+      q_[6] = initial_position[2];
     }
   }
 
@@ -96,10 +159,10 @@ class MultiBody {
    */
   void initialize() {
     // make sure dof and the q / qd indices in the links are accurate
-    int q_index = is_floating ? 7 : 0;
-    int qd_index = is_floating ? 6 : 0;
+    int q_index = is_floating_ ? 7 : 0;
+    int qd_index = is_floating_ ? 6 : 0;
     dof_ = 0;  // excludes floating-base DOF
-    for (Link &link : links) {
+    for (Link &link : links_) {
       assert(link.index >= 0);
       link.q_index = q_index;
       link.qd_index = qd_index;
@@ -113,12 +176,12 @@ class MultiBody {
       }
     }
 
-    q = Algebra::zerox(dof());
-    qd = Algebra::zerox(dof_qd());
-    qdd = Algebra::zerox(dof_qd());
-    tau = Algebra::zerox(dof_actuated());
-    if (is_floating) {
-      q[3] = Algebra::one();  // make sure orientation is valid
+    q_ = Algebra::zerox(dof());
+    qd_ = Algebra::zerox(dof_qd());
+    qdd_ = Algebra::zerox(dof_qd());
+    tau_ = Algebra::zerox(dof_actuated());
+    if (is_floating_) {
+      q_[3] = Algebra::one();  // make sure orientation is valid
     }
 
     // (Re-)create actuator to make sure it has the right degrees of freedom.
@@ -135,24 +198,24 @@ class MultiBody {
    */
   template <typename Algebra2>
   MultiBody(const MultiBody<Algebra2> &mb)
-      : links(mb.links),
+      : links_(mb.links_),
         dof_(mb.dof_),
         // actuator(mb.actuator),
-        control_indices(mb.control_indices),
-        is_floating(mb.is_floating),
-        base_velocity(mb.base_velocity),
-        base_acceleration(mb.base_acceleration),
-        base_applied_force(mb.base_applied_force),
-        base_force(mb.base_force),
-        base_bias_force(mb.base_bias_force),
-        base_rbi(mb.base_rbi),
-        base_X_world(mb.base_X_world),
+        control_indices_(mb.control_indices_),
+        is_floating_(mb.is_floating_),
+        base_velocity_(mb.base_velocity_),
+        base_acceleration_(mb.base_acceleration_),
+        base_applied_force_(mb.base_applied_force_),
+        base_force_(mb.base_force_),
+        base_bias_force_(mb.base_bias_force_),
+        base_rbi_(mb.base_rbi_),
+        base_X_world_(mb.base_X_world_),
         // collision_geometries(mb.collision_geometries),
-        X_collisions(mb.X_collisions),
-        q(mb.q),
-        qd(mb.qd),
-        qdd(mb.qdd),
-        tau(mb.tau) {}
+        X_collisions_(mb.X_collisions_),
+        q_(mb.q_),
+        qd_(mb.qd_),
+        qdd_(mb.qdd_),
+        tau_(mb.tau_) {}
 
   // virtual ~MultiBody() {
   // if (m_actuator) {
@@ -164,31 +227,31 @@ class MultiBody {
     printf("q: [");
     for (int i = 0; i < dof(); ++i) {
       if (i > 0) printf(" ");
-      printf("%.2f", Algebra::to_double(q[i]));
+      printf("%.2f", Algebra::to_double(q_[i]));
     }
     printf("] \tqd: [");
     for (int i = 0; i < dof_qd(); ++i) {
       if (i > 0) printf(" ");
-      printf("%.2f", Algebra::to_double(qd[i]));
+      printf("%.2f", Algebra::to_double(qd_[i]));
     }
     printf("] \tqdd: [");
     for (int i = 0; i < dof_qd(); ++i) {
       if (i > 0) printf(" ");
-      printf("%.2f", Algebra::to_double(qdd[i]));
+      printf("%.2f", Algebra::to_double(qdd_[i]));
     }
     printf("] \ttau: [");
     for (int i = 0; i < dof_actuated(); ++i) {
       if (i > 0) printf(" ");
-      printf("%.2f", Algebra::to_double(tau[i]));
+      printf("%.2f", Algebra::to_double(tau_[i]));
     }
     printf("]\n");
   }
 
   const Transform &get_world_transform(int link) const {
     if (link == -1) {
-      return base_X_world;
+      return base_X_world_;
     } else {
-      return links[link].X_world;
+      return links_[link].X_world;
     }
   }
 
@@ -200,28 +263,28 @@ class MultiBody {
   const Vector3 get_world_com(int link) const {
     const Transform &tf = get_world_transform(link);
     if (link == -1) {
-      return tf.apply(base_rbi.com);
+      return tf.apply(base_rbi_.com);
     } else {
-      return tf.apply(links[link].I.com);
+      return tf.apply(links_[link].I.com);
     }
   }
 
   TINY_INLINE Scalar get_q_for_link(const VectorX &q, int link_index) const {
     if (Algebra::size(q) == 0) return Algebra::zero();
-    const Link &link = links[link_index];
+    const Link &link = links_[link_index];
     return link.joint_type == JOINT_FIXED ? Algebra::zero() : q[link.q_index];
   }
   TINY_INLINE Scalar get_q_for_link(int link_index) const {
-    get_q_for_link(q, link_index);
+    get_q_for_link(q_, link_index);
   }
 
   TINY_INLINE Scalar get_qd_for_link(const VectorX &qd, int link_index) const {
     if (Algebra::size(qd) == 0) return Algebra::zero();
-    const Link &link = links[link_index];
+    const Link &link = links_[link_index];
     return link.joint_type == JOINT_FIXED ? Algebra::zero() : qd[link.qd_index];
   }
   TINY_INLINE Scalar get_qd_for_link(int link_index) const {
-    return get_qd_for_link(qd, link_index);
+    return get_qd_for_link(qd_, link_index);
   }
 
   TINY_INLINE Scalar get_qdd_for_link(const VectorX &qdd,
@@ -229,58 +292,32 @@ class MultiBody {
     return get_qd_for_link(qdd, link_index);
   }
   TINY_INLINE Scalar get_qdd_for_link(int link_index) const {
-    return get_qdd_for_link(qdd, link_index);
+    return get_qdd_for_link(qdd_, link_index);
   }
 
   TINY_INLINE Scalar get_tau_for_link(const VectorX &tau,
                                       int link_index) const {
     if (Algebra::size(tau) == 0) return Algebra::zero();
-    const Link &link = links[link_index];
-    int offset = is_floating ? -6 : 0;
+    const Link &link = links_[link_index];
+    int offset = is_floating_ ? -6 : 0;
     return link.joint_type == JOINT_FIXED ? Algebra::zero()
                                           : tau[link.qd_index + offset];
   }
   TINY_INLINE Scalar get_tau_for_link(int link_index) const {
-    return get_tau_for_link(tau, link_index);
+    return get_tau_for_link(tau_, link_index);
   }
 
   /**
    * Set joint torques and external forces in all links and the base to zero.
    */
   void clear_forces() {
-    base_applied_force.set_zero();
-    for (Link &link : links) {
+    base_applied_force_.set_zero();
+    for (Link &link : links_) {
       link.f_ext.set_zero();
     }
     for (int i = 0; i < dof_actuated(); ++i) {
-      tau[i] = Algebra::zero();
+      tau_[i] = Algebra::zero();
     }
-  }
-
-  /**
-   * Implements the first phase in ABA, CRBA and RNEA, that computes the
-   * joint and body transforms, velocities and bias forces.
-   * Initializes articulated inertia with the local body inertia.
-   *
-   * Joint positions q must have dimension of dof().
-   * Joint velocities qd must have dimension of dof_qd().
-   * If no joint velocities qd are given, qd is assumed to be zero.
-   * If no joint accelerations qdd are given, qdd is assumed to be zero.
-   */
-  void forward_kinematics(const VectorX &q, const VectorX &qd = VectorX(),
-                          const VectorX &qdd = VectorX()) const;
-
-  /**
-   * Updates the forward kinematics given the q, qd coordinates stored in this
-   * model.
-   */
-  void forward_kinematics() { forward_kinematics(q, qd); }
-
-  void forward_dynamics(const VectorX &q, const VectorX &qd, const VectorX &tau,
-                        const Vector3 &gravity, VectorX &qdd) const;
-
-  void forward_dynamics(const Vector3 &gravity) {
-    forward_dynamics(q, qd, tau, gravity, qdd);
   }
 
   static std::string joint_type_name(JointType t) {
@@ -295,12 +332,12 @@ class MultiBody {
   // attaches a new link, setting parent to the last link
   void attach(Link &link, bool is_controllable = true) {
     int parent_index = -1;
-    if (!links.empty()) parent_index = static_cast<int>(links.size()) - 1;
+    if (!links_.empty()) parent_index = static_cast<int>(links_.size()) - 1;
     attach(link, parent_index, is_controllable);
   }
 
   void attach(Link &link, int parent_index, bool is_controllable = true) {
-    int sz = static_cast<int>(links.size());
+    int sz = static_cast<int>(links_.size());
     assert(parent_index < sz);
     link.index = sz;
     link.parent_index = parent_index;
@@ -310,10 +347,10 @@ class MultiBody {
       link.qd_index = dof_qd();
       dof_++;
       if (is_controllable) {
-        if (control_indices.empty()) {
-          control_indices.push_back(0);
+        if (control_indices_.empty()) {
+          control_indices_.push_back(0);
         } else {
-          control_indices.push_back(control_indices.back() + 1);
+          control_indices_.push_back(control_indices_.back() + 1);
         }
       }
     } else {
@@ -328,58 +365,7 @@ class MultiBody {
         link.q_index, link.qd_index);
 //    link.S.print("joint.S");
 #endif
-    links.push_back(link);
+    links_.push_back(link);
   }
-
-  void integrate(VectorX &q, VectorX &qd, VectorX &qdd, const Scalar &dt) {
-    assert(Algebra::size(q) == dof());
-    assert(Algebra::size(qd) == dof_qd());
-    assert(Algebra::size(qdd) == dof_qd());
-
-    int q_offset, qd_offset;
-    if (is_floating) {
-      base_acceleration.top = Vector3(qdd[0], qdd[1], qdd[2]);
-      base_acceleration.bottom = Vector3(qdd[3], qdd[4], qdd[5]);
-
-      base_velocity.top = Vector3(qd[0], qd[1], qd[2]);
-      base_velocity.bottom = Vector3(qd[3], qd[4], qd[5]);
-
-      base_velocity += base_acceleration * dt;
-
-      Vector3 linear_velocity = base_velocity.bottom;
-      base_X_world.translation += linear_velocity * dt;
-
-      // update base orientation using Quaternion derivative
-      Vector3 angular_velocity = base_velocity.top;
-
-      Quaternion base_rot = Algebra::matrix_to_quat(base_X_world.rotation);
-      // update 4-dimensional q from 3-dimensional qd for the base rotation
-      // angular_velocity = Vector3(qd[0], qd[1], qd[2]);
-      base_rot += Algebra::quat_velocity(base_rot, angular_velocity, dt);
-      Algebra::normalize(base_rot);
-      base_X_world.rotation = Algebra::quat_to_matrix(base_rot);
-
-      q[0] = Algebra::quat_x(base_rot);
-      q[1] = Algebra::quat_y(base_rot);
-      q[2] = Algebra::quat_z(base_rot);
-      q[3] = Algebra::quat_w(base_rot);
-      q_offset = 4;
-      qd_offset = 3;
-    } else {
-      q_offset = 0;
-      qd_offset = 0;
-    }
-
-    for (int i = 0; i < dof_qd() - qd_offset; i++) {
-      int qindex = i + q_offset;
-      int qdindex = i + qd_offset;
-      qd[qdindex] += qdd[qdindex] * dt;
-      q[qindex] += qd[qdindex] * dt;
-    }
-  }
-
-  void integrate(const Scalar &dt) { integrate(q, qd, qdd, dt); }
 };
-
-#include "dynamics/forward_dynamics.hpp"
-#include "dynamics/kinematics.hpp"
+}  // namespace tds

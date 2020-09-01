@@ -18,9 +18,9 @@ struct EnokiAlgebra {
   using Matrix3 = enoki::Matrix<Scalar, 3>;
   using Matrix6 = enoki::Matrix<Scalar, 6>;
   using Quaternion = enoki::Quaternion<Scalar>;
-  using SpatialVector = ::SpatialVector<EnokiAlgebra>;
-  using MotionVector = ::MotionVector<EnokiAlgebra>;
-  using ForceVector = ::ForceVector<EnokiAlgebra>;
+  using SpatialVector = tds::SpatialVector<EnokiAlgebra>;
+  using MotionVector = tds::MotionVector<EnokiAlgebra>;
+  using ForceVector = tds::ForceVector<EnokiAlgebra>;
 
   template <typename T>
   ENOKI_INLINE static auto transpose(const T &matrix) {

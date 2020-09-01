@@ -21,7 +21,9 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include <string>
+
 #include "math.h"
 
 struct FloatUtils {
@@ -76,25 +78,28 @@ struct FloatUtils {
   }
 };
 
+#include "../pose.hpp"
+#include "tiny_algebra.hpp"
 #include "tiny_matrix3x3.h"
 #include "tiny_quaternion.h"
 #include "tiny_vector3.h"
-#include "tiny_algebra.hpp"
-#include "../pose.hpp"
 
 typedef ::TinyVector3<float, FloatUtils> TinyVector3f;
 typedef ::TinyQuaternion<float, FloatUtils> TinyQuaternionf;
 typedef ::TinyMatrix3x3<float, FloatUtils> TinyMatrix3x3f;
-typedef ::Pose<TinyAlgebra<float, FloatUtils>> Posef;
 
-inline void setFromOpenGLMatrix(Posef& tr, const float* m) {
+namespace tds {
+typedef tds::Pose<TinyAlgebra<float, FloatUtils>> Posef;
+}
+
+inline void setFromOpenGLMatrix(tds::Posef& tr, const float* m) {
   TinyMatrix3x3f mat;
   mat.setValue(m[0], m[4], m[8], m[1], m[5], m[9], m[2], m[6], m[10]);
   mat.getRotation(tr.orientation);
   tr.position.setValue(m[12], m[13], m[14]);
 }
 
-inline void getOpenGLMatrix(const Posef& tr, float* m) {
+inline void getOpenGLMatrix(const tds::Posef& tr, float* m) {
   TinyMatrix3x3f mat(tr.orientation);
   m[0] = mat.getRow(0).x();
   m[1] = mat.getRow(1).x();

@@ -2,6 +2,7 @@
 
 #include "../multi_body.hpp"
 
+namespace tds {
 /**
  * Implements the first phase in ABA, CRBA and RNEA, that computes the
  * joint and body transforms, velocities and bias forces.
@@ -13,54 +14,69 @@
  * If no joint accelerations qdd are given, qdd is assumed to be zero.
  */
 template <typename Algebra>
-void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
-                                            const VectorX &qdd) const {
-  assert(Algebra::size(q) == dof());
-  assert(Algebra::size(qd) == 0 || Algebra::size(qd) == dof_qd());
-  assert(Algebra::size(qdd) == 0 || Algebra::size(qdd) == dof_qd());
+void forward_kinematics(MultiBody<Algebra> &mb,
+                        const typename Algebra::VectorX &q,
+                        const typename Algebra::VectorX &qd,
+                        const typename Algebra::VectorX &qdd = typename Algebra::VectorX()) {
+  using Scalar = typename Algebra::Scalar;
+  using Vector3 = typename Algebra::Vector3;
+  using VectorX = typename Algebra::VectorX;
+  using Matrix3 = typename Algebra::Matrix3;
+  using Matrix6 = typename Algebra::Matrix6;
+  using Quaternion = typename Algebra::Quaternion;
+  typedef tds::Transform<Algebra> Transform;
+  typedef tds::MotionVector<Algebra> MotionVector;
+  typedef tds::ForceVector<Algebra> ForceVector;
+  typedef tds::Link<Algebra> Link;
+  typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
+  typedef tds::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
 
-  if (is_floating) {
+  assert(Algebra::size(q) == mb.dof());
+  assert(Algebra::size(qd) == 0 || Algebra::size(qd) == mb.dof_qd());
+  assert(Algebra::size(qdd) == 0 || Algebra::size(qdd) == mb.dof_qd());
+
+  if (mb.is_floating()) {
     // update base-world transform from q, and update base velocity from qd
-    base_X_world.rotation = Algebra::quat_to_matrix(q[0], q[1], q[2], q[3]);
-    base_X_world.translation = Vector3(q[4], q[5], q[6]);
+    mb.base_X_world().rotation = Algebra::quat_to_matrix(q[0], q[1], q[2], q[3]);
+    mb.base_X_world().translation = Vector3(q[4], q[5], q[6]);
     if (Algebra::size(qd) != 0) {
-      base_velocity.top = Vector3(qd[0], qd[1], qd[2]);
-      base_velocity.bottom = Vector3(qd[3], qd[4], qd[5]);
+      mb.base_velocity().top = Vector3(qd[0], qd[1], qd[2]);
+      mb.base_velocity().bottom = Vector3(qd[3], qd[4], qd[5]);
     } else {
-      base_velocity.set_zero();
+      mb.base_velocity().set_zero();
     }
 
-    base_abi = base_rbi;
-    ForceVector I0_mul_v0 = base_abi * base_velocity;
-    base_bias_force =
-        Algebra::cross(base_velocity, I0_mul_v0) - base_applied_force;
+    mb.base_abi() = mb.base_rbi();
+    ForceVector I0_mul_v0 = mb.base_abi() * mb.base_velocity();
+    mb.base_bias_force() =
+        Algebra::cross(mb.base_velocity(), I0_mul_v0) - mb.base_applied_force();
   }
-  
-  Algebra::set_zero(base_bias_force);
 
-  for (int i = 0; i < static_cast<int>(links.size()); i++) {
-    const Link &link = links[i];
+  Algebra::set_zero(mb.base_bias_force());
+
+  for (int i = 0; i < static_cast<int>(mb.size()); i++) {
+    const Link &link = mb[i];
     int parent = link.parent_index;
 
     // update joint transforms, joint velocity (if available)
-    Scalar q_val = get_q_for_link(q, i);
-    Scalar qd_val = get_qd_for_link(qd, i);
+    Scalar q_val = mb.get_q_for_link(q, i);
+    Scalar qd_val = mb.get_qd_for_link(qd, i);
     link.jcalc(q_val, qd_val);
 
     // std::cout << "Link " << i << " transform: " << link.X_parent <<
     // std::endl;
 
-    if (parent >= 0 || is_floating) {
+    if (parent >= 0 || mb.is_floating()) {
       const Transform &parent_X_world =
-          parent >= 0 ? links[parent].X_world : base_X_world;
+          parent >= 0 ? mb[parent].X_world : mb.base_X_world();
       link.X_world = parent_X_world * link.X_parent;
       // link.X_world = link.X_parent * parent_X_world;  // RBDL style
       const MotionVector &parentVelocity =
-          parent >= 0 ? links[parent].v : base_velocity;
+          parent >= 0 ? mb[parent].v : mb.base_velocity();
       MotionVector xv = link.X_parent.apply(parentVelocity);
       link.v = xv + link.vJ;
     } else {
-      link.X_world = base_X_world * link.X_parent;
+      link.X_world = mb.base_X_world() * link.X_parent;
       link.v = link.vJ;
     }
     MotionVector v_x_vJ = Algebra::cross(link.v, link.vJ);
@@ -99,7 +115,7 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
     //       }
     // #endif
 
-    link.pA = Algebra::cross(link.v, I_mul_v);// - f_ext;
+    link.pA = Algebra::cross(link.v, I_mul_v);  // - f_ext;
 #ifdef DEBUG
     // Algebra::print("link.abi", link.abi);
     Algebra::print("I_mul_v", I_mul_v);
@@ -107,7 +123,7 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
 #endif
     // compute helper temporary variables for floating-base RNEA
     // const SpatialVector &parent_a =
-    //     parent >= 0 ? links[parent].a : base_acceleration;
+    //     parent >= 0 ? links[parent].a : mb.base_acceleration_;
     // link.a = link.X_parent.apply(parent_a) + v_x_vJ;
     // if (!qdd.empty()) {
     //   link.a += link.S * get_qdd_for_link(qdd, i);
@@ -115,3 +131,9 @@ void MultiBody<Algebra>::forward_kinematics(const VectorX &q, const VectorX &qd,
     // link.f = link.abi * link.a + link.pA;
   }
 }
+
+template <typename Algebra>
+void forward_kinematics(MultiBody<Algebra> &mb) {
+  forward_kinematics(mb, mb.q(), mb.qd());
+}
+}  // namespace tds

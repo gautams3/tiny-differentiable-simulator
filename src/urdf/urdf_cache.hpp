@@ -19,16 +19,17 @@
 // #include "pybullet_urdf_import.h"
 // #include "tiny_actuator.h"
 // #include "tiny_double_utils.h"
-#include "multi_body.hpp"
-#include "world.hpp"
+#include "../multi_body.hpp"
 #include "tiny_urdf_parser.h"
-#include "urdf/tiny_urdf_to_multi_body.h"
+#include "urdf_to_multi_body.hpp"
+#include "world.hpp"
 
+namespace tds {
 template <typename Algebra>
 struct UrdfCache {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
-  typedef ::UrdfStructures<Algebra> UrdfStructures;
+  typedef tds::UrdfStructures<Algebra> UrdfStructures;
   // typedef ::PyBulletUrdfImport<Algebra> UrdfImport;
   // typedef b3RobotSimulatorLoadUrdfFileArgs UrdfFileArgs;
 
@@ -66,13 +67,13 @@ struct UrdfCache {
   }
 
   MultiBody<Algebra>* construct(const std::string& urdf_filename,
-                                World<Algebra>& world,
+                                tds::World<Algebra>& world,
                                 bool ignore_cache = false,
                                 bool is_floating = false) {
     MultiBody<Algebra>* mb = world.create_multi_body();
     const auto& urdf_data = retrieve(urdf_filename, ignore_cache);
     UrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data, world, *mb);
-    mb->is_floating = is_floating;
+    mb->set_floating_base(is_floating);
     mb->initialize();
     return mb;
   }
@@ -212,3 +213,4 @@ struct UrdfCache {
 //     }
 //   }
 // };
+}  // namespace tds

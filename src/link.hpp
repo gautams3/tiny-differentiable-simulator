@@ -1,7 +1,10 @@
 #pragma once
 
+#include <vector>
+
 #include "math/transform.hpp"
 
+namespace tds {
 enum JointType {
   JOINT_FIXED = -1,
   JOINT_PRISMATIC_X = 0,
@@ -16,17 +19,16 @@ enum JointType {
 };
 
 template <typename Algebra>
-class Link {
-  typedef ::Transform<Algebra> Transform;
-  typedef ::MotionVector<Algebra> MotionVector;
-  typedef ::ForceVector<Algebra> ForceVector;
-  typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
-  typedef ::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
+struct Link {
+  typedef tds::Transform<Algebra> Transform;
+  typedef tds::MotionVector<Algebra> MotionVector;
+  typedef tds::ForceVector<Algebra> ForceVector;
+  typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
+  typedef tds::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
 
- public:
   JointType joint_type{JOINT_REVOLUTE_Z};
 
   Transform X_T;               // parent_link_to_joint
@@ -209,3 +211,4 @@ class Link {
     jcalc(qd, &vJ);
   }
 };
+}  // namespace tds

@@ -1,16 +1,35 @@
 #pragma once
 
-#include "../multi_body.hpp"
+#include <cmath>
 
+#include "../multi_body.hpp"
+#include "kinematics.hpp"
+
+namespace tds {
 template <typename Algebra>
-void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
-                                          const VectorX &tau,
-                                          const Vector3 &gravity,
-                                          VectorX &qdd) const {
-  assert(Algebra::size(q) == dof());
-  assert(Algebra::size(qd) == dof_qd());
-  assert(Algebra::size(qdd) == dof_qd());
-  assert(Algebra::size(tau) == dof_actuated());
+void forward_dynamics(MultiBody<Algebra> &mb,
+                      const typename Algebra::VectorX &q,
+                      const typename Algebra::VectorX &qd,
+                      const typename Algebra::VectorX &tau,
+                      const typename Algebra::Vector3 &gravity,
+                      typename Algebra::VectorX &qdd) {
+  using Scalar = typename Algebra::Scalar;
+  using Vector3 = typename Algebra::Vector3;
+  using VectorX = typename Algebra::VectorX;
+  using Matrix3 = typename Algebra::Matrix3;
+  using Matrix6 = typename Algebra::Matrix6;
+  using Quaternion = typename Algebra::Quaternion;
+  typedef tds::Transform<Algebra> Transform;
+  typedef tds::MotionVector<Algebra> MotionVector;
+  typedef tds::ForceVector<Algebra> ForceVector;
+  typedef tds::Link<Algebra> Link;
+  typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
+  typedef tds::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
+
+  assert(Algebra::size(q) == mb.dof());
+  assert(Algebra::size(qd) == mb.dof_qd());
+  assert(Algebra::size(qdd) == mb.dof_qd());
+  assert(Algebra::size(tau) == mb.dof_actuated());
 
   MotionVector spatial_gravity;
   spatial_gravity.bottom = gravity;
@@ -24,17 +43,17 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
   //     }
   // #endif
 
-  forward_kinematics(q, qd);
+  forward_kinematics(mb, q, qd);
 
-  for (int i = static_cast<int>(links.size()) - 1; i >= 0; i--) {
-    const Link &link = links[i];
+  for (int i = static_cast<int>(mb.size()) - 1; i >= 0; i--) {
+    const Link &link = mb[i];
     int parent = link.parent_index;
     link.U = link.abi * link.S;
     // std::cout << "link.abi.matrix() * link.S:\n" << link.abi.matrix() *
     // link.S << std::endl; std::cout << "link.abi * link.S:\n" << link.abi *
     // link.S << std::endl; std::cout << "\n\n";
     link.D = Algebra::dot(link.S, link.U);
-    Scalar tau_val = get_tau_for_link(tau, i);
+    Scalar tau_val = mb.get_tau_for_link(tau, i);
     // apply linear joint stiffness and damping
     // see Eqns. (2.76), (2.78) in Rigid Body Dynamics Notes
     // by Shinjiro Sueda
@@ -92,22 +111,23 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
         link.X_parent.matrix_transpose() * Ia.matrix() * link.X_parent.matrix();
     if (parent >= 0) {
       // Algebra::print(
-      //     ("TDS ABI at parent of " + std::to_string(link.index) + ":").c_str(),
-      //     links[parent].abi);
+      //     ("TDS ABI at parent of " + std::to_string(link.index) +
+      //     ":").c_str(), links[parent].abi);
       // Algebra::print(
-      //     ("TDS Ia at link " + std::to_string(link.index) + ":").c_str(), Ia);
+      //     ("TDS Ia at link " + std::to_string(link.index) + ":").c_str(),
+      //     Ia);
       // Algebra::print(
-      //     ("TDS X_parent at link " + std::to_string(link.index) + ":").c_str(),
-      //     link.X_parent);
-      links[parent].pA += delta_pA;
-      links[parent].abi += delta_I;
+      //     ("TDS X_parent at link " + std::to_string(link.index) +
+      //     ":").c_str(), link.X_parent);
+      mb[parent].pA += delta_pA;
+      mb[parent].abi += delta_I;
 #ifdef DEBUG
       Algebra::print("pa update", links[parent].pA);
       Algebra::print("mIA", links[parent].abi);
 #endif
-    } else if (is_floating) {
-      base_bias_force += delta_pA;
-      base_abi += delta_I;
+    } else if (mb.is_floating()) {
+      mb.base_bias_force() += delta_pA;
+      mb.base_abi() += delta_I;
 #ifdef DEBUG
       Algebra::print("base_abi", base_abi);
       Algebra::print("base_bias_force", base_bias_force);
@@ -117,7 +137,7 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
     }
   }
 
-  if (is_floating) {
+  if (mb.is_floating()) {
     // #ifdef NEURAL_SIM
     //       NEURAL_ASSIGN(base_bias_force[0], "base_bias_force_0");
     //       NEURAL_ASSIGN(base_bias_force[1], "base_bias_force_1");
@@ -127,23 +147,23 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
     //       NEURAL_ASSIGN(base_bias_force[5], "base_bias_force_5");
     // #endif
 
-    base_acceleration = -base_abi.inv_mul(base_bias_force);
+    mb.base_acceleration() = -mb.base_abi().inv_mul(mb.base_bias_force());
 
   } else {
-    base_acceleration = -spatial_gravity;
+    mb.base_acceleration() = -spatial_gravity;
   }
 
-  for (int i = 0; i < static_cast<int>(links.size()); i++) {
-    const Link &link = links[i];
+  for (int i = 0; i < static_cast<int>(mb.size()); i++) {
+    const Link &link = mb[i];
     int parent = link.parent_index;
     const Transform &X_parent = link.X_parent;
     const MotionVector &a_parent =
-        (parent >= 0) ? links[parent].a : base_acceleration;
+        (parent >= 0) ? mb[parent].a : mb.base_acceleration();
 #if DEBUG
     if (parent < 0) {
       printf("final loop for parent %i\n", parent);
-      Algebra::print("base_abi", base_abi);
-      Algebra::print("base_bias_force", base_bias_force);
+      Algebra::print("base_abi", mb.base_abi());
+      Algebra::print("base_bias_force", mb.base_bias_force());
       Algebra::print("a_parent", a_parent);
     }
 #endif
@@ -172,12 +192,19 @@ void MultiBody<Algebra>::forward_dynamics(const VectorX &q, const VectorX &qd,
     Algebra::print("a", link.a);
 #endif
   }
-  if (is_floating) {
-    base_acceleration += spatial_gravity;
+  if (mb.is_floating()) {
+    mb.base_acceleration() += spatial_gravity;
     for (int i = 0; i < 6; i++) {
-      qdd[i] = base_acceleration[i];
+      qdd[i] = mb.base_acceleration()[i];
     }
   } else {
-    base_acceleration.set_zero();
+    mb.base_acceleration().set_zero();
   }
 }
+
+template <typename Algebra>
+void forward_dynamics(MultiBody<Algebra> &mb,
+                      const typename Algebra::Vector3 &gravity) {
+  forward_dynamics(mb, mb.q(), mb.qd(), mb.tau(), gravity, mb.qdd());
+}
+}  // namespace tds

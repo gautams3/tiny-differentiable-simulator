@@ -23,7 +23,9 @@
 #include <vector>
 
 #include "../geometry.hpp"  // for GeometryTypes
+#include "../link.hpp"
 
+namespace tds {
 template <typename Algebra>
 struct UrdfInertial {
   using Scalar = typename Algebra::Scalar;
@@ -140,14 +142,13 @@ struct UrdfVisual {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::UrdfGeometry<Algebra> UrdfGeometry;
-  typedef ::VisualMaterial<Algebra> VisualMaterial;
+  typedef tds::UrdfGeometry<Algebra> UrdfGeometry;
+  typedef tds::VisualMaterial<Algebra> VisualMaterial;
   UrdfVisual()
       : origin_xyz(Algebra::zero3()),
         origin_rpy(Algebra::zero3()),
         has_local_material(false),
-        sync_visual_body_uid1(-1),
-        sync_visual_body_uid2(-1)
+        sync_visual_body_id(-1)
 
   {}
   Vector3 origin_rpy;
@@ -157,8 +158,7 @@ struct UrdfVisual {
   VisualMaterial material;
   std::string visual_name;
   bool has_local_material;
-  int sync_visual_body_uid1;
-  int sync_visual_body_uid2;
+  int sync_visual_body_id;
 };
 
 template <typename Algebra>
@@ -166,7 +166,7 @@ struct UrdfCollision {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::UrdfGeometry<Algebra> UrdfGeometry;
+  typedef tds::UrdfGeometry<Algebra> UrdfGeometry;
 
   UrdfCollision()
       : origin_xyz(Algebra::zero3()),
@@ -189,9 +189,9 @@ struct UrdfLink {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::UrdfCollision<Algebra> UrdfCollision;
-  typedef ::UrdfVisual<Algebra> UrdfVisual;
-  typedef ::UrdfContact<Algebra> UrdfContact;
+  typedef tds::UrdfCollision<Algebra> UrdfCollision;
+  typedef tds::UrdfVisual<Algebra> UrdfVisual;
+  typedef tds::UrdfContact<Algebra> UrdfContact;
 
   UrdfLink() : parent_index(-2) {}
   std::string link_name;
@@ -208,10 +208,10 @@ struct UrdfJoint {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::UrdfLink<Algebra> UrdfLink;
+  typedef tds::UrdfLink<Algebra> UrdfLink;
 
   UrdfJoint()
-      : joint_type(JOINT_INVALID),
+      : joint_type(tds::JOINT_INVALID),
         joint_lower_limit(Algebra::one()),
         joint_upper_limit(Algebra::zero()),
         joint_origin_xyz(
@@ -249,3 +249,4 @@ struct UrdfStructures {
   std::map<std::string, int> name_to_link_index;
   std::map<std::string, VisualMaterial<Algebra> > materials;
 };
+}  // namespace tds

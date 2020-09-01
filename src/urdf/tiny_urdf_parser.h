@@ -29,9 +29,10 @@
 #include <string>
 #include <vector>
 
-#include "multi_body.hpp"
+#include "../multi_body.hpp"
 #include "tiny_urdf_structures.h"
 
+namespace tds {
 struct Logger {
   virtual ~Logger() {}
   virtual void report_error(const std::string& txt) = 0;
@@ -56,13 +57,13 @@ struct UrdfParser {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::UrdfStructures<Algebra> UrdfStructures;
-  typedef ::UrdfLink<Algebra> UrdfLink;
-  typedef ::UrdfJoint<Algebra> UrdfJoint;
-  typedef ::UrdfInertial<Algebra> UrdfInertial;
-  typedef ::UrdfVisual<Algebra> UrdfVisual;
-  typedef ::UrdfCollision<Algebra> UrdfCollision;
-  typedef ::UrdfGeometry<Algebra> UrdfGeometry;
+  typedef tds::UrdfStructures<Algebra> UrdfStructures;
+  typedef tds::UrdfLink<Algebra> UrdfLink;
+  typedef tds::UrdfJoint<Algebra> UrdfJoint;
+  typedef tds::UrdfInertial<Algebra> UrdfInertial;
+  typedef tds::UrdfVisual<Algebra> UrdfVisual;
+  typedef tds::UrdfCollision<Algebra> UrdfCollision;
+  typedef tds::UrdfGeometry<Algebra> UrdfGeometry;
 
   static bool parse_vector3(Vector3& vec3, const std::string& vector_str,
                             Logger& logger) {
@@ -908,3 +909,4 @@ struct UrdfParser {
     return true;
   }
 };
+}  // namespace tds

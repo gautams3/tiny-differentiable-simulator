@@ -18,16 +18,18 @@
 
 #include <stdio.h>
 
-#include "math/transform.hpp"
+#include "../math/transform.hpp"
+#include "../world.hpp"
 #include "tiny_urdf_structures.h"
 
+namespace tds {
 template <typename Algebra>
 struct UrdfToMultiBody {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
-  typedef ::UrdfStructures<Algebra> UrdfStructures;
-  typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
+  typedef tds::UrdfStructures<Algebra> UrdfStructures;
+  typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
 
   static int convert_to_multi_body(const UrdfStructures& urdf_structures,
                                    World<Algebra>& world,
@@ -51,14 +53,13 @@ struct UrdfToMultiBody {
                                          base_link.urdf_inertial.origin_rpy[1],
                                          base_link.urdf_inertial.origin_rpy[2]);
       Matrix3 inertia_C = rot * inertia_diag;
-      mb.base_rbi = RigidBodyInertia(mass, com, inertia_C);
+      mb.base_rbi_ = RigidBodyInertia(mass, com, inertia_C);
     }
 
     for (std::size_t i = 0; i < base_link.urdf_visual_shapes.size(); i++) {
       const UrdfVisual<Algebra>& visual_shape = base_link.urdf_visual_shapes[i];
 
-      mb.visual_uids1.push_back(visual_shape.sync_visual_body_uid1);
-      mb.visual_uids2.push_back(visual_shape.sync_visual_body_uid2);
+      mb.visual_ids_.push_back(visual_shape.sync_visual_body_id);
       Transform<Algebra> visual_offset;
       visual_offset.translation =
           Vector3(visual_shape.origin_xyz[0], visual_shape.origin_xyz[1],
@@ -68,7 +69,7 @@ struct UrdfToMultiBody {
                     visual_shape.origin_rpy[2]);
       visual_offset.rotation =
           Algebra::rotation_zyx_matrix(rpy[0], rpy[1], rpy[2]);
-      mb.X_visuals.push_back(visual_offset);
+      mb.X_visuals_.push_back(visual_offset);
     }
 
     Link<Algebra> dummy;
@@ -172,8 +173,7 @@ struct UrdfToMultiBody {
         for (int i = 0; i < link.urdf_visual_shapes.size(); i++) {
           const UrdfVisual<Algebra>& visual_shape = link.urdf_visual_shapes[i];
 
-          l.visual_ids.push_back(visual_shape.sync_visual_body_uid1);
-          // l.visual_uids2.push_back(visual_shape.sync_visual_body_uid2);
+          l.visual_ids.push_back(visual_shape.sync_visual_body_id);
           Transform<Algebra> visual_offset;
           visual_offset.translation =
               Vector3(visual_shape.origin_xyz[0], visual_shape.origin_xyz[1],
@@ -250,3 +250,4 @@ struct UrdfToMultiBody {
     }
   }
 };
+}  // namespace tds

@@ -3,16 +3,17 @@
 #include "inertia.hpp"
 #include "spatial_vector.hpp"
 
+namespace tds {
 template <typename Algebra>
 struct Transform {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix6 = typename Algebra::Matrix6;
-  using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
-  using ArticulatedBodyInertia = ::ArticulatedBodyInertia<Algebra>;
-  typedef ::MotionVector<Algebra> MotionVector;
-  typedef ::ForceVector<Algebra> ForceVector;
+  using RigidBodyInertia = tds::RigidBodyInertia<Algebra>;
+  using ArticulatedBodyInertia = tds::ArticulatedBodyInertia<Algebra>;
+  typedef tds::MotionVector<Algebra> MotionVector;
+  typedef tds::ForceVector<Algebra> ForceVector;
 
   Vector3 translation{Algebra::zero3()};
   Matrix3 rotation{Algebra::eye3()};
@@ -69,7 +70,8 @@ struct Transform {
   Matrix6 matrix_transpose() const {
     Matrix6 m;
     Matrix3 Et = Algebra::transpose(rotation);
-    Matrix3 mErxT = Algebra::transpose(-rotation * Algebra::cross_matrix(translation));
+    Matrix3 mErxT =
+        Algebra::transpose(-rotation * Algebra::cross_matrix(translation));
     Algebra::assign_block(m, Et, 0, 0);
     Algebra::assign_block(m, mErxT, 0, 3);
     Algebra::assign_block(m, Algebra::zero33(), 3, 0);
@@ -216,12 +218,11 @@ struct Transform {
   /**
    * Computes \f$ X^* I^A X^{-1} \f$.
    */
-  inline ArticulatedBodyInertia apply(
-      const ArticulatedBodyInertia &abi) const {
-        // modified version that matches the output of RBDL
+  inline ArticulatedBodyInertia apply(const ArticulatedBodyInertia &abi) const {
+    // modified version that matches the output of RBDL
     ArticulatedBodyInertia result;
-    const Matrix3 E = Algebra::transpose(rotation); // rotation;
-    const Matrix3 Et = rotation; //Algebra::transpose(rotation);
+    const Matrix3 E = Algebra::transpose(rotation);  // rotation;
+    const Matrix3 Et = rotation;  // Algebra::transpose(rotation);
     const Matrix3 rx = Algebra::cross_matrix(translation);
     // M' = E^T M E
     const Matrix3 Mp = Et * abi.M * E;
@@ -236,7 +237,8 @@ struct Transform {
     result.H = HrxM;
     return result;
   }
-  // inline ArticulatedBodyInertia apply(const ArticulatedBodyInertia &abi) const {
+  // inline ArticulatedBodyInertia apply(const ArticulatedBodyInertia &abi)
+  // const {
   //   ArticulatedBodyInertia result;
   //   const Matrix3 &E = rotation;
   //   const Matrix3 Et = Algebra::transpose(rotation);
@@ -274,7 +276,5 @@ struct Transform {
     result.H = HrxM;
     return result;
   }
-
-  // ENOKI_STRUCT(Transform, translation, rotation)
 };
-// ENOKI_STRUCT_SUPPORT(Transform, translation, rotation)
+}  // namespace tds

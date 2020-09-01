@@ -25,20 +25,20 @@
 #include "multi_body.hpp"
 // #include "tiny_rigid_body.h"
 
+namespace tds {
 template <typename Algebra>
 class World {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
   // typedef ::RigidBody<Algebra> RigidBody;
-  typedef ::MultiBody<Algebra> MultiBody;
-  typedef ::Geometry<Algebra> Geometry;
-  typedef ::Transform<Algebra>
-      Transform;
+  typedef tds::MultiBody<Algebra> MultiBody;
+  typedef tds::Geometry<Algebra> Geometry;
+  typedef tds::Transform<Algebra> Transform;
 
-  typedef ::Capsule<Algebra> Capsule;
-  typedef ::Sphere<Algebra> Sphere;
-  typedef ::Plane<Algebra> Plane;
+  typedef tds::Capsule<Algebra> Capsule;
+  typedef tds::Sphere<Algebra> Sphere;
+  typedef tds::Plane<Algebra> Plane;
   // std::vector<RigidBody*> bodies;
 
   std::vector<MultiBody*> multi_bodies;
@@ -62,12 +62,11 @@ class World {
   Scalar default_restitution{Algebra::zero()};
 
   explicit World(Scalar gravity_z = Algebra::fraction(-981, 100))
-      : gravity_acceleration(Algebra::zero(), Algebra::zero(),
-                               gravity_z) {}
-        // constraint_solver(
-        //     new ConstraintSolver<Algebra>),
-        // mb_constraint_solver(
-        //     new MultiBodyConstraintSolver<Algebra>) {}
+      : gravity_acceleration(Algebra::zero(), Algebra::zero(), gravity_z) {}
+  // constraint_solver(
+  //     new ConstraintSolver<Algebra>),
+  // mb_constraint_solver(
+  //     new MultiBodyConstraintSolver<Algebra>) {}
 
   inline void submitProfileTiming(const std::string& name) {
     // if (m_profileTimingFunc) {
@@ -100,9 +99,7 @@ class World {
 
   const Vector3& get_gravity() const { return gravity_acceleration; }
 
-  void set_gravity(const Vector3& gravity) {
-    gravity_acceleration = gravity;
-  }
+  void set_gravity(const Vector3& gravity) { gravity_acceleration = gravity; }
 
   // ConstraintSolver<Algebra>* get_constraint_solver() {
   //   return constraint_solver;
@@ -192,7 +189,8 @@ class World {
   //   std::vector<ContactPointRigidBody<Algebra>>
   //       contactsOut;
   //   compute_contacts_rigid_body_internal(bodies, dispatcher, contactsOut,
-  //                                        default_restitution, default_friction);
+  //                                        default_restitution,
+  //                                        default_friction);
   //   return contactsOut;
   // }
 
@@ -288,7 +286,8 @@ class World {
   //       std::vector<ContactPointMultiBody<Algebra>>>
   //       contactsOut;
   //   compute_contacts_multi_body_internal(bodies, dispatcher, contactsOut,
-  //                                        default_restitution, default_friction);
+  //                                        default_restitution,
+  //                                        default_friction);
   //   return contactsOut;
   // }
 
@@ -361,3 +360,4 @@ class World {
   //   }
   // }
 };
+}  // namespace tds

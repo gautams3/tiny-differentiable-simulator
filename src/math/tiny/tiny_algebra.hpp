@@ -19,9 +19,9 @@ struct TinyAlgebra {
   using Matrix3 = TinyMatrix3x3<TinyScalar, TinyConstants>;
   using Matrix6 = TinyMatrix6x6<TinyScalar, TinyConstants>;
   using Quaternion = TinyQuaternion<TinyScalar, TinyConstants>;
-  using SpatialVector = ::SpatialVector<TinyAlgebra>;
-  using MotionVector = ::MotionVector<TinyAlgebra>;
-  using ForceVector = ::ForceVector<TinyAlgebra>;
+  using SpatialVector = tds::SpatialVector<TinyAlgebra>;
+  using MotionVector = tds::MotionVector<TinyAlgebra>;
+  using ForceVector = tds::ForceVector<TinyAlgebra>;
 
   template <typename T>
   TINY_INLINE static auto transpose(const T &matrix) {

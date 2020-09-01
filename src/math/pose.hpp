@@ -16,7 +16,7 @@
 
 #pragma once
 
-
+namespace tds {
 /// Pose is a coordinate frame specified as position and orientation
 /// quaternion.
 template <typename Algebra>
@@ -60,3 +60,4 @@ struct Pose {
     position = orientation.rotate(-position);
   }
 };
+}  // namespace tds

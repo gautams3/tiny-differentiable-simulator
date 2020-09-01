@@ -20,6 +20,7 @@
 
 #include "math/pose.hpp"
 
+namespace tds {
 enum GeometryTypes {
   TINY_SPHERE_TYPE = 0,
   TINY_PLANE_TYPE,
@@ -134,8 +135,8 @@ int contactSphereSphere(const Geometry<Algebra>* geomA,
   using Vector3 = typename Algebra::Vector3;
   Scalar CONTACT_EPSILON = Algebra::fraction(1, 100000);
 
-  typedef ::Sphere<Algebra> Sphere;
-  typedef ::ContactPoint<Algebra> ContactPoint;
+  typedef tds::Sphere<Algebra> Sphere;
+  typedef tds::ContactPoint<Algebra> ContactPoint;
   assert(geomA->get_type() == TINY_SPHERE_TYPE);
   assert(geomB->get_type() == TINY_SPHERE_TYPE);
   Sphere* sphereA = (Sphere*)geomA;
@@ -170,9 +171,9 @@ int contactPlaneSphere(const Geometry<Algebra>* geomA,
                        std::vector<ContactPoint<Algebra> >& contactsOut) {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
-  typedef ::Sphere<Algebra> Sphere;
-  typedef ::Plane<Algebra> Plane;
-  typedef ::ContactPoint<Algebra> ContactPoint;
+  typedef tds::Sphere<Algebra> Sphere;
+  typedef tds::Plane<Algebra> Plane;
+  typedef tds::ContactPoint<Algebra> ContactPoint;
   assert(geomA->get_type() == TINY_PLANE_TYPE);
   assert(geomB->get_type() == TINY_SPHERE_TYPE);
   Plane* planeA = (Plane*)geomA;
@@ -201,11 +202,11 @@ int contactPlaneCapsule(const Geometry<Algebra>* geomA,
                         std::vector<ContactPoint<Algebra> >& contactsOut) {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
-  typedef ::Pose<Algebra> Pose;
-  typedef ::Plane<Algebra> Plane;
-  typedef ::Capsule<Algebra> Capsule;
-  typedef ::ContactPoint<Algebra> ContactPoint;
-  typedef ::Sphere<Algebra> Sphere;
+  typedef tds::Pose<Algebra> Pose;
+  typedef tds::Plane<Algebra> Plane;
+  typedef tds::Capsule<Algebra> Capsule;
+  typedef tds::ContactPoint<Algebra> ContactPoint;
+  typedef tds::Sphere<Algebra> Sphere;
   assert(geomA->get_type() == TINY_PLANE_TYPE);
   assert(geomB->get_type() == TINY_CAPSULE_TYPE);
   Capsule* capsule = (Capsule*)geomB;
@@ -234,9 +235,9 @@ struct CollisionDispatcher {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
 
-  typedef ::Geometry<Algebra> Geometry;
-  typedef ::Pose<Algebra> Pose;
-  typedef ::ContactPoint<Algebra> ContactPoint;
+  typedef tds::Geometry<Algebra> Geometry;
+  typedef tds::Pose<Algebra> Pose;
+  typedef tds::ContactPoint<Algebra> ContactPoint;
 
   typedef int (*contact_func)(const Geometry* geomA, const Pose& poseA,
                               const Geometry* geomB, const Pose& poseB,
@@ -274,3 +275,4 @@ struct CollisionDispatcher {
     return pts;
   }
 };
+}

@@ -4,8 +4,8 @@
 #include <ostream>
 
 #include "../base.hpp"
-// #include "enoki_algebra.hpp"
 
+namespace tds {
 template <typename Algebra>
 struct SpatialVector {
   using Scalar = typename Algebra::Scalar;
@@ -67,7 +67,7 @@ struct SpatialVector {
 
 template <typename Algebra>
 struct MotionVector : public SpatialVector<Algebra> {
-  using SpatialVector = ::SpatialVector<Algebra>;
+  using SpatialVector = tds::SpatialVector<Algebra>;
   using Scalar = typename Algebra::Scalar;
   using SpatialVector::bottom;
   using SpatialVector::SpatialVector;
@@ -107,7 +107,7 @@ struct MotionVector : public SpatialVector<Algebra> {
 
 template <typename Algebra>
 struct ForceVector : public SpatialVector<Algebra> {
-  using SpatialVector = ::SpatialVector<Algebra>;
+  using SpatialVector = tds::SpatialVector<Algebra>;
   using Scalar = typename Algebra::Scalar;
   // using Vector6 = typename Algebra::Vector6;
   using Matrix6 = typename Algebra::Matrix6;
@@ -156,3 +156,4 @@ struct ForceVector : public SpatialVector<Algebra> {
   //   return m * v6;
   // }
 };
+}  // namespace tds

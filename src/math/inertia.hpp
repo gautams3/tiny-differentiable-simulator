@@ -2,17 +2,17 @@
 
 #include <cassert>
 
-// #include "enoki_algebra.hpp"
 #include "spatial_vector.hpp"
 
+namespace tds {
 template <typename Algebra>
 struct RigidBodyInertia {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix6 = typename Algebra::Matrix6;
-  typedef ::MotionVector<Algebra> MotionVector;
-  typedef ::ForceVector<Algebra> ForceVector;
+  typedef tds::MotionVector<Algebra> MotionVector;
+  typedef tds::ForceVector<Algebra> ForceVector;
 
   /**
    * Mass \f$m\f$.
@@ -74,10 +74,7 @@ struct RigidBodyInertia {
            Algebra::to_double(inertia(2, 1)),
            Algebra::to_double(inertia(2, 2)));
   }
-
-  // ENOKI_STRUCT(RigidBodyInertia, mass, com, inertia)
 };
-// ENOKI_STRUCT_SUPPORT(RigidBodyInertia, mass, com, inertia)
 
 /**
  * The articulated body inertia matrix has the form
@@ -92,9 +89,9 @@ struct ArticulatedBodyInertia {
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix6 = typename Algebra::Matrix6;
-  typedef ::MotionVector<Algebra> MotionVector;
-  typedef ::ForceVector<Algebra> ForceVector;
-  typedef ::RigidBodyInertia<Algebra> RigidBodyInertia;
+  typedef tds::MotionVector<Algebra> MotionVector;
+  typedef tds::ForceVector<Algebra> ForceVector;
+  typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
 
   Matrix3 I{Algebra::diagonal3(1.)};
   Matrix3 H{Algebra::zero33()};
@@ -249,26 +246,6 @@ struct ArticulatedBodyInertia {
     return abi;
   }
 
-  // Matrix6 inverse() const {
-  //   // Inverse of a symmetric block matrix
-  //   // according to (4.1) in
-  //   //
-  //   //
-  //   http://msvlab.hre.ntou.edu.tw/grades/now/inte/Inverse%20&%20Border/border-LuTT.pdf
-  //   Matrix3 Ainv = Algebra::inverse(I);
-  //   Matrix3 B = H;
-  //   Matrix3 C = -B;
-  //   Matrix3 DCAB = Algebra::inverse(M - C * Ainv * B);
-  //   Matrix3 AinvBDCAB = Ainv * B * DCAB;
-
-  //   Matrix6 m;
-  //   Algebra::assign_block(m, Ainv + AinvBDCAB * C * Ainv, 0, 0);
-  //   Algebra::assign_block(m, -AinvBDCAB, 0, 3);
-  //   Algebra::assign_block(m, -DCAB * C * Ainv, 3, 0);
-  //   Algebra::assign_block(m, DCAB, 3, 3);
-  //   return m;
-  // }
-
   ArticulatedBodyInertia inverse() const {
     // Inverse of a symmetric block matrix
     // according to (4.1) in
@@ -333,7 +310,5 @@ struct ArticulatedBodyInertia {
       printf("%.8f  %.8f  %.8f\n", m(j, 0), m(j, 1), m(j, 2));
     }
   }
-
-  // ENOKI_STRUCT(ArticulatedBodyInertia, I, H, M)
 };
-// ENOKI_STRUCT_SUPPORT(ArticulatedBodyInertia, I, H, M)
+}  // namespace tds
