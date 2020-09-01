@@ -79,18 +79,18 @@ class RigidBody {
 
   void apply_force_impulse(const Scalar& dt) {
     linear_velocity_ += total_force_ * inv_mass_ * dt;
-    angular_velocity_ += inv_inertia_world_.dot(total_torque_) * dt;
+    angular_velocity_ += Algebra::dot(inv_inertia_world_, total_torque_) * dt;
   }
 
   Vector3 get_velocity(const Vector3& rel_pos) {
-    return linear_velocity_ + Vector3::cross2(angular_velocity_, rel_pos);
+    return linear_velocity_ + Algebra::cross(angular_velocity_, rel_pos);
   }
 
   /// Apply an impulse at a position relative to the center of mass.
   void apply_impulse(const Vector3& impulse, const Vector3& rel_pos) {
     linear_velocity_ += inv_mass_ * impulse;
-    Vector3 torqueImpulse = Vector3::cross2(rel_pos, impulse);
-    angular_velocity_ += inv_inertia_world_.dot(torqueImpulse);
+    Vector3 torqueImpulse = Algebra::cross(rel_pos, impulse);
+    angular_velocity_ += Algebra::dot(inv_inertia_world_, torqueImpulse);
   }
 
   /// Clear the applied forces and torques to zero.
