@@ -30,7 +30,7 @@
 #include <vector>
 
 #include "../multi_body.hpp"
-#include "tiny_urdf_structures.h"
+#include "urdf_structures.hpp"
 
 namespace tds {
 struct Logger {

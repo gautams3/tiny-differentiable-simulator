@@ -1510,7 +1510,7 @@ void TinyGLInstancingRenderer::update_camera(int upAxis) {
   for (int i = 0; i < 16; i++) {
     viewMat[i] = m_data->m_viewMatrix[i];
   }
-  Posef tr;
+  tds::Posef tr;
   setFromOpenGLMatrix(tr, viewMat);
   tr.inverse();
   getOpenGLMatrix(tr, viewMatInverse);
@@ -1758,7 +1758,7 @@ void TinyGLInstancingRenderer::draw_textured_triangle_mesh(
   TinyVector3f pos =
       TinyVector3f(worldPosition[0], worldPosition[1], worldPosition[2]);
 
-  Posef worldTrans(pos, orn);
+  tds::Posef worldTrans(pos, orn);
   float worldMatUnk[16];
   getOpenGLMatrix(worldTrans, worldMatUnk);
   float modelMat[16];

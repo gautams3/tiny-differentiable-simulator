@@ -20,7 +20,7 @@
 
 #include "../math/transform.hpp"
 #include "../world.hpp"
-#include "tiny_urdf_structures.h"
+#include "urdf_structures.hpp"
 
 namespace tds {
 template <typename Algebra>

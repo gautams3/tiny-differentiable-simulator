@@ -128,13 +128,21 @@ struct TinyAlgebra {
     const Scalar o = TinyConstants::zero();
     return Matrix3(v, o, o, o, v, o, o, o, v);
   }
+  /**
+   * Returns a 3x3 identity matrix.
+   */
   TINY_INLINE static Matrix3 eye3() { return diagonal3(TinyConstants::one()); }
+  TINY_INLINE static void set_identity(Quaternion& quat) { quat.set_identity(); }
 
   TINY_INLINE static Scalar zero() { return TinyConstants::zero(); }
   TINY_INLINE static Scalar one() { return TinyConstants::one(); }
+  TINY_INLINE static Scalar two() { return TinyConstants::two(); }
   TINY_INLINE static Scalar half() { return TinyConstants::half(); }
-  TINY_INLINE static Scalar fraction(const Scalar &a, const Scalar &b) {
+  TINY_INLINE static Scalar fraction(int a, int b) {
     return TinyConstants::fraction(a, b);
+  }
+  TINY_INLINE static Scalar pi() {
+    return TinyConstants::pi();
   }
 
   TINY_INLINE static Scalar scalar_from_string(const std::string &s) {

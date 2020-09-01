@@ -123,8 +123,8 @@ struct EnokiAlgebra {
   ENOKI_INLINE static Scalar zero() { return 0; }
   ENOKI_INLINE static Scalar one() { return 1; }
   ENOKI_INLINE static Scalar half() { return 0.5; }
-  ENOKI_INLINE static Scalar fraction(const Scalar &a, const Scalar &b) {
-    return a / b;
+  ENOKI_INLINE static Scalar fraction(int a, int b) {
+    return ((Scalar)a) / b;
   }
 
   static Scalar scalar_from_string(const std::string &s) {

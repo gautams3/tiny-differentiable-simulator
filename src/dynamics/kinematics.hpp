@@ -20,16 +20,10 @@ void forward_kinematics(MultiBody<Algebra> &mb,
                         const typename Algebra::VectorX &qdd = typename Algebra::VectorX()) {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
-  using VectorX = typename Algebra::VectorX;
-  using Matrix3 = typename Algebra::Matrix3;
-  using Matrix6 = typename Algebra::Matrix6;
-  using Quaternion = typename Algebra::Quaternion;
   typedef tds::Transform<Algebra> Transform;
   typedef tds::MotionVector<Algebra> MotionVector;
   typedef tds::ForceVector<Algebra> ForceVector;
   typedef tds::Link<Algebra> Link;
-  typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
-  typedef tds::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
 
   assert(Algebra::size(q) == mb.dof());
   assert(Algebra::size(qd) == 0 || Algebra::size(qd) == mb.dof_qd());

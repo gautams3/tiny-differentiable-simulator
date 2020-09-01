@@ -16,11 +16,14 @@
 namespace plt = matplotlibcpp;
 #endif
 
+#include "dynamics/forward_dynamics.hpp"
+#include "dynamics/integrator.hpp"
+#include "dynamics/kinematics.hpp"
 #include "math/enoki_algebra.hpp"
 #include "math/tiny/tiny_algebra.hpp"
 #include "math/tiny/tiny_double_utils.h"
 #include "multi_body.hpp"
-#include "urdf/tiny_system_constructor.h"
+#include "urdf/urdf_cache.hpp"
 #include "utils/tiny_file_utils.h"
 #include "world.hpp"
 
@@ -29,6 +32,8 @@ namespace plt = matplotlibcpp;
 #include "rbdl/Model.h"
 #include "rbdl/rbdl.h"
 #endif
+
+using namespace tds;
 
 #ifdef USE_MATPLOTLIB
 template <typename Algebra>
@@ -68,11 +73,11 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
 
   float box_size = 0.02f;
 
-  for (std::size_t i = 0; i < mb.links.size(); ++i) {
+  for (std::size_t i = 0; i < mb.size(); ++i) {
     int cube_shape = app.register_cube_shape(box_size, box_size, box_size);
     int cube_id = app.m_renderer->register_graphics_instance(cube_shape);
-    mb.links[i].visual_ids = {cube_id};
-    mb.links[i].X_visuals = {Transform(mb.links[i].rbi.com)};
+    mb[i].visual_ids = {cube_id};
+    mb[i].X_visuals = {Transform(mb[i].rbi.com)};
   }
 
   for (std::size_t t = 0; t < states.size(); t += skip_steps) {
@@ -82,17 +87,18 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
     data.upAxis = 2;
     app.draw_grid(data);
     for (int i = 0; i < mb.dof(); ++i) {
-      mb.q[i] = state[i];
+      mb.q()[i] = state[i];
     }
-    mb.forward_kinematics();
+    forward_kinematics(mb);
     // mb.print_state();
 
     std::this_thread::sleep_for(std::chrono::duration<double>(dt));
 
-    TinyVector3f parent_pos(static_cast<float>(mb.base_X_world.translation[0]),
-                            static_cast<float>(mb.base_X_world.translation[1]),
-                            static_cast<float>(mb.base_X_world.translation[2]));
-    for (const auto &link : mb.links) {
+    TinyVector3f parent_pos(
+        static_cast<float>(mb.base_X_world().translation[0]),
+        static_cast<float>(mb.base_X_world().translation[1]),
+        static_cast<float>(mb.base_X_world().translation[2]));
+    for (const auto &link : mb) {
       TinyVector3f link_pos(static_cast<float>(link.X_world.translation[0]),
                             static_cast<float>(link.X_world.translation[1]),
                             static_cast<float>(link.X_world.translation[2]));
@@ -392,15 +398,15 @@ int main(int argc, char **argv) {
                                urdf_filename);
       mb = cache.construct(urdf_filename, world);
 
-      for (std::size_t j = 0; j < mb->links.size(); ++j) {
+      for (std::size_t j = 0; j < mb->size(); ++j) {
         std::cout << "link " << j << ":\n";
-        Algebra::print("rbi", mb->links[j].rbi);
+        Algebra::print("rbi", (*mb)[j].rbi);
       }
       std::cout << "\n\n\n";
-      mb->forward_kinematics();
-      for (std::size_t j = 0; j < mb->links.size(); ++j) {
+      forward_kinematics(*mb);
+      for (std::size_t j = 0; j < mb->size(); ++j) {
         std::cout << "link " << j << ":\n";
-        Algebra::print("abi", mb->links[j].abi);
+        Algebra::print("abi", (*mb)[j].abi);
       }
     }
 
@@ -422,7 +428,7 @@ int main(int argc, char **argv) {
 
     //   mb->q = VectorX({M_PI_2, 0.0});
     //   // mb->q = VectorX({M_PI_2});
-    //   mb->forward_kinematics();
+    //   forward_kinematics(mb);
     // }
 
 #if USE_RBDL
@@ -447,7 +453,7 @@ int main(int argc, char **argv) {
       double dt = 0.001;
       for (int i = 0; i < 50; ++i) {
         printf("\n\n\nt: %i\n", i);
-        // mb->forward_kinematics();
+        // forward_kinematics(mb);
         // traj.push_back(mb->q);
         for (auto &link : mb->links) {
           Algebra::set_zero(link.a);
@@ -458,7 +464,7 @@ int main(int argc, char **argv) {
           mb->tau[j] = Algebra::sin(i * dt * 10.) * .2;
           rbdl_tau[j] = Algebra::to_double(mb->tau[j]);
         }
-        mb->forward_dynamics(gravity);
+        forward_dynamics(*mb, gravity);
         mb->print_state();
         // for (auto &link : mb->links) {
         //   Algebra::print(
@@ -475,7 +481,7 @@ int main(int argc, char **argv) {
         //       link.u);
         // }
         mb->clear_forces();
-        mb->integrate(dt);
+        integrate_euler(*mb, dt);
 
         RigidBodyDynamics::ForwardDynamics(rbdl_model, rbdl_q, rbdl_qd,
                                            rbdl_tau, rbdl_qdd);
@@ -521,25 +527,25 @@ int main(int argc, char **argv) {
     // }
 
     // Vector3 gravity(0., 0., -9.81);
-    // mb.forward_dynamics(gravity);
+    // forward_dynamics(mb, gravity);
 
     std::vector<typename Algebra::VectorX> traj;
 
     mb->initialize();
     double dt = 0.001;
-    for (int i = 0; i < 2000; ++i) {
+    for (int i = 0; i < 50000; ++i) {
       printf("\n\n\nt: %i\n", i);
-      // mb->forward_kinematics();
-      traj.push_back(mb->q);
-      for (auto &link : mb->links) {
+      // forward_kinematics(mb);
+      traj.push_back(mb->q());
+      for (auto &link : (*mb)) {
         Algebra::set_zero(link.a);
       }
       int nd = mb->dof_actuated();
       // Algebra::Index j = 2;
       for (Algebra::Index j = 3; j < nd; ++j) {
-        mb->tau[j] = Algebra::sin(i * dt * 10.) * .2;
+        mb->tau()[j] = Algebra::sin(i * dt * 10.) * 1e-4;
       }
-      mb->forward_dynamics(gravity);
+      forward_dynamics(*mb, gravity);
       mb->print_state();
       // for (auto &link : mb->links) {
       //   Algebra::print(("link[" + std::to_string(link.q_index) +
@@ -556,7 +562,7 @@ int main(int argc, char **argv) {
       //                  link.u);
       // }
       mb->clear_forces();
-      mb->integrate(dt);
+      integrate_euler(*mb, dt);
     }
 
 #ifdef USE_MATPLOTLIB
@@ -588,19 +594,19 @@ int main(int argc, char **argv) {
     mb.attach(link_b);
     mb.initialize();
 
-    mb.q = VectorX({M_PI_2, 0.0});
+    mb.q() = VectorX({M_PI_2, 0.0});
 
-    mb.forward_kinematics();
+    forward_kinematics(mb);
     Vector3 gravity(0., 0., -9.81);
-    mb.forward_dynamics(gravity);
+    forward_dynamics(mb, gravity);
 
     std::vector<typename Algebra::VectorX> traj;
 
     double dt = 0.01;
     for (int i = 0; i < 1000; ++i) {
-      traj.push_back(mb.q);
-      mb.integrate(dt);
-      mb.forward_dynamics(gravity);
+      traj.push_back(mb.q());
+      integrate_euler(mb, dt);
+      forward_dynamics(mb, gravity);
       mb.print_state();
     }
 

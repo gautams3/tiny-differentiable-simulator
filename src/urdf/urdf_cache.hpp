@@ -20,7 +20,7 @@
 // #include "tiny_actuator.h"
 // #include "tiny_double_utils.h"
 #include "../multi_body.hpp"
-#include "tiny_urdf_parser.h"
+#include "urdf_parser.hpp"
 #include "urdf_to_multi_body.hpp"
 #include "world.hpp"
 

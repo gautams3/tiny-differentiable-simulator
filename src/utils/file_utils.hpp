@@ -13,21 +13,23 @@
 
 #define TINY_MAX_EXE_PATH_LEN 4096
 
-#include <cassert>
 #include <stddef.h>  //ptrdiff_h
 #include <stdio.h>
 #include <string.h>
 
-struct TinyResourcePath {
+#include <cassert>
+
+namespace tds {
+struct ResourcePath {
   char* m_path;
-  TinyResourcePath(int len) {
+  ResourcePath(int len) {
     m_path = (char*)malloc(len);
     memset(m_path, 0, len);
   }
-  virtual ~TinyResourcePath() { free(m_path); }
+  virtual ~ResourcePath() { free(m_path); }
 };
 
-struct TinyFileUtils {
+struct FileUtils {
   // find_file searches files in 'data' folder in the current working directory
   // and relative to executable directory and many of their parent directories.
   static bool find_file(const std::string& org_file_name,
@@ -145,3 +147,4 @@ struct TinyFileUtils {
     return numBytes;
   }
 };
+}  // namespace tds
