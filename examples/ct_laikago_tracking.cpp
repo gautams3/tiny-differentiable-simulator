@@ -21,7 +21,7 @@
 
 #include "motion_import.h"
 #include "tiny_double_utils.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_mb_constraint_solver_spring.h"
 #include "tiny_system_constructor.h"
 #include "tiny_traj_opt.h"

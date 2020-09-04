@@ -3,7 +3,7 @@
 #include "utils/tiny_chrome_trace_util.h"
 #include "utils/tiny_logging.h"
 #include "tiny_obj_loader.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_mesh_utils.h"
 #include "stb_image/stb_image.h"
 

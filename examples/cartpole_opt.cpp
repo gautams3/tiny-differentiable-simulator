@@ -30,7 +30,7 @@ typedef PyBulletVisualizerAPI VisualizerAPI;
 #include "ceres_utils.h"
 #include "pybullet_urdf_import.h"
 #include "tiny_double_utils.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_multi_body.h"
 #include "tiny_urdf_to_multi_body.h"
 #include "tiny_world.h"

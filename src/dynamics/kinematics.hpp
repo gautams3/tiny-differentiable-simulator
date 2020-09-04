@@ -14,10 +14,10 @@ namespace tds {
  * If no joint accelerations qdd are given, qdd is assumed to be zero.
  */
 template <typename Algebra>
-void forward_kinematics(MultiBody<Algebra> &mb,
-                        const typename Algebra::VectorX &q,
-                        const typename Algebra::VectorX &qd,
-                        const typename Algebra::VectorX &qdd = typename Algebra::VectorX()) {
+void forward_kinematics(
+    MultiBody<Algebra> &mb, const typename Algebra::VectorX &q,
+    const typename Algebra::VectorX &qd,
+    const typename Algebra::VectorX &qdd = typename Algebra::VectorX()) {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   typedef tds::Transform<Algebra> Transform;
@@ -31,7 +31,8 @@ void forward_kinematics(MultiBody<Algebra> &mb,
 
   if (mb.is_floating()) {
     // update base-world transform from q, and update base velocity from qd
-    mb.base_X_world().rotation = Algebra::quat_to_matrix(q[0], q[1], q[2], q[3]);
+    mb.base_X_world().rotation =
+        Algebra::quat_to_matrix(q[0], q[1], q[2], q[3]);
     mb.base_X_world().translation = Vector3(q[4], q[5], q[6]);
     if (Algebra::size(qd) != 0) {
       mb.base_velocity().top = Vector3(qd[0], qd[1], qd[2]);
@@ -127,7 +128,74 @@ void forward_kinematics(MultiBody<Algebra> &mb,
 }
 
 template <typename Algebra>
+void forward_kinematics(MultiBody<Algebra> &mb,
+                        const typename Algebra::VectorX &q) {
+  forward_kinematics(mb, q, typename Algebra::VectorX());
+}
+
+template <typename Algebra>
 void forward_kinematics(MultiBody<Algebra> &mb) {
-  forward_kinematics(mb, mb.q(), mb.qd());
+  forward_kinematics(mb, mb.q(), typename Algebra::VectorX());
+}
+
+/**
+ * Computes the forward kinematics given joint positions q and assigns
+ * base_X_world the base transform in world frame, and optionally the link
+ * transforms in world and in base frame.
+ * Input q must have dimensions of dof().
+ */
+template <typename Algebra>
+void forward_kinematics_q(
+    const MultiBody<Algebra> &mb,
+    const typename Algebra::VectorX &q,
+    tds::Transform<Algebra> *base_X_world,
+    std::vector<tds::Transform<Algebra>> *links_X_world = nullptr,
+    std::vector<tds::Transform<Algebra>> *links_X_base = nullptr) {
+  using Scalar = typename Algebra::Scalar;
+  using Vector3 = typename Algebra::Vector3;
+  typedef tds::Transform<Algebra> Transform;
+  typedef tds::MotionVector<Algebra> MotionVector;
+  typedef tds::ForceVector<Algebra> ForceVector;
+  typedef tds::Link<Algebra> Link;
+
+  assert(Algebra::size(q) == mb.dof());
+  assert(base_X_world != nullptr);
+
+  if (mb.is_floating()) {
+    base_X_world->rotation = Algebra::quat_to_matrix(q[0], q[1], q[2], q[3]);
+    base_X_world->translation = Vector3(q[4], q[5], q[6]);
+  } else {
+    *base_X_world = mb.base_X_world();
+  }
+  if (links_X_world) links_X_world->resize(mb.size());
+  if (links_X_base) links_X_base->resize(mb.size());
+  Transform x_j;
+  Transform x_parent;
+  Transform ident;
+  ident.set_identity();
+  for (std::size_t i = 0; i < mb.size(); i++) {
+    const Link &link = mb[i];
+    int parent = link.parent_index;
+
+    Scalar q_val = mb.get_q_for_link(q, i);
+    link.jcalc(q_val, &x_j, &x_parent);
+
+    if (parent >= 0 || mb.is_floating()) {
+      if (links_X_world) {
+        const Transform &parent_X_world =
+            parent >= 0 ? (*links_X_world)[parent] : *base_X_world;
+        (*links_X_world)[i] = parent_X_world * x_parent;
+      }
+      if (links_X_base) {
+        const Transform &parent_X_base =
+            parent >= 0 ? (*links_X_base)[parent] : ident;
+        (*links_X_base)[i] = parent_X_base * x_parent;
+      }
+    } else {
+      // first link in fixed-base system
+      if (links_X_world) (*links_X_world)[i] = *base_X_world * x_parent;
+      if (links_X_base) (*links_X_base)[i] = x_parent;
+    }
+  }
 }
 }  // namespace tds

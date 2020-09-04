@@ -28,8 +28,8 @@ struct UrdfToMultiBody {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
-  typedef tds::UrdfStructures<Algebra> UrdfStructures;
-  typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
+  typedef UrdfStructures<Algebra> UrdfStructures;
+  typedef RigidBodyInertia<Algebra> RigidBodyInertia;
 
   static int convert_to_multi_body(const UrdfStructures& urdf_structures,
                                    World<Algebra>& world,
@@ -72,7 +72,7 @@ struct UrdfToMultiBody {
       mb.X_visuals_.push_back(visual_offset);
     }
 
-    Link<Algebra> dummy;
+    // Link<Algebra> dummy;
     // convert_collisions(world, base_link, dummy);
     // for (int i = 0; i < dummy.collision_geometries.size(); i++) {
     //   mb.collision_geometries.push_back(dummy.collision_geometries[i]);
@@ -210,43 +210,43 @@ struct UrdfToMultiBody {
       collision_offset.rotation =
           Algebra::rotation_zyx_matrix(rpy[0], rpy[1], rpy[2]);
 
-      // switch (col.geometry.geom_type) {
-      //   case TINY_SPHERE_TYPE: {
-      //     Geometry<Algebra>* geom =
-      //         world.create_sphere(col.geometry.sphere.radius);
-      //     l.collision_geometries.push_back(geom);
-      //     l.X_collisions.push_back(collision_offset);
-      //     break;
-      //   }
-      //     // case BOX_TYPE: {
-      //     //     // col.box.extents = Vector3(colShapeData.dimensions[0],
-      //     //     // colShapeData.dimensions[1], colShapeData.dimensions[2]);
-      //     //     // urdfLink.urdf_collision_shapes.push_back(col);
-      //     //     break;
-      //     // }
-      //   case TINY_CAPSULE_TYPE: {
-      //     Geometry<Algebra>* geom =
-      //         world.create_capsule(Scalar(col.geometry.capsule.radius),
-      //                              Scalar(col.geometry.capsule.length));
-      //     l.collision_geometries.push_back(geom);
-      //     l.X_collisions.push_back(collision_offset);
-      //     break;
-      //   }
-      //   // case GEOM_MESH: {
-      //   //    // col.mesh.file_name = colShapeData.meshAssetFileName;
-      //   //    // col.mesh.scale = Vector3(colShapeData.dimensions[0],
-      //   //    // colShapeData.dimensions[1], colShapeData.dimensions[2]);
-      //   //    break;
-      //   //}
-      //   case TINY_PLANE_TYPE: {
-      //     Geometry<Algebra>* geom = world.create_plane();
-      //     l.collision_geometries.push_back(geom);
-      //     l.X_collisions.push_back(collision_offset);
-      //     break;
-      //   }
-      //   default: {
-      //   }
-      // };
+      switch (col.geometry.geom_type) {
+        case TINY_SPHERE_TYPE: {
+          Geometry<Algebra>* geom =
+              world.create_sphere(col.geometry.sphere.radius);
+          l.collision_geometries.push_back(geom);
+          l.X_collisions.push_back(collision_offset);
+          break;
+        }
+          // case BOX_TYPE: {
+          //     // col.box.extents = Vector3(colShapeData.dimensions[0],
+          //     // colShapeData.dimensions[1], colShapeData.dimensions[2]);
+          //     // urdfLink.urdf_collision_shapes.push_back(col);
+          //     break;
+          // }
+        case TINY_CAPSULE_TYPE: {
+          Geometry<Algebra>* geom =
+              world.create_capsule(Scalar(col.geometry.capsule.radius),
+                                   Scalar(col.geometry.capsule.length));
+          l.collision_geometries.push_back(geom);
+          l.X_collisions.push_back(collision_offset);
+          break;
+        }
+        // case GEOM_MESH: {
+        //    // col.mesh.file_name = colShapeData.meshAssetFileName;
+        //    // col.mesh.scale = Vector3(colShapeData.dimensions[0],
+        //    // colShapeData.dimensions[1], colShapeData.dimensions[2]);
+        //    break;
+        //}
+        case TINY_PLANE_TYPE: {
+          Geometry<Algebra>* geom = world.create_plane();
+          l.collision_geometries.push_back(geom);
+          l.X_collisions.push_back(collision_offset);
+          break;
+        }
+        default: {
+        }
+      };
     }
   }
 };

@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "math/transform.hpp"
+#include "geometry.hpp"
 
 namespace tds {
 enum JointType {
@@ -58,8 +59,8 @@ struct Link {
   int parent_index{-1};  // index of parent link in MultiBody
   int index{-1};         // index of this link in MultiBody
 
-  // std::vector<const Geometry<Scalar, Constants> *> collision_geometries;
-  // std::vector<Transform> X_collisions;  // offset of collision geometries
+  std::vector<const Geometry<Algebra> *> collision_geometries;
+  std::vector<Transform> X_collisions;  // offset of collision geometries
   // (relative to this link frame)
   std::vector<int> visual_ids;
   std::vector<Transform>

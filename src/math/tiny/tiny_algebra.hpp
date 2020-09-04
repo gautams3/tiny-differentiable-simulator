@@ -18,6 +18,8 @@ struct TinyAlgebra {
   using VectorX = TinyVectorX<TinyScalar, TinyConstants>;
   using Matrix3 = TinyMatrix3x3<TinyScalar, TinyConstants>;
   using Matrix6 = TinyMatrix6x6<TinyScalar, TinyConstants>;
+  using Matrix3X = TinyMatrix3xX<TinyScalar, TinyConstants>;
+  using MatrixX = TinyMatrixXxX<TinyScalar, TinyConstants>;
   using Quaternion = TinyQuaternion<TinyScalar, TinyConstants>;
   using SpatialVector = tds::SpatialVector<TinyAlgebra>;
   using MotionVector = tds::MotionVector<TinyAlgebra>;
@@ -28,6 +30,9 @@ struct TinyAlgebra {
     return matrix.transpose();
   }
 
+  TINY_INLINE static auto inverse(const Quaternion &quat) {
+    return quat.inversed();
+  }
   template <typename T>
   TINY_INLINE static auto inverse(const T &matrix) {
     return matrix.inverse();
@@ -44,6 +49,23 @@ struct TinyAlgebra {
   }
 
   TINY_INLINE static Index size(const VectorX &v) { return v.m_size; }
+
+  TINY_INLINE static Matrix3X create_matrix_3x(int num_cols) {
+    return Matrix3X(num_cols);
+  }
+  TINY_INLINE static MatrixX create_matrix_x(int num_rows, int num_cols) {
+    return MatrixX(num_rows, num_cols);
+  }
+
+  template <typename T>
+  TINY_INLINE static int num_rows(const T &matrix) {
+    return matrix.m_rows;
+  }
+
+  template <typename T>
+  TINY_INLINE static int num_cols(const T &matrix) {
+    return matrix.m_cols;
+  }
 
   /**
    * V1 = mv(w1, v1)
@@ -96,6 +118,10 @@ struct TinyAlgebra {
   TINY_INLINE static Scalar norm(const T &v) {
     return v.length();
   }
+  template <typename T>
+  TINY_INLINE static Scalar sqnorm(const T &v) {
+    return v.sqnorm();
+  }
 
   TINY_INLINE static auto normalize(const Quaternion &q) {
     Scalar ql = q.length();
@@ -132,7 +158,9 @@ struct TinyAlgebra {
    * Returns a 3x3 identity matrix.
    */
   TINY_INLINE static Matrix3 eye3() { return diagonal3(TinyConstants::one()); }
-  TINY_INLINE static void set_identity(Quaternion& quat) { quat.set_identity(); }
+  TINY_INLINE static void set_identity(Quaternion &quat) {
+    quat.set_identity();
+  }
 
   TINY_INLINE static Scalar zero() { return TinyConstants::zero(); }
   TINY_INLINE static Scalar one() { return TinyConstants::one(); }
@@ -141,9 +169,7 @@ struct TinyAlgebra {
   TINY_INLINE static Scalar fraction(int a, int b) {
     return TinyConstants::fraction(a, b);
   }
-  TINY_INLINE static Scalar pi() {
-    return TinyConstants::pi();
-  }
+  TINY_INLINE static Scalar pi() { return TinyConstants::pi(); }
 
   TINY_INLINE static Scalar scalar_from_string(const std::string &s) {
     return TinyConstants::scalar_from_string(s);
@@ -154,9 +180,10 @@ struct TinyAlgebra {
   TINY_INLINE static Vector3 unit3_y() { return Vector3::makeUnitY(); }
   TINY_INLINE static Vector3 unit3_z() { return Vector3::makeUnitZ(); }
 
-  TINY_INLINE static void assign_block(Matrix3 &output, const Matrix6 &input, Index i,
-                                       Index j, Index m = 3, Index n = 3,
-                                       Index input_i = 0, Index input_j = 0) {
+  TINY_INLINE static void assign_block(Matrix3 &output, const Matrix6 &input,
+                                       Index i, Index j, Index m = 3,
+                                       Index n = 3, Index input_i = 0,
+                                       Index input_j = 0) {
     if (input_i == 0) {
       if (input_j == 0) {
         output = input.m_topLeftMat;
@@ -171,9 +198,10 @@ struct TinyAlgebra {
       }
     }
   }
-  TINY_INLINE static void assign_block(Matrix6 &output, const Matrix3 &input, Index i,
-                                       Index j, Index m = 3, Index n = 3,
-                                       Index input_i = 0, Index input_j = 0) {
+  TINY_INLINE static void assign_block(Matrix6 &output, const Matrix3 &input,
+                                       Index i, Index j, Index m = 3,
+                                       Index n = 3, Index input_i = 0,
+                                       Index input_j = 0) {
     if (i == 0) {
       if (j == 0) {
         output.m_topLeftMat = input;
@@ -196,6 +224,34 @@ struct TinyAlgebra {
                                         const SpatialVector &v) {
     for (int j = 0; j < 6; ++j) {
       m(j, i) = v[j];
+    }
+  }
+  template <template <typename, typename> typename ColumnType>
+  TINY_INLINE static void assign_column(
+      TinyMatrixXxX_<TinyScalar, TinyConstants, ColumnType> &m, Index i,
+      const SpatialVector &v) {
+    for (int j = 0; j < 6; ++j) {
+      m(j, i) = v[j];
+    }
+  }
+
+  TINY_INLINE static void assign_row(Matrix3 &m, Index i, const Vector3 &v) {
+    for (int j = 0; j < 6; ++j) {
+      m(i, j) = v[j];
+    }
+  }
+  TINY_INLINE static void assign_row(Matrix6 &m, Index i,
+                                     const SpatialVector &v) {
+    for (int j = 0; j < 6; ++j) {
+      m(i, j) = v[j];
+    }
+  }
+  template <template <typename, typename> typename ColumnType>
+  TINY_INLINE static void assign_row(
+      TinyMatrixXxX_<TinyScalar, TinyConstants, ColumnType> &m, Index i,
+      const SpatialVector &v) {
+    for (int j = 0; j < 6; ++j) {
+      m(i, j) = v[j];
     }
   }
 
@@ -262,7 +318,7 @@ struct TinyAlgebra {
                      q[3] * w[1] + q[2] * w[0] - q[0] * w[2],
                      q[3] * w[2] + q[0] * w[1] - q[1] * w[0],
                      -q[0] * w[0] - q[1] * w[1] - q[2] * w[2]);
-    delta *= 0.5 * dt;
+    delta *= half() * dt;
     return delta;
   }
 
@@ -289,11 +345,47 @@ struct TinyAlgebra {
     v.bottom.set_zero();
   }
 
+  /**
+   * Non-differentiable comparison operator.
+   */
+  TINY_INLINE static bool less_than(const Scalar &a, const Scalar &b) {
+    return a < b;
+  }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  TINY_INLINE static bool less_than_zero(const Scalar &a) { return a < zero(); }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  TINY_INLINE static bool greater_than_zero(const Scalar &a) {
+    return a > zero();
+  }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  TINY_INLINE static bool greater_than(const Scalar &a, const Scalar &b) {
+    return a > b;
+  }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  TINY_INLINE static bool equals(const Scalar &a, const Scalar &b) {
+    return a == b;
+  }
+
   TINY_INLINE static double to_double(const Scalar &s) {
     return TinyConstants::getDouble(s);
   }
+  TINY_INLINE static Scalar from_double(double s) {
+    return TinyConstants::scalar_from_double(s);
+  }
 
-  static void print(const std::string &title, const Scalar& s) {
+  static void print(const std::string &title, const Scalar &s) {
     printf("%s %.12f\n", title.c_str(), to_double(s));
   }
 
@@ -318,8 +410,28 @@ struct TinyAlgebra {
     return TinyConstants::cos1(s);
   }
 
+  TINY_INLINE static Scalar tan(const Scalar &s) {
+    return TinyConstants::tan1(s);
+  }
+
+  TINY_INLINE static Scalar sqrt(const Scalar &s) {
+    return TinyConstants::sqrt1(s);
+  }
+
   TINY_INLINE static Scalar abs(const Scalar &s) {
     return TinyConstants::abs(s);
+  }
+
+  TINY_INLINE static Scalar pow(const Scalar &s,const Scalar &e) {
+    return TinyConstants::pow(s, e);
+  }
+
+  TINY_INLINE static Scalar exp(const Scalar &s) {
+    return TinyConstants::exp(s);
+  }
+
+  TINY_INLINE static Scalar tanh(const Scalar &s) {
+    return TinyConstants::tanh(s);
   }
 
   TinyAlgebra() = delete;

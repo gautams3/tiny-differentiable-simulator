@@ -23,7 +23,7 @@
 #include "meshcat_urdf_visualizer.h"
 #include "pybullet_urdf_import.h"
 #include "pybullet_visualizer_api.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_urdf_to_multi_body.h"
 
 typedef PyBulletVisualizerAPI VisualizerAPI;

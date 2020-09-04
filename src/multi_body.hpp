@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "geometry.hpp"
 #include "link.hpp"
 
 namespace tds {
@@ -11,6 +12,7 @@ class MultiBody {
   friend struct UrdfToMultiBody;
 
   using Scalar = typename Algebra::Scalar;
+  using Index = typename Algebra::Index;
   using Vector3 = typename Algebra::Vector3;
   using VectorX = typename Algebra::VectorX;
   using Matrix3 = typename Algebra::Matrix3;
@@ -22,6 +24,7 @@ class MultiBody {
   typedef tds::Link<Algebra> Link;
   typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
   typedef tds::ArticulatedBodyInertia<Algebra> ArticulatedBodyInertia;
+  typedef tds::Geometry<Algebra> Geometry;
   typedef std::vector<Link> LinkCollection;
 
   /**
@@ -57,8 +60,7 @@ class MultiBody {
   // offset of geometry (relative to the base frame)
   std::vector<Transform> X_visuals_;
 
-  // std::vector<const TinyGeometry<Scalar, Algebra> *>
-  //     collision_geometries;
+  std::vector<const Geometry *> collision_geometries_;
   // offset of collision geometries (relative to this link frame)
   std::vector<Transform> X_collisions_;
 
@@ -105,14 +107,28 @@ class MultiBody {
     is_floating_ = is_floating;
   }
 
+  TINY_INLINE std::vector<int> control_indices() { return control_indices_; }
+  void set_control_indices(const std::vector<int> &control_indices) {
+    control_indices_ = control_indices;
+    tau_ = Algebra::zerox(control_indices.size());
+  }
+
   TINY_INLINE VectorX &q() { return q_; }
   TINY_INLINE const VectorX &q() const { return q_; }
+  TINY_INLINE Scalar &q(Index i) { return q_[i]; }
+  TINY_INLINE const Scalar &q(Index i) const { return q_[i]; }
   TINY_INLINE VectorX &qd() { return qd_; }
   TINY_INLINE const VectorX &qd() const { return qd_; }
+  TINY_INLINE Scalar &qd(Index i) { return qd_[i]; }
+  TINY_INLINE const Scalar &qd(Index i) const { return qd_[i]; }
   TINY_INLINE VectorX &qdd() { return qdd_; }
   TINY_INLINE const VectorX &qdd() const { return qdd_; }
+  TINY_INLINE Scalar &qdd(Index i) { return qdd_[i]; }
+  TINY_INLINE const Scalar &qdd(Index i) const { return qdd_[i]; }
   TINY_INLINE VectorX &tau() { return tau_; }
   TINY_INLINE const VectorX &tau() const { return tau_; }
+  TINY_INLINE Scalar &tau(Index i) { return tau_[i]; }
+  TINY_INLINE const Scalar &tau(Index i) const { return tau_[i]; }
 
   TINY_INLINE MotionVector &base_velocity() { return base_velocity_; }
   TINY_INLINE const MotionVector &base_velocity() const {
@@ -140,6 +156,38 @@ class MultiBody {
   }
   TINY_INLINE Transform &base_X_world() { return base_X_world_; }
   TINY_INLINE const Transform &base_X_world() const { return base_X_world_; }
+
+  TINY_INLINE std::vector<int> &visual_ids() { return visual_ids_; }
+  TINY_INLINE const std::vector<int> &visual_ids() const { return visual_ids_; }
+  TINY_INLINE std::vector<Transform> &X_visuals() { return X_visuals_; }
+  TINY_INLINE const std::vector<Transform> &X_visuals() const {
+    return X_visuals_;
+  }
+
+  TINY_INLINE std::vector<const Geometry *> collision_geometries() {
+    return collision_geometries_;
+  }
+  TINY_INLINE const std::vector<const Geometry *> collision_geometries() const {
+    return collision_geometries_;
+  }
+  TINY_INLINE std::vector<const Geometry *> collision_geometries(int link_id) {
+    if (link_id == -1) return collision_geometries_;
+    return links_[link_id].collision_geometries;
+  }
+  TINY_INLINE const std::vector<const Geometry *> collision_geometries(int link_id) const {
+    if (link_id == -1) return collision_geometries_;
+    return links_[link_id].collision_geometries;
+  }
+  TINY_INLINE std::vector<Transform> &collision_transforms() { return X_collisions_; }
+  TINY_INLINE const std::vector<Transform> &collision_transforms() const {
+    return X_collisions_;
+  }
+  TINY_INLINE std::vector<Transform> &collision_transforms(int link_id) {
+    if (link_id == -1) return X_collisions_; return links_[link_id].X_collisions; }
+  TINY_INLINE const std::vector<Transform> &collision_transforms(int link_id) const {
+    if (link_id == -1) return X_collisions_;
+    return links_[link_id].X_collisions;
+  }
 
   /**
    * Set 3D base position in world coordinates.

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #if defined(_MSC_VER)
 #define TINY_INLINE inline
 #else

@@ -33,19 +33,19 @@ struct Pose {
   Pose(const Vector3& position, const Quaternion& orientation)
       : position(position), orientation(orientation) {}
   Vector3 transform(const Vector3& point) const {
-    return orientation.rotate(point) + position;
+    return Algebra::rotate(orientation, point) + position;
   }
 
   Vector3 inverse_transform(const Vector3& point) const {
     Vector3 point_out;
     point_out = point - position;
-    return orientation.inversed().rotate(point_out);
+    return Algebra::rotate(Algebra::inverse(orientation), point_out);
   }
 
   Pose operator*(const Pose& b) const {
     const Pose& a = *this;
     Pose res = a;
-    res.position += a.orientation.rotate(b.position);
+    res.position += Algebra::rotate(a.orientation, b.position);
     res.orientation *= b.orientation;
     return res;
   }
@@ -56,8 +56,8 @@ struct Pose {
   }
 
   void inverse() {
-    orientation = orientation.inversed();
-    position = orientation.rotate(-position);
+    orientation = Algebra::inverse(orientation);
+    position = Algebra::rotate(orientation, -position);
   }
 };
 }  // namespace tds

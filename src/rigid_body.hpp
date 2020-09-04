@@ -26,9 +26,10 @@ class RigidBody {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
-  typedef tds::Geometry<Algebra> Geometry;
+  typedef Geometry<Algebra> Geometry;
+  typedef Pose<Algebra> Pose;
 
-  tds::Pose<Algebra> world_pose_;
+  Pose world_pose_;
   Vector3 linear_velocity_;
   Vector3 angular_velocity_;
   Vector3 local_inertia_;
@@ -50,16 +51,16 @@ class RigidBody {
         mass_ == Algebra::zero() ? Algebra::zero33() : Algebra::eye3();
     Algebra::set_zero(world_pose_.position);
     Algebra::set_identity(world_pose_.orientation);
-    linear_velocity_.set_zero();
-    angular_velocity_.set_zero();
-    total_force_.set_zero();
-    total_torque_.set_zero();
+    Algebra::set_zero(linear_velocity_);
+    Algebra::set_zero(angular_velocity_);
+    Algebra::set_zero(total_force_);
+    Algebra::set_zero(total_torque_);
 
     // local_inertia_(local_inertia)
   }
 
-  TINY_INLINE tds::Pose<Algebra>& world_pose() { return world_pose_; }
-  TINY_INLINE const tds::Pose<Algebra>& world_pose() const {
+  TINY_INLINE Pose& world_pose() { return world_pose_; }
+  TINY_INLINE const Pose& world_pose() const {
     return world_pose_;
   }
 
@@ -78,8 +79,19 @@ class RigidBody {
   void apply_central_force(const Vector3& force) { total_force_ += force; }
 
   void apply_force_impulse(const Scalar& dt) {
+    printf("rigid_body.hpp:%i\n", __LINE__);
+    fflush(stdout);
     linear_velocity_ += total_force_ * inv_mass_ * dt;
-    angular_velocity_ += Algebra::dot(inv_inertia_world_, total_torque_) * dt;
+    printf("rigid_body.hpp:%i\n", __LINE__);
+
+    Algebra::print("inv_inertia_world_", inv_inertia_world_);
+    Algebra::print("total_torque_", total_torque_);
+    Vector3 temp = inv_inertia_world_ * total_torque_;
+    Algebra::print("inv_inertia_world_ * total_torque_", temp);
+    fflush(stdout);
+    angular_velocity_ += inv_inertia_world_ * total_torque_ * dt;
+    printf("rigid_body.hpp:%i\n", __LINE__);
+    fflush(stdout);
   }
 
   Vector3 get_velocity(const Vector3& rel_pos) {
@@ -90,19 +102,22 @@ class RigidBody {
   void apply_impulse(const Vector3& impulse, const Vector3& rel_pos) {
     linear_velocity_ += inv_mass_ * impulse;
     Vector3 torqueImpulse = Algebra::cross(rel_pos, impulse);
-    angular_velocity_ += Algebra::dot(inv_inertia_world_, torqueImpulse);
+    angular_velocity_ += inv_inertia_world_ * torqueImpulse;
   }
 
   /// Clear the applied forces and torques to zero.
   void clear_forces() {
-    total_force_.set_zero();
-    total_torque_.set_zero();
+    Algebra::set_zero(total_force_);
+    Algebra::set_zero(total_torque_);
   }
 
   void integrate(const Scalar& dt) {
     world_pose_.position += linear_velocity_ * dt;
+    // world_pose_.orientation +=
+    //     (angular_velocity_ * world_pose_.orientation) * (dt *
+    //     Algebra::half());
     world_pose_.orientation +=
-        (angular_velocity_ * world_pose_.orientation) * (dt * Algebra::half());
+        Algebra::quat_velocity(world_pose_.orientation, angular_velocity_, dt);
     world_pose_.orientation = Algebra::normalize(world_pose_.orientation);
   }
 };

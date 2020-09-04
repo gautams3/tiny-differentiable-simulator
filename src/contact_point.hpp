@@ -32,11 +32,11 @@ int contact_sphere_sphere(const tds::Geometry<Algebra>* geomA,
   Sphere* sphereB = (Sphere*)geomB;
 
   Vector3 diff = poseA.position - poseB.position;
-  Scalar length = diff.length();
+  Scalar length = Algebra::norm(diff);
   Scalar distance = length - (sphereA->get_radius() + sphereB->get_radius());
   Vector3 normal_on_b;
-  normal_on_b.setValue(Algebra::one(), Algebra::zero(), Algebra::zero());
-  if (length > CONTACT_EPSILON) {
+  normal_on_b = Algebra::unit3_x();
+  if (Algebra::greater_than(length, CONTACT_EPSILON)) {
     Vector3 normal_on_b = Algebra::one() / length * diff;
     Vector3 point_a_world =
         poseA.position - sphereA->get_radius() * normal_on_b;
@@ -69,7 +69,7 @@ int contact_plane_sphere(const tds::Geometry<Algebra>* geomA,
   Sphere* sphereB = (Sphere*)geomB;
 
   Scalar t =
-      -(poseB.position.dot(-planeA->get_normal()) + planeA->get_constant());
+      -(Algebra::dot(poseB.position, -planeA->get_normal()) + planeA->get_constant());
   Vector3 pointAWorld = poseB.position + t * -planeA->get_normal();
   Scalar distance = t - sphereB->get_radius();
   Vector3 pointBWorld =

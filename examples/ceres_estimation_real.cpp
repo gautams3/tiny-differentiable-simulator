@@ -23,7 +23,7 @@
 #include "pendulum.h"
 #include "pybullet_visualizer_api.h"
 #include "tiny_ceres_estimator.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_multi_body.h"
 #include "tiny_world.h"
 

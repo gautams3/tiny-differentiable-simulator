@@ -14,19 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef PYBULLET_URDF_IMPORT_H
-#define PYBULLET_URDF_IMPORT_H
+#pragma once
 
 #include "SharedMemory/b3RobotSimulatorClientAPI_NoDirect.h"
-#include "tiny_multi_body.h"
-#include "tiny_urdf_structures.h"
+#include "multi_body.hpp"
+#include "urdf_structures.hpp"
 
-template <typename TinyScalar, typename TinyConstants>
+namespace tds {
+template <typename Algebra>
 struct PyBulletUrdfImport {
-  typedef ::TinyUrdfStructures<TinyScalar, TinyConstants> TinyUrdfStructures;
+  typedef tds::UrdfStructures<Algebra> UrdfStructures;
+    using Vector3 = typename Algebra::Vector3;
+    using Quaternion = typename Algebra::Quaternion;
+    typedef tds::Transform<Algebra> Transform;
 
   static void extract_urdf_structs(
-      TinyUrdfStructures& urdf_structures, int body_unique_id,
+      UrdfStructures& urdf_structures, int body_unique_id,
       class b3RobotSimulatorClientAPI_NoDirect& sim_api,
       class b3RobotSimulatorClientAPI_NoDirect& viz_api) {
     btVector3 basePos;
@@ -34,23 +37,23 @@ struct PyBulletUrdfImport {
     sim_api.getBasePositionAndOrientation(body_unique_id, basePos, baseOrn);
     {
       int base_link_index = -1;
-      TinyUrdfLink<TinyScalar, TinyConstants> base_link;
+      UrdfLink<Algebra> base_link;
       extract_link(urdf_structures, body_unique_id, base_link_index, sim_api,
                    viz_api, base_link);
-      base_link.m_parent_index = -2;
-      urdf_structures.m_base_links.push_back(base_link);
+      base_link.parent_index = -2;
+      urdf_structures.base_links.push_back(base_link);
     }
 
     int num_joints = sim_api.getNumJoints(body_unique_id);
     for (int link_index = 0; link_index < num_joints; link_index++) {
-      TinyUrdfLink<TinyScalar, TinyConstants> child_link;
+      UrdfLink<Algebra> child_link;
       extract_link(urdf_structures, body_unique_id, link_index, sim_api,
                    viz_api, child_link);
 
       b3JointInfo jointInfo;
       sim_api.getJointInfo(body_unique_id, link_index, &jointInfo);
 
-      TinyUrdfJoint<TinyScalar, TinyConstants> joint;
+      UrdfJoint<Algebra> joint;
 
       joint.child_name = child_link.link_name;
       joint.joint_name = jointInfo.m_jointName;
@@ -76,24 +79,23 @@ struct PyBulletUrdfImport {
       };
 
       joint.joint_axis_xyz.setValue(
-          TinyConstants::scalar_from_double(jointInfo.m_jointAxis[0]),
-          TinyConstants::scalar_from_double(jointInfo.m_jointAxis[1]),
-          TinyConstants::scalar_from_double(jointInfo.m_jointAxis[2]));
+          Algebra::from_double(jointInfo.m_jointAxis[0]),
+          Algebra::from_double(jointInfo.m_jointAxis[1]),
+          Algebra::from_double(jointInfo.m_jointAxis[2]));
 
       if (jointInfo.m_parentIndex < 0) {
-        joint.parent_name = urdf_structures.m_base_links[0].link_name;
-        urdf_structures.m_base_links[0].child_link_indices.push_back(
-            link_index);
+        joint.parent_name = urdf_structures.base_links[0].link_name;
+        urdf_structures.base_links[0].child_link_indices.push_back(link_index);
 
       } else {
         b3JointInfo parentJointInfo;
         sim_api.getJointInfo(body_unique_id, jointInfo.m_parentIndex,
                              &parentJointInfo);
         joint.parent_name = parentJointInfo.m_linkName;
-        urdf_structures.m_links[jointInfo.m_parentIndex]
+        urdf_structures.links[jointInfo.m_parentIndex]
             .child_link_indices.push_back(link_index);
       }
-      child_link.m_parent_index = jointInfo.m_parentIndex;
+      child_link.parent_index = jointInfo.m_parentIndex;
 
       b3DynamicsInfo dynamics_info_child;
       sim_api.getDynamicsInfo(body_unique_id, link_index, &dynamics_info_child);
@@ -131,65 +133,60 @@ struct PyBulletUrdfImport {
       btTransform tmp2(btQuaternion::getIdentity(), parentCom2JointPos);
       btTransform pos = parentInertia * tmp2;
       joint.joint_origin_xyz.setValue(
-          TinyConstants::scalar_from_double(pos.getOrigin()[0]),
-          TinyConstants::scalar_from_double(pos.getOrigin()[1]),
-          TinyConstants::scalar_from_double(pos.getOrigin()[2]));
+          Algebra::from_double(pos.getOrigin()[0]),
+          Algebra::from_double(pos.getOrigin()[1]),
+          Algebra::from_double(pos.getOrigin()[2]));
       btScalar roll, pitch, yaw;
       pos_.getRotation().getEulerZYX(yaw, pitch, roll);
       btVector3 rpy = btVector3(roll, pitch, yaw);
-      joint.joint_origin_rpy.setValue(
-          TinyConstants::scalar_from_double(rpy[0]),
-          TinyConstants::scalar_from_double(rpy[1]),
-          TinyConstants::scalar_from_double(rpy[2]));
-      urdf_structures.m_links.push_back(child_link);
-      urdf_structures.m_joints.push_back(joint);
+      joint.joint_origin_rpy.setValue(Algebra::from_double(rpy[0]),
+                                      Algebra::from_double(rpy[1]),
+                                      Algebra::from_double(rpy[2]));
+      urdf_structures.links.push_back(child_link);
+      urdf_structures.joints.push_back(joint);
     }
   }
 
   static void sync_graphics_transforms(
-      const TinyMultiBody<TinyScalar, TinyConstants>* body,
+      const MultiBody<Algebra>* body,
       class b3RobotSimulatorClientAPI_NoDirect& viz_api) {
-    for (int v = 0; v < body->m_visual_uids1.size(); v++) {
-      int visual_id = body->m_visual_uids1[v];
-      TinyQuaternion<TinyScalar, TinyConstants> rot;
-      TinySpatialTransform<TinyScalar, TinyConstants> geom_X_world =
-          body->m_base_X_world * body->m_X_visuals[v];
-      btVector3 base_pos(
-          TinyConstants::getDouble(geom_X_world.m_translation.getX()),
-          TinyConstants::getDouble(geom_X_world.m_translation.getY()),
-          TinyConstants::getDouble(geom_X_world.m_translation.getZ()));
-      geom_X_world.m_rotation.getRotation(rot);
-      btQuaternion base_orn(TinyConstants::getDouble(rot.getX()),
-                            TinyConstants::getDouble(rot.getY()),
-                            TinyConstants::getDouble(rot.getZ()),
-                            TinyConstants::getDouble(rot.getW()));
+
+    for (int v = 0; v < body->visual_ids().size(); v++) {
+      int visual_id = body->visual_ids()[v];
+      Quaternion rot;
+      Transform geom_X_world = body->base_X_world() * body->X_visuals()[v];
+      btVector3 base_pos(Algebra::to_double(geom_X_world.translation.getX()),
+                         Algebra::to_double(geom_X_world.translation.getY()),
+                         Algebra::to_double(geom_X_world.translation.getZ()));
+      geom_X_world.rotation.getRotation(rot);
+      btQuaternion base_orn(
+          Algebra::to_double(rot.getX()), Algebra::to_double(rot.getY()),
+          Algebra::to_double(rot.getZ()), Algebra::to_double(rot.getW()));
       viz_api.resetBasePositionAndOrientation(visual_id, base_pos, base_orn);
     }
 
-    for (int l = 0; l < body->m_links.size(); l++) {
-      for (int v = 0; v < body->m_links[l].m_visual_uids1.size(); v++) {
-        int visual_id = body->m_links[l].m_visual_uids1[v];
-        TinyQuaternion<TinyScalar, TinyConstants> rot;
-        TinySpatialTransform<TinyScalar, TinyConstants> geom_X_world =
-            body->m_links[l].m_X_world * body->m_links[l].m_X_visuals[v];
-        btVector3 base_pos(
-            TinyConstants::getDouble(geom_X_world.m_translation.getX()),
-            TinyConstants::getDouble(geom_X_world.m_translation.getY()),
-            TinyConstants::getDouble(geom_X_world.m_translation.getZ()));
-        geom_X_world.m_rotation.getRotation(rot);
-        btQuaternion base_orn(TinyConstants::getDouble(rot.getX()),
-                              TinyConstants::getDouble(rot.getY()),
-                              TinyConstants::getDouble(rot.getZ()),
-                              TinyConstants::getDouble(rot.getW()));
+    for (int l = 0; l < body->size(); l++) {
+      for (int v = 0; v < (*body)[l].visual_ids.size(); v++) {
+        int visual_id = (*body)[l].visual_ids[v];
+        Quaternion rot;
+        Transform geom_X_world =
+            (*body)[l].X_world * (*body)[l].X_visuals[v];
+        btVector3 base_pos(Algebra::to_double(geom_X_world.translation.getX()),
+                           Algebra::to_double(geom_X_world.translation.getY()),
+                           Algebra::to_double(geom_X_world.translation.getZ()));
+        geom_X_world.rotation.getRotation(rot);
+        btQuaternion base_orn(
+            Algebra::to_double(rot.getX()), Algebra::to_double(rot.getY()),
+            Algebra::to_double(rot.getZ()), Algebra::to_double(rot.getW()));
         viz_api.resetBasePositionAndOrientation(visual_id, base_pos, base_orn);
       }
     }
   }
-  static void extract_link(TinyUrdfStructures& urdf_structures,
-                           int body_unique_id, int linkIndex,
+  static void extract_link(UrdfStructures& urdf_structures, int body_unique_id,
+                           int linkIndex,
                            class b3RobotSimulatorClientAPI_NoDirect& sim_api,
                            class b3RobotSimulatorClientAPI_NoDirect& viz_api,
-                           TinyUrdfLink<TinyScalar, TinyConstants>& urdfLink) {
+                           UrdfLink<Algebra>& urdfLink) {
     b3BodyInfo bodyInfo;
     sim_api.getBodyInfo(body_unique_id, &bodyInfo);
 
@@ -204,22 +201,22 @@ struct PyBulletUrdfImport {
     b3DynamicsInfo dyn;
     sim_api.getDynamicsInfo(body_unique_id, linkIndex, &dyn);
 
-    urdfLink.urdf_inertial.mass = TinyConstants::scalar_from_double(dyn.m_mass);
+    urdfLink.urdf_inertial.mass = Algebra::from_double(dyn.m_mass);
     urdfLink.urdf_inertial.inertia_xxyyzz.setValue(
-        TinyConstants::scalar_from_double(dyn.m_localInertialDiagonal[0]),
-        TinyConstants::scalar_from_double(dyn.m_localInertialDiagonal[1]),
-        TinyConstants::scalar_from_double(dyn.m_localInertialDiagonal[2]));
+        Algebra::from_double(dyn.m_localInertialDiagonal[0]),
+        Algebra::from_double(dyn.m_localInertialDiagonal[1]),
+        Algebra::from_double(dyn.m_localInertialDiagonal[2]));
     urdfLink.urdf_inertial.origin_xyz.setValue(
-        TinyConstants::scalar_from_double(dyn.m_localInertialFrame[0]),
-        TinyConstants::scalar_from_double(dyn.m_localInertialFrame[1]),
-        TinyConstants::scalar_from_double(dyn.m_localInertialFrame[2]));
+        Algebra::from_double(dyn.m_localInertialFrame[0]),
+        Algebra::from_double(dyn.m_localInertialFrame[1]),
+        Algebra::from_double(dyn.m_localInertialFrame[2]));
     btVector3 rpy = sim_api.getEulerFromQuaternion(
         btQuaternion(dyn.m_localInertialFrame[3], dyn.m_localInertialFrame[4],
                      dyn.m_localInertialFrame[5], dyn.m_localInertialFrame[6]));
     urdfLink.urdf_inertial.origin_rpy.setValue(
-        TinyConstants::scalar_from_double(rpy[0]),
-        TinyConstants::scalar_from_double(rpy[1]),
-        TinyConstants::scalar_from_double(rpy[2]));
+        Algebra::from_double(rpy[0]),
+        Algebra::from_double(rpy[1]),
+        Algebra::from_double(rpy[2]));
 
     // visual shapes
     b3VisualShapeInformation visualShapeInfo;
@@ -228,66 +225,64 @@ struct PyBulletUrdfImport {
     for (int i = 0; i < visualShapeInfo.m_numVisualShapes; i++) {
       const b3VisualShapeData& visual = visualShapeInfo.m_visualShapeData[i];
       if (visual.m_linkIndex == linkIndex) {
-        TinyUrdfVisual<TinyScalar, TinyConstants> viz;
+        UrdfVisual<Algebra> viz;
         // offset
         viz.origin_xyz.setValue(
-            TinyConstants::scalar_from_double(visual.m_localVisualFrame[0]),
-            TinyConstants::scalar_from_double(visual.m_localVisualFrame[1]),
-            TinyConstants::scalar_from_double(visual.m_localVisualFrame[2]));
+            Algebra::from_double(visual.m_localVisualFrame[0]),
+            Algebra::from_double(visual.m_localVisualFrame[1]),
+            Algebra::from_double(visual.m_localVisualFrame[2]));
         btVector3 rpy = sim_api.getEulerFromQuaternion(btQuaternion(
             visual.m_localVisualFrame[3], visual.m_localVisualFrame[4],
             visual.m_localVisualFrame[5], visual.m_localVisualFrame[6]));
-        viz.origin_rpy.setValue(TinyConstants::scalar_from_double(rpy[0]),
-                                TinyConstants::scalar_from_double(rpy[1]),
-                                TinyConstants::scalar_from_double(rpy[2]));
+        viz.origin_rpy.setValue(Algebra::from_double(rpy[0]),
+                                Algebra::from_double(rpy[1]),
+                                Algebra::from_double(rpy[2]));
 
-        viz.m_material.material_rgb.setValue(
-            TinyConstants::scalar_from_double(visual.m_rgbaColor[0]),
-            TinyConstants::scalar_from_double(visual.m_rgbaColor[1]),
-            TinyConstants::scalar_from_double(visual.m_rgbaColor[2]));
+        viz.material.material_rgb.setValue(
+            Algebra::from_double(visual.m_rgbaColor[0]),
+            Algebra::from_double(visual.m_rgbaColor[1]),
+            Algebra::from_double(visual.m_rgbaColor[2]));
         // viz.material_a =
-        // TinyConstants::scalar_from_double(visual.m_rgbaColor[3]);
+        // Algebra::from_double(visual.m_rgbaColor[3]);
 
         // try to load for now, until we can manually 'override' the shape world
         // transform
         switch (visual.m_visualGeometryType) {
           case GEOM_SPHERE: {
-            viz.geometry.m_sphere.m_radius =
-                TinyConstants::scalar_from_double(visual.m_dimensions[0]);
+            viz.geometry.sphere.radius =
+                Algebra::from_double(visual.m_dimensions[0]);
             viz.geometry.geom_type = TINY_SPHERE_TYPE;
             break;
           }
           case GEOM_CAPSULE: {
-            viz.geometry.m_capsule.m_length =
-                TinyConstants::scalar_from_double(visual.m_dimensions[0]);
-            viz.geometry.m_capsule.m_radius =
-                TinyConstants::scalar_from_double(visual.m_dimensions[1]);
+            viz.geometry.capsule.length =
+                Algebra::from_double(visual.m_dimensions[0]);
+            viz.geometry.capsule.radius =
+                Algebra::from_double(visual.m_dimensions[1]);
             viz.geometry.geom_type = TINY_CAPSULE_TYPE;
             break;
           }
           case GEOM_BOX: {
-            TinyVector3<TinyScalar, TinyConstants> halfExtents;
+            Vector3 halfExtents;
             halfExtents.setValue(
-                TinyConstants::scalar_from_double(visual.m_dimensions[0]),
-                TinyConstants::scalar_from_double(visual.m_dimensions[1]),
-                TinyConstants::scalar_from_double(visual.m_dimensions[2]));
-            viz.geometry.m_box.m_extents =
-                halfExtents * TinyConstants::fraction(2, 1);
+                Algebra::from_double(visual.m_dimensions[0]),
+                Algebra::from_double(visual.m_dimensions[1]),
+                Algebra::from_double(visual.m_dimensions[2]));
+            viz.geometry.box.extents = halfExtents * Algebra::fraction(2, 1);
             viz.geometry.geom_type = TINY_BOX_TYPE;
             break;
           }
           case GEOM_MESH: {
-            viz.geometry.m_mesh.m_scale.setValue(
-                TinyConstants::scalar_from_double(visual.m_dimensions[0]),
-                TinyConstants::scalar_from_double(visual.m_dimensions[1]),
-                TinyConstants::scalar_from_double(visual.m_dimensions[2]));
-            viz.geometry.m_mesh.m_file_name = visual.m_meshAssetFileName;
-            printf("extract mesh: %s\n",
-                   viz.geometry.m_mesh.m_file_name.c_str());
+            viz.geometry.mesh.scale.setValue(
+                Algebra::from_double(visual.m_dimensions[0]),
+                Algebra::from_double(visual.m_dimensions[1]),
+                Algebra::from_double(visual.m_dimensions[2]));
+            viz.geometry.mesh.file_name = visual.m_meshAssetFileName;
+            printf("extract mesh: %s\n", viz.geometry.mesh.file_name.c_str());
             printf("extract scale: %f,%f,%f\n",
-                   TinyConstants::getDouble(viz.geometry.m_mesh.m_scale[0]),
-                   TinyConstants::getDouble(viz.geometry.m_mesh.m_scale[1]),
-                   TinyConstants::getDouble(viz.geometry.m_mesh.m_scale[2]));
+                   Algebra::to_double(viz.geometry.mesh.scale[0]),
+                   Algebra::to_double(viz.geometry.mesh.scale[1]),
+                   Algebra::to_double(viz.geometry.mesh.scale[2]));
             viz.geometry.geom_type = TINY_MESH_TYPE;
             break;
           }
@@ -308,7 +303,7 @@ struct PyBulletUrdfImport {
     for (int i = 0; i < collisionShapeInfo.m_numCollisionShapes; i++) {
       const b3CollisionShapeData& colShapeData =
           collisionShapeInfo.m_collisionShapeData[i];
-      TinyUrdfCollision<TinyScalar, TinyConstants> col;
+      UrdfCollision<Algebra> col;
       btVector3 inertial_pos(dyn.m_localInertialFrame[0],
                              dyn.m_localInertialFrame[1],
                              dyn.m_localInertialFrame[2]);
@@ -329,54 +324,53 @@ struct PyBulletUrdfImport {
       btTransform col_tr = inertial_tr * col_local_tr;
 
       col.origin_xyz.setValue(
-          TinyConstants::scalar_from_double(col_tr.getOrigin()[0]),
-          TinyConstants::scalar_from_double(col_tr.getOrigin()[1]),
-          TinyConstants::scalar_from_double(col_tr.getOrigin()[2]));
+          Algebra::from_double(col_tr.getOrigin()[0]),
+          Algebra::from_double(col_tr.getOrigin()[1]),
+          Algebra::from_double(col_tr.getOrigin()[2]));
       btVector3 rpy;
       col_tr.getRotation().getEulerZYX(rpy[0], rpy[1], rpy[2]);
 
-      col.origin_rpy.setValue(TinyConstants::scalar_from_double(rpy[0]),
-                              TinyConstants::scalar_from_double(rpy[1]),
-                              TinyConstants::scalar_from_double(rpy[2]));
+      col.origin_rpy.setValue(Algebra::from_double(rpy[0]),
+                              Algebra::from_double(rpy[1]),
+                              Algebra::from_double(rpy[2]));
 
       switch (colShapeData.m_collisionGeometryType) {
         case GEOM_SPHERE: {
-          col.geometry.m_sphere.m_radius =
-              TinyConstants::scalar_from_double(colShapeData.m_dimensions[0]);
+          col.geometry.sphere.radius =
+              Algebra::from_double(colShapeData.m_dimensions[0]);
           col.geometry.geom_type = TINY_SPHERE_TYPE;
           urdfLink.urdf_collision_shapes.push_back(col);
           break;
         }
         // case GEOM_BOX: {
-        //	col.m_box.m_extents.setValue(TinyConstants::scalar_from_double(colShapeData.m_dimensions[0]),
-        //		TinyConstants::scalar_from_double(colShapeData.m_dimensions[1]),
-        //		TinyConstants::scalar_from_double(colShapeData.m_dimensions[2]));
+        //	col.box.extents.setValue(Algebra::from_double(colShapeData.m_dimensions[0]),
+        //		Algebra::from_double(colShapeData.m_dimensions[1]),
+        //		Algebra::from_double(colShapeData.m_dimensions[2]));
         //	col.geom_type1 = BOX_TYPE;
         //	urdfLink.urdf_collision_shapes.push_back(col);
         //	break;
         //}
         case GEOM_CAPSULE: {
-          col.geometry.m_capsule.m_length =
-              TinyConstants::scalar_from_double(colShapeData.m_dimensions[0]);
-          col.geometry.m_capsule.m_radius =
-              TinyConstants::scalar_from_double(colShapeData.m_dimensions[1]);
+          col.geometry.capsule.length =
+              Algebra::from_double(colShapeData.m_dimensions[0]);
+          col.geometry.capsule.radius =
+              Algebra::from_double(colShapeData.m_dimensions[1]);
           col.geometry.geom_type = TINY_CAPSULE_TYPE;
           urdfLink.urdf_collision_shapes.push_back(col);
           break;
         }
         // case GEOM_MESH: {
-        //	col.m_mesh.m_file_name = colShapeData.m_meshAssetFileName;
-        //	col.m_mesh.m_scale.setValue(TinyConstants::scalar_from_double(colShapeData.m_dimensions[0]),
-        //		TinyConstants::scalar_from_double(colShapeData.m_dimensions[1]),
-        //		TinyConstants::scalar_from_double(colShapeData.m_dimensions[2]));
+        //	col.mesh.file_name = colShapeData.m_meshAssetFileName;
+        //	col.mesh.scale.setValue(Algebra::from_double(colShapeData.m_dimensions[0]),
+        //		Algebra::from_double(colShapeData.m_dimensions[1]),
+        //		Algebra::from_double(colShapeData.m_dimensions[2]));
         //	col.geom_type1 = MESH_TYPE;
         //	break;
         //}
         case GEOM_PLANE: {
-          col.geometry.m_plane.m_normal.setValue(TinyConstants::zero(),
-                                                 TinyConstants::zero(),
-                                                 TinyConstants::one());
-          col.geometry.m_plane.m_constant = TinyConstants::zero();
+          col.geometry.plane.normal.setValue(Algebra::zero(), Algebra::zero(),
+                                             Algebra::one());
+          col.geometry.plane.constant = Algebra::zero();
           col.geometry.geom_type = TINY_PLANE_TYPE;
           urdfLink.urdf_collision_shapes.push_back(col);
           break;
@@ -388,22 +382,18 @@ struct PyBulletUrdfImport {
   }
 
   static void convert_visuals(
-      TinyUrdfStructures& urdf_structures,
-      TinyUrdfLink<TinyScalar, TinyConstants>& link,
+      UrdfStructures& urdf_structures, UrdfLink<Algebra>& link,
       class b3RobotSimulatorClientAPI_NoDirect& viz_api) {
-    typedef ::TinyVector3<TinyScalar, TinyConstants> TinyVector3;
 
     for (int v = 0; v < link.urdf_visual_shapes.size(); v++) {
-      TinyUrdfVisual<TinyScalar, TinyConstants>& visual_shape =
-          link.urdf_visual_shapes[v];
+      UrdfVisual<Algebra>& visual_shape = link.urdf_visual_shapes[v];
       b3RobotSimulatorCreateVisualShapeArgs args;
       args.m_shapeType = visual_shape.geometry.geom_type;
 
       printf("visual_shape.geom_type=%d\n", visual_shape.geometry.geom_type);
       switch (visual_shape.geometry.geom_type) {
         case TINY_SPHERE_TYPE: {
-          args.m_radius =
-              TinyConstants::getDouble(visual_shape.geometry.m_sphere.m_radius);
+          args.m_radius = Algebra::to_double(visual_shape.geometry.sphere.radius);
           int vizShape = viz_api.createVisualShape(GEOM_SPHERE, args);
           if (vizShape < 0) {
             printf("Couldn't create sphere shape\n");
@@ -412,14 +402,14 @@ struct PyBulletUrdfImport {
           args2.m_baseVisualShapeIndex = vizShape;
           args2.m_baseMass = 0;
           int viz_uid = viz_api.createMultiBody(args2);
-          visual_shape.sync_visual_body_uid1 = viz_uid;
+          visual_shape.sync_visual_body_id = viz_uid;
           break;
         }
         case TINY_CAPSULE_TYPE: {
-          args.m_radius = TinyConstants::getDouble(
-              visual_shape.geometry.m_capsule.m_radius);
-          args.m_height = TinyConstants::getDouble(
-              visual_shape.geometry.m_capsule.m_length);
+          args.m_radius =
+              Algebra::to_double(visual_shape.geometry.capsule.radius);
+          args.m_height =
+              Algebra::to_double(visual_shape.geometry.capsule.length);
 
           int vizShape = viz_api.createVisualShape(GEOM_CAPSULE, args);
           if (vizShape < 0) {
@@ -429,35 +419,31 @@ struct PyBulletUrdfImport {
           args2.m_baseVisualShapeIndex = vizShape;
           args2.m_baseMass = 0;
           int viz_uid = viz_api.createMultiBody(args2);
-          visual_shape.sync_visual_body_uid1 = viz_uid;
+          visual_shape.sync_visual_body_id = viz_uid;
           break;
         }
         case TINY_BOX_TYPE: {
           {
-            TinyVector3 he = visual_shape.geometry.m_box.m_extents *
-                             TinyConstants::fraction(1, 2);
-            args.m_halfExtents.setValue(TinyConstants::getDouble(he[0]),
-                                        TinyConstants::getDouble(he[1]),
-                                        TinyConstants::getDouble(he[2]));
+            Vector3 he =
+                visual_shape.geometry.box.extents * Algebra::fraction(1, 2);
+            args.m_halfExtents.setValue(Algebra::to_double(he[0]),
+                                      Algebra::to_double(he[1]),
+                                      Algebra::to_double(he[2]));
             int vizShape = viz_api.createVisualShape(GEOM_BOX, args);
             b3RobotSimulatorCreateMultiBodyArgs args2;
             args2.m_baseVisualShapeIndex = vizShape;
             args2.m_baseMass = 0;
             int viz_uid = viz_api.createMultiBody(args2);
-            visual_shape.sync_visual_body_uid1 = viz_uid;
+            visual_shape.sync_visual_body_id = viz_uid;
             break;
           }
           case TINY_MESH_TYPE: {
-            args.m_fileName =
-                (char*)visual_shape.geometry.m_mesh.m_file_name.c_str();
+            args.m_fileName = (char*)visual_shape.geometry.mesh.file_name.c_str();
             // printf("mb mesh: %s\n", args.m_fileName);
             args.m_meshScale.setValue(
-                TinyConstants::getDouble(
-                    visual_shape.geometry.m_mesh.m_scale[0]),
-                TinyConstants::getDouble(
-                    visual_shape.geometry.m_mesh.m_scale[1]),
-                TinyConstants::getDouble(
-                    visual_shape.geometry.m_mesh.m_scale[2]));
+                Algebra::to_double(visual_shape.geometry.mesh.scale[0]),
+                Algebra::to_double(visual_shape.geometry.mesh.scale[1]),
+                Algebra::to_double(visual_shape.geometry.mesh.scale[2]));
 
             int vizShape = viz_api.createVisualShape(GEOM_MESH, args);
             if (vizShape < 0) {
@@ -478,7 +464,7 @@ struct PyBulletUrdfImport {
               args_change.m_rgbaColor.setValue(1, 1, 1, 1);
               viz_api.changeVisualShape(args_change);
             }
-            visual_shape.sync_visual_body_uid1 = viz_uid;
+            visual_shape.sync_visual_body_id = viz_uid;
             break;
           }
           default: {
@@ -489,4 +475,4 @@ struct PyBulletUrdfImport {
   }
 };
 
-#endif  // PYBULLET_URDF_IMPORT_H
+}  // namespace tds

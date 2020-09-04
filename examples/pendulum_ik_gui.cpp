@@ -25,7 +25,7 @@
 #include "tiny_dual.h"
 #include "tiny_dual_double_utils.h"
 #include "tiny_eigen_helper.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_multi_body.h"
 #include "tiny_rigid_body.h"
 #include "tiny_vector3.h"

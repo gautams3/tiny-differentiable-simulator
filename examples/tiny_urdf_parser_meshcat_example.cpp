@@ -21,7 +21,7 @@
 
 #include "meshcat_urdf_visualizer.h"
 #include "tiny_double_utils.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_urdf_parser.h"
 #include "tiny_urdf_to_multi_body.h"
 

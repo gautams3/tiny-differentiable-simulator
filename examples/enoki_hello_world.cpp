@@ -58,7 +58,7 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
                           MultiBody<Algebra> &mb, double dt,
                           std::size_t skip_steps = 10,
                           const std::string &window_title = "Trajectory") {
-  typedef ::Transform<Algebra> Transform;
+  typedef Transform<Algebra> Transform;
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using VectorX = typename Algebra::VectorX;
@@ -384,7 +384,7 @@ int main(int argc, char **argv) {
     using Vector3 = Algebra::Vector3;
     using VectorX = typename Algebra::VectorX;
     using Matrix3 = Algebra::Matrix3;
-    using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
+    using RigidBodyInertia = RigidBodyInertia<Algebra>;
 
     Vector3 gravity(0., 0., -9.81);
 
@@ -579,7 +579,7 @@ int main(int argc, char **argv) {
     using Vector3 = Algebra::Vector3;
     using VectorX = typename Algebra::VectorX;
     using Matrix3 = Algebra::Matrix3;
-    using RigidBodyInertia = ::RigidBodyInertia<Algebra>;
+    using RigidBodyInertia = RigidBodyInertia<Algebra>;
 
     MultiBody<Algebra> mb;
     double mass = 1.;

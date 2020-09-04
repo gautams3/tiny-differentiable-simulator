@@ -20,7 +20,7 @@
 #include "pybullet_visualizer_api.h"
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_gym_env.h"
 #include "tiny_neural_network.h"
 #include "tiny_policy_opt.h"

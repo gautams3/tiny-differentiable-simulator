@@ -9,9 +9,12 @@
 
 #include "spatial_vector.hpp"
 
-struct EnokiAlgebra {
+namespace tds {
+template <typename ScalarT = double>
+struct EnokiAlgebraT {
   using Index = std::size_t;
-  using Scalar = double;
+  using Scalar = ScalarT;
+  using EnokiAlgebra = EnokiAlgebraT<Scalar>;
   using Vector3 = enoki::Array<Scalar, 3>;
   // using Vector6 = enoki::Array<Scalar, 6>;
   using VectorX = std::vector<Scalar>;
@@ -97,6 +100,10 @@ struct EnokiAlgebra {
   ENOKI_INLINE static Scalar norm(const T &v) {
     return enoki::norm(v);
   }
+  template <typename T>
+  ENOKI_INLINE static Scalar sqnorm(const T &v) {
+    return enoki::squared_norm(v);
+  }
 
   template <typename T>
   ENOKI_INLINE static auto normalize(T &v) {
@@ -119,13 +126,16 @@ struct EnokiAlgebra {
   }
   ENOKI_INLINE static Matrix3 diagonal3(const Scalar &v) { return Matrix3(v); }
   TINY_INLINE static Matrix3 eye3() { return Matrix3(1.0); }
+  TINY_INLINE static void set_identity(Quaternion &quat) {
+    quat = Quaternion(0., 0., 0., 1.);
+  }
 
   ENOKI_INLINE static Scalar zero() { return 0; }
   ENOKI_INLINE static Scalar one() { return 1; }
+  ENOKI_INLINE static Scalar two() { return 2; }
   ENOKI_INLINE static Scalar half() { return 0.5; }
-  ENOKI_INLINE static Scalar fraction(int a, int b) {
-    return ((Scalar)a) / b;
-  }
+  ENOKI_INLINE static Scalar pi() { return M_PI; }
+  ENOKI_INLINE static Scalar fraction(int a, int b) { return ((double)a) / b; }
 
   static Scalar scalar_from_string(const std::string &s) {
     return std::stod(s);
@@ -248,7 +258,66 @@ struct EnokiAlgebra {
   }
 
   ENOKI_INLINE static double to_double(const Scalar &s) {
-    return static_cast<double>(s);
+    if constexpr (std::is_arithmetic_v<Scalar>) {
+      return static_cast<double>(s);
+    } else if constexpr (enoki::is_array<Scalar>::value) {
+      return static_cast<double>(s[0]);
+    }
+  }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  ENOKI_INLINE static bool less_than(const Scalar &a, const Scalar &b) {
+    if constexpr (std::is_arithmetic_v<Scalar>) {
+      return a < b;
+    } else if constexpr (enoki::is_array<Scalar>::value) {
+      return enoki::all(a < b);
+    }
+  }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  ENOKI_INLINE static bool less_than_zero(const Scalar &a) {
+    if constexpr (std::is_arithmetic_v<Scalar>) {
+      return a < 0.;
+    } else if constexpr (enoki::is_array<Scalar>::value) {
+      return enoki::all(a < 0.);
+    }
+  }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  ENOKI_INLINE static bool greater_than_zero(const Scalar &a) {
+    if constexpr (std::is_arithmetic_v<Scalar>) {
+      return a > 0.;
+    } else if constexpr (enoki::is_array<Scalar>::value) {
+      return enoki::all(a > 0.);
+    }
+  }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  ENOKI_INLINE static bool greater_than(const Scalar &a, const Scalar &b) {
+    if constexpr (std::is_arithmetic_v<Scalar>) {
+      return a > b;
+    } else if constexpr (enoki::is_array<Scalar>::value) {
+      return enoki::all(a > b);
+    }
+  }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  ENOKI_INLINE static bool equals(const Scalar &a, const Scalar &b) {
+    if constexpr (std::is_arithmetic_v<Scalar>) {
+      return a == b;
+    } else if constexpr (enoki::is_array<Scalar>::value) {
+      return enoki::all(a == b);
+    }
   }
 
   template <std::size_t Size>
@@ -301,5 +370,9 @@ struct EnokiAlgebra {
     return enoki::abs(s);
   }
 
-  EnokiAlgebra() = delete;
+  EnokiAlgebraT<Scalar>() = delete;
 };
+
+typedef EnokiAlgebraT<double> EnokiAlgebra;
+
+}  // namespace tds

@@ -19,33 +19,40 @@
 #include <iostream>
 #include <thread>
 
-#include "Utils/b3Clock.h"
+#include "dynamics/forward_dynamics.hpp"
+#include "dynamics/integrator.hpp"
+#include "math/tiny/tiny_algebra.hpp"
+#include "math/tiny/tiny_double_utils.h"
+#include "mb_constraint_solver_spring.hpp"
+#include "multi_body.hpp"
 #include "pybullet_visualizer_api.h"
-#include "tiny_double_utils.h"
-#include "tiny_file_utils.h"
-#include "tiny_mb_constraint_solver_spring.h"
-#include "tiny_multi_body.h"
-#include "tiny_system_constructor.h"
+#include "urdf/pybullet_urdf_import.hpp"
+#include "urdf/system_constructor.hpp"
+#include "urdf/urdf_cache.hpp"
+#include "utils/file_utils.hpp"
+#include "world.hpp"
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
-static VisualizerAPI *gSim = nullptr;
-void MyTinySubmitProfileTiming3(const std::string &profile_name) {
-  if (gSim) {
-    gSim->submitProfileTiming(profile_name);
-  }
-}
-
 int main(int argc, char *argv[]) {
   std::string connection_mode = "gui";
+
+  typedef TinyAlgebra<double, DoubleUtils> Algebra;
+  typedef typename Algebra::Vector3 Vector3;
+  typedef typename Algebra::Quaternion Quaternion;
+  typedef typename Algebra::VectorX VectorX;
+  typedef typename Algebra::Matrix3 Matrix3;
+  typedef typename Algebra::Matrix3X Matrix3X;
+  typedef tds::MultiBody<Algebra> MultiBody;
+  typedef tds::MultiBodyContactPoint<Algebra> ContactPoint;
 
   std::string urdf_filename;
   //"cheetah_link0_1.urdf"
   //"pendulum5.urdf"
   //"sphere2.urdf"
-  TinyFileUtils::find_file("sphere8cube.urdf", urdf_filename);
+  tds::FileUtils::find_file("sphere8cube.urdf", urdf_filename);
   std::string plane_filename;
-  TinyFileUtils::find_file("plane_implicit.urdf", plane_filename);
+  tds::FileUtils::find_file("plane_implicit.urdf", plane_filename);
 
   if (argc > 1) urdf_filename = std::string(argv[1]);
   bool floating_base = true;
@@ -78,49 +85,48 @@ int main(int argc, char *argv[]) {
 
   int rotateCamera = 0;
 
-  TinyWorld<double, DoubleUtils> world;
-  TinyMultiBody<double, DoubleUtils> *system = world.create_multi_body();
-  TinySystemConstructor<> constructor(urdf_filename, plane_filename);
-  constructor.m_is_floating = floating_base;
+  tds::World<Algebra> world;
+  MultiBody *system = world.create_multi_body();
+  tds::SystemConstructor constructor(urdf_filename, plane_filename);
+  constructor.is_floating = floating_base;
   constructor(sim2, sim, world, &system);
-  // delete world.m_mb_constraint_solver;
-  // world.m_mb_constraint_solver =
-  //     new TinyMultiBodyConstraintSolverSpring<double, DoubleUtils>;
+  
+  world.set_mb_constraint_solver(
+      new tds::MultiBodyConstraintSolverSpring<Algebra>);
 
-  //  system->m_q[0] = 2.;
-  //  system->m_q[1] = 1.2;
-  //  system->m_q[2] = 0.1;
-  //  system->m_qd[3] = 5;
-  system->m_q[1] = .2;
+  //  system->q()[0] = 2.;
+  //  system->q()[1] = 1.2;
+  //  system->q()[2] = 0.1;
+  //  system->qd()[3] = 5;
+  system->q()[1] = .2;
   fflush(stdout);
 
   if (floating_base) {
-    TinyQuaternion<double, DoubleUtils> start_rot;
-    start_rot.set_euler_rpy(TinyVector3<double, DoubleUtils>(0.8, 1.1, 0.9));
+    Quaternion start_rot;
+    start_rot.set_euler_rpy(Vector3(0.8, 1.1, 0.9));
     const double initial_height = 1.2;
-    const TinyVector3<double, DoubleUtils> initial_velocity(
-      0.7, 2., 0.);
-    system->m_q[0] = start_rot.x();
-    system->m_q[1] = start_rot.y();
-    system->m_q[2] = start_rot.z();
-    system->m_q[3] = start_rot.w();
-    system->m_q[4] = 0.;
-    system->m_q[5] = 0.;
-    system->m_q[6] = initial_height;
+    const Vector3 initial_velocity(0.7, 2., 0.);
+    system->q()[0] = start_rot.x();
+    system->q()[1] = start_rot.y();
+    system->q()[2] = start_rot.z();
+    system->q()[3] = start_rot.w();
+    system->q()[4] = 0.;
+    system->q()[5] = 0.;
+    system->q()[6] = initial_height;
 
-    system->m_qd[0] = 0.;
-    system->m_qd[1] = 0.;
-    system->m_qd[2] = 0.;
-    system->m_qd[3] = initial_velocity.x();
-    system->m_qd[4] = initial_velocity.y();
-    system->m_qd[5] = initial_velocity.z();
+    system->qd()[0] = 0.;
+    system->qd()[1] = 0.;
+    system->qd()[2] = 0.;
+    system->qd()[3] = initial_velocity.x();
+    system->qd()[4] = initial_velocity.y();
+    system->qd()[5] = initial_velocity.z();
 
     // apply some "random" rotation
-    // system->m_q[0] = 0.06603363263475902;
-    // system->m_q[1] = 0.2764891273883223;
-    // system->m_q[2] = 0.2477976811032405;
-    // system->m_q[3] = 0.9261693317298725;
-    // system->m_q[6] = 2;
+    // system->q()[0] = 0.06603363263475902;
+    // system->q()[1] = 0.2764891273883223;
+    // system->q()[2] = 0.2477976811032405;
+    // system->q()[3] = 0.9261693317298725;
+    // system->q()[6] = 2;
   }
   system->print_state();
 
@@ -128,15 +134,14 @@ int main(int argc, char *argv[]) {
   double time = 0;
   while (sim->canSubmitCommand()) {
     double gravZ = sim->readUserDebugParameter(grav_id);
-    world.set_gravity(TinyVector3<double, DoubleUtils>(0, 0, gravZ));
+    world.set_gravity(Vector3(0, 0, gravZ));
 
     {
       // system->control(dt, control);
       sim->submitProfileTiming("forwardDynamics");
-      system->forward_dynamics(world.get_gravity());
+      forward_dynamics(*system, world.get_gravity());
       sim->submitProfileTiming("");
-      PyBulletUrdfImport<double, DoubleUtils>::sync_graphics_transforms(system,
-                                                                        *sim);
+      tds::PyBulletUrdfImport<Algebra>::sync_graphics_transforms(system, *sim);
       system->clear_forces();
     }
 
@@ -156,7 +161,7 @@ int main(int argc, char *argv[]) {
 
     {
       sim->submitProfileTiming("integrate");
-      system->integrate(dt);
+      integrate_euler(*system, dt);
       // system->print_state();
       sim->submitProfileTiming("");
     }

@@ -29,7 +29,7 @@
 #include "tiny_ceres_estimator.h"
 #include "tiny_dataset.h"
 #include "tiny_double_utils.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_multi_body.h"
 #include "tiny_neural_network.h"
 #include "tiny_urdf_parser.h"

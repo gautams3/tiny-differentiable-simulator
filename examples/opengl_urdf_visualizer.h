@@ -26,7 +26,7 @@
 #include "tiny_urdf_structures.h"
 #include "opengl_window/tiny_opengl3_app.h"
 #include "tiny_obj_loader.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_mesh_utils.h"
 #include "stb_image/stb_image.h"
 

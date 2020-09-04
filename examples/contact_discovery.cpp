@@ -32,7 +32,7 @@
 #include "ceres_utils.h"
 #include "tiny_double_utils.h"
 #include "tiny_dual_double_utils.h"
-#include "tiny_file_utils.h"
+#include "utils/file_utils.hpp"
 #include "tiny_rigid_body.h"
 
 #include "pybullet_visualizer_api.h"
