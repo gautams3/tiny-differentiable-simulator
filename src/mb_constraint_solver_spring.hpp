@@ -65,11 +65,11 @@ class MultiBodyConstraintSolverSpring
   /**
    * Spring stiffness k.
    */
-  Scalar spring_k_{Algebra::fraction(5000, 1)};
+  Scalar spring_k_{Algebra::fraction(50000, 1)};
   /**
    * Damper coefficient d.
    */
-  Scalar damper_d_{Algebra::fraction(5000, 1)};
+  Scalar damper_d_{Algebra::fraction(50000, 1)};
   /**
    * Exponent `n` used in the Hunt-Crossley contact model.
    * 3/2 corresponds to contacting spheres under static conditions (Hertz).
@@ -130,11 +130,10 @@ class MultiBodyConstraintSolverSpring
 
   FrictionForceModel friction_model_{FRICTION_BROWN};
 
-protected:
+ protected:
   using MultiBodyConstraintSolver<Algebra>::needs_outer_iterations_;
 
-public:
-
+ public:
   MultiBodyConstraintSolverSpring() { needs_outer_iterations_ = false; }
 
   /**
@@ -279,12 +278,12 @@ public:
     }
   }
 
-public:
+ public:
   // Args:
   // cps: contact points
   // dt : delta time (in seconds)
   virtual void resolve_collision(const std::vector<ContactPoint>& cps,
-                                Scalar dt) const {
+                                 const Scalar& dt) {
     if (cps.empty()) return;
     const int n_c = static_cast<int>(cps.size());
 
@@ -314,14 +313,15 @@ public:
         // Matrix3X jac_a = mb_a->point_jacobian(cp.link_a,
         // world_point_a); Matrix3X jac_b =
         // mb_b->point_jacobian(cp.link_b, world_point_b);
+        mb_b->print_state();
         Matrix3X jac_a =
-            point_jacobian_fd(*mb_a, mb_a->q, cp.link_a, world_point_a);
+            point_jacobian(*mb_a, mb_a->q(), cp.link_a, world_point_a);
         Matrix3X jac_b =
-            point_jacobian_fd(*mb_b, mb_b->q, cp.link_b, world_point_b);
-        // jac_b.print("jac_b_fd");
+            point_jacobian(*mb_b, mb_b->q(), cp.link_b, world_point_b);
+        Algebra::print("jac_b", jac_b);
 
-        VectorX qd_a(mb_a->qd);
-        VectorX qd_b(mb_b->qd);
+        VectorX qd_a(mb_a->qd());
+        VectorX qd_b(mb_b->qd());
         vel_a = jac_a * qd_a;
         vel_b = jac_b * qd_b;
         Vector3 rel_vel = vel_a - vel_b;
@@ -410,28 +410,29 @@ public:
       }
     }
     // apply forces
+        Algebra::print("tau_b", tau_b);
     if (n_a > 0) {
       int tau_offset_a = 0;
-      if (mb_a->isFloating) {
+      if (mb_a->is_floating()) {
         for (int i = 0; i < 6; ++i) {
           mb_a->base_applied_force()[i] += tau_a[i];
         }
         tau_offset_a = 6;
       }
       for (int i = 0; i < mb_a->dof_actuated(); ++i) {
-        mb_a->tau[i] += tau_a[i + tau_offset_a];
+        mb_a->tau(i) += tau_a[i + tau_offset_a];
       }
     }
     if (n_b > 0) {
       int tau_offset_b = 0;
-      if (mb_b->isFloating) {
+      if (mb_b->is_floating()) {
         for (int i = 0; i < 6; ++i) {
           mb_b->base_applied_force()[i] += tau_b[i];
         }
         tau_offset_b = 6;
       }
       for (int i = 0; i < mb_b->dof_actuated(); ++i) {
-        mb_b->tau[i] += tau_b[i + tau_offset_b];
+        mb_b->tau(i) += tau_b[i + tau_offset_b];
       }
     }
   }

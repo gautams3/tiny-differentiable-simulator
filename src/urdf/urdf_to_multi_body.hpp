@@ -72,12 +72,13 @@ struct UrdfToMultiBody {
       mb.X_visuals_.push_back(visual_offset);
     }
 
-    // Link<Algebra> dummy;
-    // convert_collisions(world, base_link, dummy);
-    // for (int i = 0; i < dummy.collision_geometries.size(); i++) {
-    //   mb.collision_geometries.push_back(dummy.collision_geometries[i]);
-    //   mb.X_collisions.push_back(dummy.X_collisions[i]);
-    // }
+    // convert collision geoms, transforms for base
+    Link<Algebra> dummy;
+    convert_collisions(world, base_link, dummy);
+    for (std::size_t i = 0; i < dummy.collision_geometries.size(); i++) {
+      mb.collision_geometries().push_back(dummy.collision_geometries[i]);
+      mb.collision_transforms().push_back(dummy.X_collisions[i]);
+    }
 
     // then convert each link
     int num_links = urdf_structures.joints.size();
@@ -92,7 +93,7 @@ struct UrdfToMultiBody {
       bool joint_conversion_ok = false;
 
       // convert from enum JointType (SharedMemoryPublic.h) to JointType
-      // (MultiBody.h)
+      // (link.hpp)
       switch (urdf_structures.joints[i].joint_type) {
         case JOINT_FIXED: {
           printf("FixedType!\n");
@@ -218,12 +219,12 @@ struct UrdfToMultiBody {
           l.X_collisions.push_back(collision_offset);
           break;
         }
-          // case BOX_TYPE: {
-          //     // col.box.extents = Vector3(colShapeData.dimensions[0],
-          //     // colShapeData.dimensions[1], colShapeData.dimensions[2]);
-          //     // urdfLink.urdf_collision_shapes.push_back(col);
-          //     break;
-          // }
+        // case BOX_TYPE: {
+        //     // col.box.extents = Vector3(colShapeData.dimensions[0],
+        //     // colShapeData.dimensions[1], colShapeData.dimensions[2]);
+        //     // urdfLink.urdf_collision_shapes.push_back(col);
+        //     break;
+        // }
         case TINY_CAPSULE_TYPE: {
           Geometry<Algebra>* geom =
               world.create_capsule(Scalar(col.geometry.capsule.radius),

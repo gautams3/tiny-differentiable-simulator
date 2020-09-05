@@ -22,19 +22,27 @@ void integrate_euler(MultiBody<Algebra> &mb, typename Algebra::VectorX &q,
   if (mb.is_floating()) {
     mb.base_acceleration().top = Vector3(qdd[0], qdd[1], qdd[2]);
     mb.base_acceleration().bottom = Vector3(qdd[3], qdd[4], qdd[5]);
+    // Algebra::print("mb.base_acceleration()", mb.base_acceleration());
+
+    Algebra::print("qdd", qdd);
 
     mb.base_velocity().top = Vector3(qd[0], qd[1], qd[2]);
     mb.base_velocity().bottom = Vector3(qd[3], qd[4], qd[5]);
 
     mb.base_velocity() += mb.base_acceleration() * dt;
+    Algebra::print("mb.base_velocity()", mb.base_velocity());
+    qd[0] = mb.base_velocity().top[0];
+    qd[1] = mb.base_velocity().top[1];
+    qd[2] = mb.base_velocity().top[2];
 
-    Vector3 linear_velocity = mb.base_velocity().bottom;
+    const Vector3& linear_velocity = mb.base_velocity().bottom;
     mb.base_X_world().translation += linear_velocity * dt;
 
     // update base orientation using Quaternion derivative
-    Vector3 angular_velocity = mb.base_velocity().top;
+    const Vector3& angular_velocity = mb.base_velocity().top;
 
     Quaternion base_rot = Algebra::matrix_to_quat(mb.base_X_world().rotation);
+    // Algebra::print("base_rot", base_rot);
     // update 4-dimensional q from 3-dimensional qd for the base rotation
     // angular_velocity = Vector3(qd[0], qd[1], qd[2]);
     base_rot += Algebra::quat_velocity(base_rot, angular_velocity, dt);

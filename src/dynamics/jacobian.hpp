@@ -83,6 +83,7 @@ typename Algebra::Matrix3X point_jacobian_fd(
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using VectorX = typename Algebra::VectorX;
+  using Matrix3 = typename Algebra::Matrix3;
   using Matrix3X = typename Algebra::Matrix3X;
   using Quaternion = typename Algebra::Quaternion;
   typedef tds::Transform<Algebra> Transform;
@@ -97,11 +98,14 @@ typename Algebra::Matrix3X point_jacobian_fd(
   std::vector<Transform> links_X_world;
   Transform base_X_world;
   // compute world point transform for the initial joint angles
-  forward_kinematics_q(q, &base_X_world, &links_X_world);
-  if (mb.empty()) return jac;
+  forward_kinematics_q(mb, q, &base_X_world, &links_X_world);
+  // if (mb.empty()) {
+  //   return jac;
+  // }
   // convert start point in world coordinates to link frame
   const Vector3 base_point =
-      links_X_world[link_index].apply_inverse(start_point);
+      mb.empty() ? mb.base_X_world().apply_inverse(start_point)
+                 : links_X_world[link_index].apply_inverse(start_point);
   Vector3 world_point;
 
   VectorX q_x;
@@ -128,9 +132,11 @@ typename Algebra::Matrix3X point_jacobian_fd(
       q_x[q_index] += eps;
     }
     forward_kinematics_q(mb, q_x, &base_X_world_temp, &links_X_world);
-    world_point = links_X_world[link_index].apply(base_point);
-    for (int j = 0; j < 3; ++j)
+    world_point = mb.empty() ? mb.base_X_world().apply(base_point)
+                             : links_X_world[link_index].apply(base_point);
+    for (int j = 0; j < 3; ++j) {
       jac(j, i) = (world_point[j] - start_point[j]) / eps;
+    }
   }
 
   return jac;

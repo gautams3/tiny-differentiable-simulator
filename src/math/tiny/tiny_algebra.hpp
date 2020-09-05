@@ -314,12 +314,14 @@ struct TinyAlgebra {
   TINY_INLINE static Quaternion quat_velocity(const Quaternion &q,
                                               const Vector3 &w,
                                               const Scalar &dt) {
-    Quaternion delta(q[3] * w[0] + q[1] * w[2] - q[2] * w[1],
-                     q[3] * w[1] + q[2] * w[0] - q[0] * w[2],
-                     q[3] * w[2] + q[0] * w[1] - q[1] * w[0],
-                     -q[0] * w[0] - q[1] * w[1] - q[2] * w[2]);
-    delta *= half() * dt;
-    return delta;
+                                                return w * q * (dt * half());
+    // Quaternion delta(q[3] * w[0] + q[1] * w[2] - q[2] * w[1],
+    //                  q[3] * w[1] + q[2] * w[0] - q[0] * w[2],
+    //                  q[3] * w[2] + q[0] * w[1] - q[1] * w[0],
+    //                  -q[0] * w[0] - q[1] * w[1] - q[2] * w[2]);
+    // delta *= half() * dt;
+    // print("delta quat", delta);
+    // return delta;
   }
 
   TINY_INLINE static const Scalar &quat_x(const Quaternion &q) { return q.x(); }
@@ -432,6 +434,14 @@ struct TinyAlgebra {
 
   TINY_INLINE static Scalar tanh(const Scalar &s) {
     return TinyConstants::tanh(s);
+  }
+
+  TINY_INLINE static Scalar min(const Scalar &a, const Scalar &b) {
+    return TinyConstants::min1(a, b);
+  }
+
+  TINY_INLINE static Scalar max(const Scalar &a, const Scalar &b) {
+    return TinyConstants::max1(a, b);
   }
 
   TinyAlgebra() = delete;

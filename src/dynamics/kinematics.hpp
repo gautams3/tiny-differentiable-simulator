@@ -47,8 +47,6 @@ void forward_kinematics(
         Algebra::cross(mb.base_velocity(), I0_mul_v0) - mb.base_applied_force();
   }
 
-  Algebra::set_zero(mb.base_bias_force());
-
   for (int i = 0; i < static_cast<int>(mb.size()); i++) {
     const Link &link = mb[i];
     int parent = link.parent_index;
@@ -80,7 +78,6 @@ void forward_kinematics(
     link.abi = link.rbi;
     ForceVector I_mul_v = link.abi * link.v;
     ForceVector f_ext = link.X_world.apply_inverse(link.f_ext);
-
     // #ifdef NEURAL_SIM
     //       if (i >= 3) {
     //         if constexpr (is_neural_scalar<Scalar, Algebra>::value) {
@@ -110,7 +107,7 @@ void forward_kinematics(
     //       }
     // #endif
 
-    link.pA = Algebra::cross(link.v, I_mul_v);  // - f_ext;
+    link.pA = Algebra::cross(link.v, I_mul_v) - f_ext;
 #ifdef DEBUG
     // Algebra::print("link.abi", link.abi);
     Algebra::print("I_mul_v", I_mul_v);

@@ -83,6 +83,7 @@ class MultiBody {
   TINY_INLINE typename LinkCollection::const_iterator cend() const {
     return links_.cend();
   }
+  TINY_INLINE bool empty() const { return links_.empty(); }
 
   /**
    * Dimensionality of joint positions q (including 7-DoF floating-base
@@ -164,27 +165,34 @@ class MultiBody {
     return X_visuals_;
   }
 
-  TINY_INLINE std::vector<const Geometry *> collision_geometries() {
+  TINY_INLINE std::vector<const Geometry *> &collision_geometries() {
     return collision_geometries_;
   }
-  TINY_INLINE const std::vector<const Geometry *> collision_geometries() const {
+  TINY_INLINE const std::vector<const Geometry *> &collision_geometries()
+      const {
     return collision_geometries_;
   }
-  TINY_INLINE std::vector<const Geometry *> collision_geometries(int link_id) {
+  TINY_INLINE std::vector<const Geometry *> &collision_geometries(int link_id) {
     if (link_id == -1) return collision_geometries_;
     return links_[link_id].collision_geometries;
   }
-  TINY_INLINE const std::vector<const Geometry *> collision_geometries(int link_id) const {
+  TINY_INLINE const std::vector<const Geometry *> &collision_geometries(
+      int link_id) const {
     if (link_id == -1) return collision_geometries_;
     return links_[link_id].collision_geometries;
   }
-  TINY_INLINE std::vector<Transform> &collision_transforms() { return X_collisions_; }
+  TINY_INLINE std::vector<Transform> &collision_transforms() {
+    return X_collisions_;
+  }
   TINY_INLINE const std::vector<Transform> &collision_transforms() const {
     return X_collisions_;
   }
   TINY_INLINE std::vector<Transform> &collision_transforms(int link_id) {
-    if (link_id == -1) return X_collisions_; return links_[link_id].X_collisions; }
-  TINY_INLINE const std::vector<Transform> &collision_transforms(int link_id) const {
+    if (link_id == -1) return X_collisions_;
+    return links_[link_id].X_collisions;
+  }
+  TINY_INLINE const std::vector<Transform> &collision_transforms(
+      int link_id) const {
     if (link_id == -1) return X_collisions_;
     return links_[link_id].X_collisions;
   }

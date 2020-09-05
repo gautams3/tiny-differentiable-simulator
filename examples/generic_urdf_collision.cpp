@@ -90,9 +90,9 @@ int main(int argc, char *argv[]) {
   tds::SystemConstructor constructor(urdf_filename, plane_filename);
   constructor.is_floating = floating_base;
   constructor(sim2, sim, world, &system);
-  
-  world.set_mb_constraint_solver(
-      new tds::MultiBodyConstraintSolverSpring<Algebra>);
+
+  // world.set_mb_constraint_solver(
+  //     new tds::MultiBodyConstraintSolverSpring<Algebra>);
 
   //  system->q()[0] = 2.;
   //  system->q()[1] = 1.2;
@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
     system->q()[6] = initial_height;
 
     system->qd()[0] = 0.;
-    system->qd()[1] = 0.;
+    system->qd()[1] = 0;
     system->qd()[2] = 0.;
     system->qd()[3] = initial_velocity.x();
     system->qd()[4] = initial_velocity.y();
