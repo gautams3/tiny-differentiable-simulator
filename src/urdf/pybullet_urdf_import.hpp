@@ -24,9 +24,9 @@ namespace tds {
 template <typename Algebra>
 struct PyBulletUrdfImport {
   typedef tds::UrdfStructures<Algebra> UrdfStructures;
-    using Vector3 = typename Algebra::Vector3;
-    using Quaternion = typename Algebra::Quaternion;
-    typedef tds::Transform<Algebra> Transform;
+  using Vector3 = typename Algebra::Vector3;
+  using Quaternion = typename Algebra::Quaternion;
+  typedef tds::Transform<Algebra> Transform;
 
   static void extract_urdf_structs(
       UrdfStructures& urdf_structures, int body_unique_id,
@@ -132,10 +132,9 @@ struct PyBulletUrdfImport {
 
       btTransform tmp2(btQuaternion::getIdentity(), parentCom2JointPos);
       btTransform pos = parentInertia * tmp2;
-      joint.joint_origin_xyz.setValue(
-          Algebra::from_double(pos.getOrigin()[0]),
-          Algebra::from_double(pos.getOrigin()[1]),
-          Algebra::from_double(pos.getOrigin()[2]));
+      joint.joint_origin_xyz.setValue(Algebra::from_double(pos.getOrigin()[0]),
+                                      Algebra::from_double(pos.getOrigin()[1]),
+                                      Algebra::from_double(pos.getOrigin()[2]));
       btScalar roll, pitch, yaw;
       pos_.getRotation().getEulerZYX(yaw, pitch, roll);
       btVector3 rpy = btVector3(roll, pitch, yaw);
@@ -150,7 +149,6 @@ struct PyBulletUrdfImport {
   static void sync_graphics_transforms(
       const MultiBody<Algebra>* body,
       class b3RobotSimulatorClientAPI_NoDirect& viz_api) {
-
     for (int v = 0; v < body->visual_ids().size(); v++) {
       int visual_id = body->visual_ids()[v];
       Quaternion rot;
@@ -158,7 +156,12 @@ struct PyBulletUrdfImport {
       btVector3 base_pos(Algebra::to_double(geom_X_world.translation.getX()),
                          Algebra::to_double(geom_X_world.translation.getY()),
                          Algebra::to_double(geom_X_world.translation.getZ()));
-      geom_X_world.rotation.getRotation(rot);
+      //  geom_X_world.rotation.getRotation(rot);
+      /// TODO do not use inverse rotation here
+      /// FIXME
+      typename Algebra::Matrix3 rot_mat =
+          Algebra::transpose(geom_X_world.rotation);
+      rot_mat.getRotation(rot);
       btQuaternion base_orn(
           Algebra::to_double(rot.getX()), Algebra::to_double(rot.getY()),
           Algebra::to_double(rot.getZ()), Algebra::to_double(rot.getW()));
@@ -169,8 +172,7 @@ struct PyBulletUrdfImport {
       for (int v = 0; v < (*body)[l].visual_ids.size(); v++) {
         int visual_id = (*body)[l].visual_ids[v];
         Quaternion rot;
-        Transform geom_X_world =
-            (*body)[l].X_world * (*body)[l].X_visuals[v];
+        Transform geom_X_world = (*body)[l].X_world * (*body)[l].X_visuals[v];
         btVector3 base_pos(Algebra::to_double(geom_X_world.translation.getX()),
                            Algebra::to_double(geom_X_world.translation.getY()),
                            Algebra::to_double(geom_X_world.translation.getZ()));
@@ -213,10 +215,9 @@ struct PyBulletUrdfImport {
     btVector3 rpy = sim_api.getEulerFromQuaternion(
         btQuaternion(dyn.m_localInertialFrame[3], dyn.m_localInertialFrame[4],
                      dyn.m_localInertialFrame[5], dyn.m_localInertialFrame[6]));
-    urdfLink.urdf_inertial.origin_rpy.setValue(
-        Algebra::from_double(rpy[0]),
-        Algebra::from_double(rpy[1]),
-        Algebra::from_double(rpy[2]));
+    urdfLink.urdf_inertial.origin_rpy.setValue(Algebra::from_double(rpy[0]),
+                                               Algebra::from_double(rpy[1]),
+                                               Algebra::from_double(rpy[2]));
 
     // visual shapes
     b3VisualShapeInformation visualShapeInfo;
@@ -264,10 +265,9 @@ struct PyBulletUrdfImport {
           }
           case GEOM_BOX: {
             Vector3 halfExtents;
-            halfExtents.setValue(
-                Algebra::from_double(visual.m_dimensions[0]),
-                Algebra::from_double(visual.m_dimensions[1]),
-                Algebra::from_double(visual.m_dimensions[2]));
+            halfExtents.setValue(Algebra::from_double(visual.m_dimensions[0]),
+                                 Algebra::from_double(visual.m_dimensions[1]),
+                                 Algebra::from_double(visual.m_dimensions[2]));
             viz.geometry.box.extents = halfExtents * Algebra::fraction(2, 1);
             viz.geometry.geom_type = TINY_BOX_TYPE;
             break;
@@ -323,10 +323,9 @@ struct PyBulletUrdfImport {
                        colShapeData.m_localCollisionFrame[6]));
       btTransform col_tr = inertial_tr * col_local_tr;
 
-      col.origin_xyz.setValue(
-          Algebra::from_double(col_tr.getOrigin()[0]),
-          Algebra::from_double(col_tr.getOrigin()[1]),
-          Algebra::from_double(col_tr.getOrigin()[2]));
+      col.origin_xyz.setValue(Algebra::from_double(col_tr.getOrigin()[0]),
+                              Algebra::from_double(col_tr.getOrigin()[1]),
+                              Algebra::from_double(col_tr.getOrigin()[2]));
       btVector3 rpy;
       col_tr.getRotation().getEulerZYX(rpy[0], rpy[1], rpy[2]);
 
@@ -384,7 +383,6 @@ struct PyBulletUrdfImport {
   static void convert_visuals(
       UrdfStructures& urdf_structures, UrdfLink<Algebra>& link,
       class b3RobotSimulatorClientAPI_NoDirect& viz_api) {
-
     for (int v = 0; v < link.urdf_visual_shapes.size(); v++) {
       UrdfVisual<Algebra>& visual_shape = link.urdf_visual_shapes[v];
       b3RobotSimulatorCreateVisualShapeArgs args;
@@ -393,7 +391,8 @@ struct PyBulletUrdfImport {
       printf("visual_shape.geom_type=%d\n", visual_shape.geometry.geom_type);
       switch (visual_shape.geometry.geom_type) {
         case TINY_SPHERE_TYPE: {
-          args.m_radius = Algebra::to_double(visual_shape.geometry.sphere.radius);
+          args.m_radius =
+              Algebra::to_double(visual_shape.geometry.sphere.radius);
           int vizShape = viz_api.createVisualShape(GEOM_SPHERE, args);
           if (vizShape < 0) {
             printf("Couldn't create sphere shape\n");
@@ -427,8 +426,8 @@ struct PyBulletUrdfImport {
             Vector3 he =
                 visual_shape.geometry.box.extents * Algebra::fraction(1, 2);
             args.m_halfExtents.setValue(Algebra::to_double(he[0]),
-                                      Algebra::to_double(he[1]),
-                                      Algebra::to_double(he[2]));
+                                        Algebra::to_double(he[1]),
+                                        Algebra::to_double(he[2]));
             int vizShape = viz_api.createVisualShape(GEOM_BOX, args);
             b3RobotSimulatorCreateMultiBodyArgs args2;
             args2.m_baseVisualShapeIndex = vizShape;
@@ -438,7 +437,8 @@ struct PyBulletUrdfImport {
             break;
           }
           case TINY_MESH_TYPE: {
-            args.m_fileName = (char*)visual_shape.geometry.mesh.file_name.c_str();
+            args.m_fileName =
+                (char*)visual_shape.geometry.mesh.file_name.c_str();
             // printf("mb mesh: %s\n", args.m_fileName);
             args.m_meshScale.setValue(
                 Algebra::to_double(visual_shape.geometry.mesh.scale[0]),

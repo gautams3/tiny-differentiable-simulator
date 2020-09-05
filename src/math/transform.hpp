@@ -107,10 +107,11 @@ struct Transform {
   }
 
   TINY_INLINE Vector3 apply(const Vector3 &point) const {
-    return rotation * point + translation;
+    return Algebra::transpose(rotation) * point + translation;
   }
   TINY_INLINE Vector3 apply_inverse(const Vector3 &point) const {
-    return Algebra::transpose(rotation) * (point - translation);
+    // return Algebra::transpose(rotation) * (point - translation);
+    return rotation * (point - translation);
   }
 
   Transform inverse() const {

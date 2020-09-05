@@ -40,7 +40,8 @@ void mass_matrix(MultiBody<Algebra> &mb, const typename Algebra::VectorX &q,
     int parent = link.parent_index;
     const ArticulatedBodyInertia &Ic = link.abi;
     const Transform &Xp = link.X_parent;
-    ArticulatedBodyInertia delta_I = Xp.apply(Ic);  // shift(Xp, Ic)
+    // ArticulatedBodyInertia delta_I = Xp.apply(Ic);  // shift(Xp, Ic)
+    ArticulatedBodyInertia delta_I = Xp.matrix_transpose() * Ic.matrix() * Xp.matrix();
     if (parent >= 0) {
       mb[parent].abi += delta_I;
     } else if (mb.is_floating()) {

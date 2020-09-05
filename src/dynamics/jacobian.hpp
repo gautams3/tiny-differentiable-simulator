@@ -79,7 +79,7 @@ template <typename Algebra>
 typename Algebra::Matrix3X point_jacobian_fd(
     const MultiBody<Algebra> &mb, const typename Algebra::VectorX &q,
     int link_index, const typename Algebra::Vector3 &start_point,
-    const typename Algebra::Scalar &eps = Algebra::fraction(1, 10000)) {
+    const typename Algebra::Scalar &eps = Algebra::fraction(1, 1000)) {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using VectorX = typename Algebra::VectorX;
@@ -103,8 +103,8 @@ typename Algebra::Matrix3X point_jacobian_fd(
   //   return jac;
   // }
   // convert start point in world coordinates to link frame
-  const Vector3 base_point =
-      mb.empty() ? mb.base_X_world().apply_inverse(start_point)
+  const Vector3 base_point =  // start_point;
+      mb.empty() ? base_X_world.apply_inverse(start_point)
                  : links_X_world[link_index].apply_inverse(start_point);
   Vector3 world_point;
 
@@ -132,7 +132,7 @@ typename Algebra::Matrix3X point_jacobian_fd(
       q_x[q_index] += eps;
     }
     forward_kinematics_q(mb, q_x, &base_X_world_temp, &links_X_world);
-    world_point = mb.empty() ? mb.base_X_world().apply(base_point)
+    world_point = mb.empty() ? base_X_world_temp.apply(base_point)
                              : links_X_world[link_index].apply(base_point);
     for (int j = 0; j < 3; ++j) {
       jac(j, i) = (world_point[j] - start_point[j]) / eps;
