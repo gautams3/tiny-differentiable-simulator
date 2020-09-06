@@ -85,7 +85,7 @@ include_directories(third_party/rbdl/build/include)
 subdirs(third_party/rbdl)
 endif(USE_RBDL)
 
-
+add_subdirectory(third_party/pagmo2)
 
 SUBDIRS(third_party/cpp_base64)
 
