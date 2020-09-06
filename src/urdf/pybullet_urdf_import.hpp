@@ -156,11 +156,7 @@ struct PyBulletUrdfImport {
       btVector3 base_pos(Algebra::to_double(geom_X_world.translation.getX()),
                          Algebra::to_double(geom_X_world.translation.getY()),
                          Algebra::to_double(geom_X_world.translation.getZ()));
-      //  geom_X_world.rotation.getRotation(rot);
-      /// TODO do not use inverse rotation here
-      /// FIXME
-      typename Algebra::Matrix3 rot_mat =
-          Algebra::transpose(geom_X_world.rotation);
+      typename Algebra::Matrix3 rot_mat = geom_X_world.rotation;
       rot_mat.getRotation(rot);
       btQuaternion base_orn(
           Algebra::to_double(rot.getX()), Algebra::to_double(rot.getY()),
@@ -168,8 +164,8 @@ struct PyBulletUrdfImport {
       viz_api.resetBasePositionAndOrientation(visual_id, base_pos, base_orn);
     }
 
-    for (int l = 0; l < body->size(); l++) {
-      for (int v = 0; v < (*body)[l].visual_ids.size(); v++) {
+    for (std::size_t l = 0; l < body->size(); l++) {
+      for (std::size_t v = 0; v < (*body)[l].visual_ids.size(); v++) {
         int visual_id = (*body)[l].visual_ids[v];
         Quaternion rot;
         Transform geom_X_world = (*body)[l].X_world * (*body)[l].X_visuals[v];

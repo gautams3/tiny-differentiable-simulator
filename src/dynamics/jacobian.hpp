@@ -30,17 +30,20 @@ typename Algebra::Matrix3X point_jacobian(
   std::vector<Transform> links_X_base;
   Transform base_X_world;
   forward_kinematics_q(mb, q, &base_X_world, &links_X_world, &links_X_base);
+
   Transform point_tf;
   point_tf.set_identity();
   point_tf.translation = world_point;
   if (mb.is_floating()) {
+    // convert start point in world coordinates to base frame
+    const Vector3 base_point = world_point - base_X_world.translation;
+        // mb.empty() ? base_X_world.apply_inverse(world_point)
+        //            : links_X_world[link_index].apply_inverse(world_point);
     // see (Eq. 2.238) in
     // https://ethz.ch/content/dam/ethz/special-interest/mavt/robotics-n-intelligent-systems/rsl-dam/documents/RobotDynamics2016/FloatingBaseKinematics.pdf
-    Vector3 base_to_point = world_point - base_X_world.translation;
-    Matrix3 cr = Algebra::cross_matrix(base_to_point);
-    jac[0] = cr[0];
-    jac[1] = cr[1];
-    jac[2] = cr[2];
+    // Matrix3 cr = Algebra::cross_matrix(base_point);
+    Matrix3 cr = Algebra::transpose(Algebra::cross_matrix(base_point));
+    Algebra::assign_block(jac, cr, 0, 0);
     jac[3][0] = Algebra::one();
     jac[4][1] = Algebra::one();
     jac[5][2] = Algebra::one();
@@ -102,8 +105,8 @@ typename Algebra::Matrix3X point_jacobian_fd(
   // if (mb.empty()) {
   //   return jac;
   // }
-  // convert start point in world coordinates to link frame
-  const Vector3 base_point =  // start_point;
+  // convert start point in world coordinates to base frame
+  const Vector3 base_point = // start_point - base_X_world.translation;
       mb.empty() ? base_X_world.apply_inverse(start_point)
                  : links_X_world[link_index].apply_inverse(start_point);
   Vector3 world_point;

@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
     system->q()[6] = initial_height;
 
     system->qd()[0] = 0.;
-    system->qd()[1] = 0;
+    // system->qd()[1] = 2;
     system->qd()[2] = 0.;
     system->qd()[3] = initial_velocity.x();
     system->qd()[4] = initial_velocity.y();

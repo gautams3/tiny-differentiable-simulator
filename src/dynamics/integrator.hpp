@@ -23,14 +23,13 @@ void integrate_euler(MultiBody<Algebra> &mb, typename Algebra::VectorX &q,
     mb.base_acceleration().top = Vector3(qdd[0], qdd[1], qdd[2]);
     mb.base_acceleration().bottom = Vector3(qdd[3], qdd[4], qdd[5]);
     // Algebra::print("mb.base_acceleration()", mb.base_acceleration());
-
-    Algebra::print("qdd", qdd);
+    // Algebra::print("qdd", qdd);
 
     mb.base_velocity().top = Vector3(qd[0], qd[1], qd[2]);
     mb.base_velocity().bottom = Vector3(qd[3], qd[4], qd[5]);
 
     mb.base_velocity() += mb.base_acceleration() * dt;
-    Algebra::print("mb.base_velocity()", mb.base_velocity());
+    // Algebra::print("mb.base_velocity()", mb.base_velocity());
     qd[0] = mb.base_velocity().top[0];
     qd[1] = mb.base_velocity().top[1];
     qd[2] = mb.base_velocity().top[2];

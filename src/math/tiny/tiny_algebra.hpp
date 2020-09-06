@@ -217,6 +217,18 @@ struct TinyAlgebra {
     }
   }
 
+  template <template <typename, typename> typename ColumnType>   
+  TINY_INLINE static void assign_block(TinyMatrixXxX_<TinyScalar, TinyConstants, ColumnType> &output, const Matrix3 &input,
+                                       Index i, Index j, Index m = 3,
+                                       Index n = 3, Index input_i = 0,
+                                       Index input_j = 0) {
+    for (int ii = 0; ii < m; ++ii) {
+      for (int jj = 0; jj < n; ++jj) {
+        output(ii + i, jj + j) = input(ii + input_i, jj + input_j);
+      }
+    }
+  }
+
   TINY_INLINE static void assign_column(Matrix3 &m, Index i, const Vector3 &v) {
     m[i] = v;
   }
