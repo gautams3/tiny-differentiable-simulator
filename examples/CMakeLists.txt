@@ -102,7 +102,7 @@ if (Bullet_FOUND)
             OpenGLWindow  gwen BussIK Bullet3Common pthread ${DL})
 
     if (Ceres_FOUND)
-        FIND_PACKAGE(PythonLibs REQUIRED)
+        FIND_PACKAGE(PythonLibs 2.7 REQUIRED)
         INCLUDE_DIRECTORIES( 
             ${PYTHON_INCLUDE_DIRS}
             ${PYTHON_NUMPY_INCLUDE_DIR}
@@ -111,9 +111,13 @@ if (Bullet_FOUND)
         add_executable(billiard_opt_gui billiard_opt_gui.cpp ${TDS_HDRS})
         target_link_libraries(billiard_opt_gui pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES} enoki-autodiff enoki-cuda cuda)
-
         set_target_properties(billiard_opt_gui PROPERTIES FOLDER autodiff)
         target_compile_definitions(billiard_opt_gui PRIVATE STAN_MATH)
+
+        add_executable(billiard_opt_simple billiard_opt_simple.cpp ${TDS_HDRS})
+        target_link_libraries(billiard_opt_simple pybullet_visualizer_api ${DL}
+                ${CERES_LIBRARIES})
+        target_compile_definitions(billiard_opt_simple PRIVATE STAN_MATH)
 
         add_executable(cartpole_opt cartpole_opt.cpp ${TDS_HDRS})
         target_link_libraries(cartpole_opt pybullet_visualizer_api ${DL}
@@ -127,6 +131,15 @@ if (Bullet_FOUND)
         add_executable(ceres_estimation_real ceres_estimation_real.cpp ${TDS_HDRS})
         target_link_libraries(ceres_estimation_real pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES} python2.7)
+
+        add_executable(box_opt_simple box_opt_simple.cpp ${TDS_HDRS})
+        target_link_libraries(box_opt_simple opengl_window ${DL}
+        ${CERES_LIBRARIES} ${MESHCAT_LIBRARIES} python2.7 tinyxml2)
+
+        add_executable(ceres_box_example ceres_box_example.cpp ${TDS_HDRS})
+        target_link_libraries(ceres_box_example ${DL} ${CERES_LIBRARIES}
+                python2.7 ${PYTHON_LIBRARIES})
+        target_compile_definitions(ceres_box_example PRIVATE -DUSE_MATPLOTLIB)
 
         add_executable(neural_pendulum neural_pendulum.cpp ${TDS_HDRS})
         target_link_libraries(neural_pendulum pybullet_visualizer_api ${DL}
@@ -148,6 +161,10 @@ if (Bullet_FOUND)
         add_executable(neural_joint neural_joint.cpp ${TDS_HDRS})
         target_link_libraries(neural_joint pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES})  
+
+        add_executable(pagmo_box_example pagmo_box_example.cpp)
+        target_link_libraries(pagmo_box_example pagmo python2.7 ${PYTHON_LIBRARIES})
+        target_compile_definitions(pagmo_box_example PRIVATE -DUSE_MATPLOTLIB)
 
         if (HighFive_FOUND)
             include_directories(${HighFive_INCLUDE_DIRS})
