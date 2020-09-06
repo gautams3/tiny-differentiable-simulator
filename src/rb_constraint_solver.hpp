@@ -22,7 +22,7 @@
 namespace tds {
 template <typename Algebra>
 struct RigidBodyContactPoint : public ContactPoint<Algebra> {
-  typedef RigidBody<Algebra> RigidBody;
+  typedef tds::RigidBody<Algebra> RigidBody;
   using Scalar = typename Algebra::Scalar;
   RigidBody* rigid_body_a{nullptr};
   RigidBody* rigid_body_b{nullptr};

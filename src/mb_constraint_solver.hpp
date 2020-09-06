@@ -24,7 +24,7 @@
 namespace tds {
 template <typename Algebra>
 struct MultiBodyContactPoint : public ContactPoint<Algebra> {
-  typedef MultiBody<Algebra> MultiBody;
+  typedef tds::MultiBody<Algebra> MultiBody;
   using Scalar = typename Algebra::Scalar;
 
   MultiBody* multi_body_a;
@@ -43,10 +43,10 @@ class MultiBodyConstraintSolver {
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix3X = typename Algebra::Matrix3X;
   using MatrixX = typename Algebra::MatrixX;
-  typedef MultiBody<Algebra> MultiBody;
-  typedef Geometry<Algebra> Geometry;
-  typedef Transform<Algebra> Transform;
-  typedef MultiBodyContactPoint<Algebra> ContactPoint;
+  typedef tds::MultiBody<Algebra> MultiBody;
+  typedef tds::Geometry<Algebra> Geometry;
+  typedef tds::Transform<Algebra> Transform;
+  typedef tds::MultiBodyContactPoint<Algebra> ContactPoint;
 
   SubmitProfileTiming profile_timing_func_{nullptr};
 
