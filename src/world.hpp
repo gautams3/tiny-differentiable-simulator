@@ -31,17 +31,17 @@ class World {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   using Matrix3 = typename Algebra::Matrix3;
-  typedef RigidBody<Algebra> RigidBody;
-  typedef MultiBody<Algebra> MultiBody;
-  typedef Geometry<Algebra> Geometry;
-  typedef Transform<Algebra> Transform;
-  typedef RigidBodyContactPoint<Algebra> RigidBodyContactPoint;
-  typedef MultiBodyContactPoint<Algebra> MultiBodyContactPoint;
-  typedef Pose<Algebra> Pose;
+  typedef tds::RigidBody<Algebra> RigidBody;
+  typedef tds::MultiBody<Algebra> MultiBody;
+  typedef tds::Geometry<Algebra> Geometry;
+  typedef tds::Transform<Algebra> Transform;
+  typedef tds::RigidBodyContactPoint<Algebra> RigidBodyContactPoint;
+  typedef tds::MultiBodyContactPoint<Algebra> MultiBodyContactPoint;
+  typedef tds::Pose<Algebra> Pose;
 
-  typedef Capsule<Algebra> Capsule;
-  typedef Sphere<Algebra> Sphere;
-  typedef Plane<Algebra> Plane;
+  typedef tds::Capsule<Algebra> Capsule;
+  typedef tds::Sphere<Algebra> Sphere;
+  typedef tds::Plane<Algebra> Plane;
 
   std::vector<RigidBody*> rigid_bodies_;
   std::vector<MultiBody*> multi_bodies_;

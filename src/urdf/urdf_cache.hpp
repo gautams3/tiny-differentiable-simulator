@@ -27,9 +27,9 @@ template <typename Algebra>
 struct UrdfCache {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
-  typedef UrdfStructures<Algebra> UrdfStructures;
+  typedef tds::UrdfStructures<Algebra> UrdfStructures;
 
-  typedef PyBulletUrdfImport<Algebra> UrdfImport;
+  typedef tds::PyBulletUrdfImport<Algebra> UrdfImport;
   typedef b3RobotSimulatorLoadUrdfFileArgs UrdfFileArgs;
 
   std::map<std::string, UrdfStructures> data;
