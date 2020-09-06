@@ -140,6 +140,13 @@ if (Bullet_FOUND)
         target_link_libraries(neural_pendulum pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES})
 
+        add_executable(pagmo_getting_started pagmo_getting_started.cpp)
+        target_link_libraries(pagmo_getting_started pagmo)
+
+        add_executable(pagmo_box_example pagmo_box_example.cpp)
+        target_link_libraries(pagmo_box_example pagmo python2.7 ${PYTHON_LIBRARIES})
+        target_compile_definitions(pagmo_box_example PRIVATE -DUSE_MATPLOTLIB)
+
         add_definitions(-DNEURAL_SIM)
         add_executable(neural_discovery neural_discovery.cpp ${TDS_HDRS})
         target_link_libraries(neural_discovery pybullet_visualizer_api ${DL}
