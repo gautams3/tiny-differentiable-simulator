@@ -54,22 +54,16 @@ typename Algebra::Scalar rollout(
   typedef tds::RigidBody<Algebra> RigidBody;
   typedef tds::Geometry<Algebra> Geometry;
 
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
 
   std::vector<int> visuals;
   Vector3 target(Algebra::fraction(35, 10), Algebra::fraction(8, 1),
                  Algebra::zero());
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
   if (vis) {
     vis->resetSimulation();
   }
 
   Scalar gravity_z = Algebra::zero();
   tds::World<Algebra> world(gravity_z);
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
 
   std::vector<RigidBody*> bodies;
 
@@ -79,21 +73,13 @@ typename Algebra::Scalar rollout(
   Scalar dx = Algebra::cos(deg_60) * radius * Algebra::two();
   Scalar dy = Algebra::sin(deg_60) * radius * Algebra::two();
   Scalar rx = Algebra::zero(), y = Algebra::zero();
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
   int ball_id = 0;
   for (int column = 1; column <= 3; ++column) {
     Scalar x = rx;
     for (int i = 0; i < column; ++i) {
       const Geometry* geom = world.create_sphere(radius);
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
       RigidBody* body = world.create_rigid_body(mass, geom);
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
       body->world_pose().position = Vector3(x, y, Algebra::zero());
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
       bodies.push_back(body);
       if (vis) {
         b3RobotSimulatorLoadUrdfFileArgs args;
@@ -115,8 +101,6 @@ typename Algebra::Scalar rollout(
     rx = rx - dx;
     y = y + dy;
   }
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
 
   // Create white ball
   Vector3 white = Vector3(Algebra::zero(), -Algebra::two(), Algebra::zero());
@@ -126,8 +110,6 @@ typename Algebra::Scalar rollout(
   bodies.push_back(white_ball);
   white_ball->apply_central_force(Vector3(force_x, force_y, Algebra::zero()));
 
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
   if (vis) {
     {
       // visualize white ball
@@ -161,13 +143,9 @@ typename Algebra::Scalar rollout(
   }
 
   for (int i = 0; i < steps; i++) {
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
     visualizer->submitProfileTiming("world.step");
     world.step(dt);
     visualizer->submitProfileTiming("");
-  printf("main.cpp:%i\n", __LINE__);
-  fflush(stdout);
 
     if (vis) {
       double dtd = Algebra::to_double(dt);
@@ -342,90 +320,16 @@ int main(int argc, char* argv[]) {
 
   double init_force_x = 0., init_force_y = 500.;
   int steps = 300;
-  // using DoubleAlgebra = TinyAlgebra<double, DoubleUtils>;
-  // rollout<DoubleAlgebra>(init_force_x, init_force_y, steps, visualizer);
+  using DoubleAlgebra = TinyAlgebra<double, DoubleUtils>;
+  rollout<DoubleAlgebra>(init_force_x, init_force_y, steps, visualizer);
 
-  // {
-  //   auto start = high_resolution_clock::now();
-  //   double cost, d_force_x, d_force_y;
-  //   double learning_rate = 1e2;
-  //   double force_x = init_force_x, force_y = init_force_y;
-  //   for (int iter = 0; iter < 50; ++iter) {
-  //     grad_finite(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-  //     printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
-  //            force_x, force_y);
-  //     force_x -= learning_rate * d_force_x;
-  //     force_y -= learning_rate * d_force_y;
-  //   }
-  //   auto stop = high_resolution_clock::now();
-  //   auto duration = duration_cast<microseconds>(stop - start);
-  //   printf("Finite differences took %ld microseconds.",
-  //          static_cast<long>(duration.count()));
-  //   fflush(stdout);
-  // }
-  // //  {
-  // //    auto start = high_resolution_clock::now();
-  // //    double cost, d_force_x, d_force_y;
-  // //    double learning_rate = 1e2;
-  // //    double force_x = init_force_x, force_y = init_force_y;
-  // //    for (int iter = 0; iter < 50; ++iter) {
-  // //      grad_stan(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-  // //      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter,
-  // //      cost,
-  // //             force_x, force_y);
-  // //      force_x -= learning_rate * d_force_x;
-  // //      force_y -= learning_rate * d_force_y;
-  // //    }
-  // //    auto stop = high_resolution_clock::now();
-  // //    auto duration = duration_cast<microseconds>(stop - start);
-  // //    printf("Stan's forward-mode AD took %ld microseconds.",
-  // //    static_cast<long>(duration.count()));
-  // fflush(stdout);
-  // //  }
-  // {
-  //   auto start = high_resolution_clock::now();
-  //   double cost, d_force_x, d_force_y;
-  //   double learning_rate = 1e2;
-  //   double force_x = init_force_x, force_y = init_force_y;
-  //   for (int iter = 0; iter < 50; ++iter) {
-  //     grad_dual(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-  //     printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
-  //            force_x, force_y);
-  //     force_x -= learning_rate * d_force_x;
-  //     force_y -= learning_rate * d_force_y;
-  //   }
-  //   auto stop = high_resolution_clock::now();
-  //   auto duration = duration_cast<microseconds>(stop - start);
-  //   printf("TinyDual took %ld microseconds.",
-  //          static_cast<long>(duration.count()));
-  //   fflush(stdout);
-  // }
-  // {
-  //   auto start = high_resolution_clock::now();
-  //   double cost, d_force_x, d_force_y;
-  //   double learning_rate = 1e2;
-  //   double force_x = init_force_x, force_y = init_force_y;
-  //   for (int iter = 0; iter < 50; ++iter) {
-  //     grad_ceres(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-  //     printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
-  //            force_x, force_y);
-  //     force_x -= learning_rate * d_force_x;
-  //     force_y -= learning_rate * d_force_y;
-  //   }
-  //   auto stop = high_resolution_clock::now();
-  //   auto duration = duration_cast<microseconds>(stop - start);
-  //   printf("Ceres Jet took %ld microseconds.",
-  //          static_cast<long>(duration.count()));
-  //   fflush(stdout);
-  //   // rollout<DoubleAlgebra>(force_x, force_y, steps, visualizer);
-  // }
   {
     auto start = high_resolution_clock::now();
     double cost, d_force_x, d_force_y;
     double learning_rate = 1e2;
     double force_x = init_force_x, force_y = init_force_y;
     for (int iter = 0; iter < 50; ++iter) {
-      grad_enoki(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
+      grad_finite(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
       printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
              force_x, force_y);
       force_x -= learning_rate * d_force_x;
@@ -433,10 +337,84 @@ int main(int argc, char* argv[]) {
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
-    printf("Enoki took %ld microseconds.", static_cast<long>(duration.count()));
+    printf("Finite differences took %ld microseconds.",
+           static_cast<long>(duration.count()));
     fflush(stdout);
-    // rollout<DoubleAlgebra>(force_x, force_y, steps, visualizer);
   }
+  //  {
+  //    auto start = high_resolution_clock::now();
+  //    double cost, d_force_x, d_force_y;
+  //    double learning_rate = 1e2;
+  //    double force_x = init_force_x, force_y = init_force_y;
+  //    for (int iter = 0; iter < 50; ++iter) {
+  //      grad_stan(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
+  //      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter,
+  //      cost,
+  //             force_x, force_y);
+  //      force_x -= learning_rate * d_force_x;
+  //      force_y -= learning_rate * d_force_y;
+  //    }
+  //    auto stop = high_resolution_clock::now();
+  //    auto duration = duration_cast<microseconds>(stop - start);
+  //    printf("Stan's forward-mode AD took %ld microseconds.",
+  //    static_cast<long>(duration.count()));
+  fflush(stdout);
+  //  }
+  {
+    auto start = high_resolution_clock::now();
+    double cost, d_force_x, d_force_y;
+    double learning_rate = 1e2;
+    double force_x = init_force_x, force_y = init_force_y;
+    for (int iter = 0; iter < 50; ++iter) {
+      grad_dual(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
+      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
+             force_x, force_y);
+      force_x -= learning_rate * d_force_x;
+      force_y -= learning_rate * d_force_y;
+    }
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+    printf("TinyDual took %ld microseconds.",
+           static_cast<long>(duration.count()));
+    fflush(stdout);
+  }
+  {
+    auto start = high_resolution_clock::now();
+    double cost, d_force_x, d_force_y;
+    double learning_rate = 1e2;
+    double force_x = init_force_x, force_y = init_force_y;
+    for (int iter = 0; iter < 50; ++iter) {
+      grad_ceres(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
+      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
+             force_x, force_y);
+      force_x -= learning_rate * d_force_x;
+      force_y -= learning_rate * d_force_y;
+    }
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+    printf("Ceres Jet took %ld microseconds.",
+           static_cast<long>(duration.count()));
+    fflush(stdout);
+    rollout<DoubleAlgebra>(force_x, force_y, steps, visualizer);
+  }
+  // {
+  //   auto start = high_resolution_clock::now();
+  //   double cost, d_force_x, d_force_y;
+  //   double learning_rate = 1e2;
+  //   double force_x = init_force_x, force_y = init_force_y;
+  //   for (int iter = 0; iter < 50; ++iter) {
+  //     grad_enoki(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
+  //     printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
+  //            force_x, force_y);
+  //     force_x -= learning_rate * d_force_x;
+  //     force_y -= learning_rate * d_force_y;
+  //   }
+  //   auto stop = high_resolution_clock::now();
+  //   auto duration = duration_cast<microseconds>(stop - start);
+  //   printf("Enoki took %ld microseconds.", static_cast<long>(duration.count()));
+  //   fflush(stdout);
+  //   // rollout<DoubleAlgebra>(force_x, force_y, steps, visualizer);
+  // }
 
   visualizer->disconnect();
   delete visualizer;

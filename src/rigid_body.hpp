@@ -79,19 +79,9 @@ class RigidBody {
   void apply_central_force(const Vector3& force) { total_force_ += force; }
 
   void apply_force_impulse(const Scalar& dt) {
-    printf("rigid_body.hpp:%i\n", __LINE__);
-    fflush(stdout);
     linear_velocity_ += total_force_ * inv_mass_ * dt;
-    printf("rigid_body.hpp:%i\n", __LINE__);
-
-    Algebra::print("inv_inertia_world_", inv_inertia_world_);
-    Algebra::print("total_torque_", total_torque_);
     Vector3 temp = inv_inertia_world_ * total_torque_;
-    Algebra::print("inv_inertia_world_ * total_torque_", temp);
-    fflush(stdout);
     angular_velocity_ += inv_inertia_world_ * total_torque_ * dt;
-    printf("rigid_body.hpp:%i\n", __LINE__);
-    fflush(stdout);
   }
 
   Vector3 get_velocity(const Vector3& rel_pos) {

@@ -239,24 +239,15 @@ class MultiBody {
     if (is_floating_) {
       q_[3] = Algebra::one();  // make sure orientation is valid
     }
-
-    // (Re-)create actuator to make sure it has the right degrees of freedom.
-    // if (actuator) {
-    //   delete actuator;
-    //   actuator = new TinyActuator(dof_actuated());
-    // }
   }
 
   /**
    * Copy constructor. Skips visualization members, temporary variables.
-   * The actuator is not copied, but the original pointer `m_actuator` is
-   * carried over.
    */
   template <typename Algebra2>
   MultiBody(const MultiBody<Algebra2> &mb)
       : links_(mb.links_),
         dof_(mb.dof_),
-        // actuator(mb.actuator),
         control_indices_(mb.control_indices_),
         is_floating_(mb.is_floating_),
         base_velocity_(mb.base_velocity_),
@@ -266,18 +257,12 @@ class MultiBody {
         base_bias_force_(mb.base_bias_force_),
         base_rbi_(mb.base_rbi_),
         base_X_world_(mb.base_X_world_),
-        // collision_geometries(mb.collision_geometries),
+        collision_geometries_(mb.collision_geometries_),
         X_collisions_(mb.X_collisions_),
         q_(mb.q_),
         qd_(mb.qd_),
         qdd_(mb.qdd_),
         tau_(mb.tau_) {}
-
-  // virtual ~MultiBody() {
-  // if (m_actuator) {
-  //   delete actuator;
-  // }
-  // }
 
   void print_state() const {
     printf("q: [");

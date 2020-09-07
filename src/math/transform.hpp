@@ -3,7 +3,9 @@
 #include "inertia.hpp"
 #include "spatial_vector.hpp"
 
-#define RIGHT_ASSOCIATIVE_TRANSFORMS true
+// right-associative means transforms are multiplied like parent_transform * child_transform.
+// RBDL uses left-associative transforms
+#define RIGHT_ASSOCIATIVE_TRANSFORMS false
 
 namespace tds {
 template <typename Algebra>
@@ -117,20 +119,28 @@ struct Transform {
     return Algebra::transpose(rotation) * (point - translation);
   }
 #else
+  // Transform operator*(const Transform &t) const {
+  //   /// XXX this is different from Featherstone: we assume transforms are
+  //   /// right-associative
+  //   Transform tr = *this;
+  //   tr.translation += Algebra::transpose(rotation) * t.translation;
+  //   tr.rotation *= t.rotation;
+  //   return tr;
+  // }
+  // TINY_INLINE Vector3 apply(const Vector3 &point) const {
+  //   return rotation * point + translation;
+  // }
+  // TINY_INLINE Vector3 apply_inverse(const Vector3 &point) const {
+  //   return Algebra::transpose(rotation) * (point - translation);
+  // }
+
   Transform operator*(const Transform &t) const {
-    /// XXX this is different from Featherstone: we assume transforms are
-    /// right-associative
+    /// XXX this is different from Featherstone
     Transform tr = *this;
-    tr.translation += Algebra::transpose(rotation) * t.translation;
+    tr.translation += rotation * t.translation;
     tr.rotation *= t.rotation;
     return tr;
   }
-  // TINY_INLINE Vector3 apply(const Vector3 &point) const {
-  //   return Algebra::transpose(rotation) * point + translation;
-  // }
-  // TINY_INLINE Vector3 apply_inverse(const Vector3 &point) const {
-  //   return rotation * (point - translation);
-  // }
   TINY_INLINE Vector3 apply(const Vector3 &point) const {
     return rotation * point + translation;
   }
@@ -302,22 +312,6 @@ struct Transform {
     result.H = HrxM;
     return result;
   }
-  // inline ArticulatedBodyInertia apply(const ArticulatedBodyInertia &abi)
-  // const {
-  //   ArticulatedBodyInertia result;
-  //   const Matrix3 &E = rotation;
-  //   const Matrix3 Et = Algebra::transpose(rotation);
-  //   const Matrix3 rx = Algebra::cross_matrix(translation);
-  //   // H - rx M
-  //   const Matrix3 HrxM = abi.H - rx * abi.M;
-  //   // E (I + rx H^T + (H - rx M) rx) E^T
-  //   result.I = E * (abi.I + rx * Algebra::transpose(abi.H) + HrxM * rx) * Et;
-  //   // E (H - rx M) E^T
-  //   result.H = E * HrxM * Et;
-  //   // E M E^T
-  //   result.M = E * abi.M * Et;
-  //   return result;
-  // }
 
   /**
    * Computes \f$ X^T I^A X \f$.
