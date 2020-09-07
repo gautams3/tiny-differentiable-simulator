@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
 
   sim->resetSimulation();
   sim->setTimeOut(10);
-  int grav_id = sim->addUserDebugParameter("gravity", -10, 10, -2);
+  int grav_id = sim->addUserDebugParameter("gravity", -10, 10, -9.8);
 
   int rotateCamera = 0;
 
@@ -157,7 +157,7 @@ int main(int argc, char *argv[]) {
     {
       sim->submitProfileTiming("integrate");
       integrate_euler(*system, dt);
-      // system->print_state();
+      system->print_state();
       sim->submitProfileTiming("");
     }
     std::this_thread::sleep_for(std::chrono::duration<double>(dt));

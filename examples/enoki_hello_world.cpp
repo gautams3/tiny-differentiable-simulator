@@ -26,7 +26,7 @@ namespace plt = matplotlibcpp;
 #include "utils/file_utils.hpp"
 #include "world.hpp"
 
-#define USE_RBDL false
+#define USE_RBDL true
 
 #if USE_RBDL
 #include "rbdl/Dynamics.h"
@@ -392,45 +392,45 @@ int main(int argc, char **argv) {
     World<Algebra> world;
     MultiBody<Algebra> *mb = nullptr;
 
-    // {
-    //   std::string urdf_filename;
-    //   FileUtils::find_file("swimmer/swimmer05/swimmer05.urdf",
-    //   urdf_filename); mb = cache.construct(urdf_filename, world);
-
-    //   for (std::size_t j = 0; j < mb->size(); ++j) {
-    //     std::cout << "link " << j << ":\n";
-    //     Algebra::print("rbi", (*mb)[j].rbi);
-    //   }
-    //   std::cout << "\n\n\n";
-    //   forward_kinematics(*mb);
-    //   for (std::size_t j = 0; j < mb->size(); ++j) {
-    //     std::cout << "link " << j << ":\n";
-    //     Algebra::print("abi", (*mb)[j].abi);
-    //   }
-    // }
-
     {
-      mb = new MultiBody<Algebra>;
-      mb->base_rbi().mass = 0;
-      mb->base_rbi().com = Algebra::zero3();
-      mb->base_rbi().inertia = Algebra::zero33();
-      double mass = 0.5;
-      Vector3 com(0.0, 0.0, 1.);
-      Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));
-      Link<Algebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
-                           RigidBodyInertia(mass, com, I));
-      mb->attach(link_a);
-      Link<Algebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
-                           RigidBodyInertia(mass, com, I));
-      mb->attach(link_b);
-      Link<Algebra> link_c(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
-                           RigidBodyInertia(mass, com, I));
-      mb->attach(link_c);
-      mb->initialize();
+      std::string urdf_filename;
+      FileUtils::find_file("swimmer/swimmer05/swimmer05.urdf", urdf_filename);
+      mb = cache.construct(urdf_filename, world);
 
-      mb->q(0) = M_PI_2;
+      for (std::size_t j = 0; j < mb->size(); ++j) {
+        std::cout << "link " << j << ":\n";
+        Algebra::print("rbi", (*mb)[j].rbi);
+      }
+      std::cout << "\n\n\n";
       forward_kinematics(*mb);
+      for (std::size_t j = 0; j < mb->size(); ++j) {
+        std::cout << "link " << j << ":\n";
+        Algebra::print("abi", (*mb)[j].abi);
+      }
     }
+
+    // {
+    //   mb = new MultiBody<Algebra>;
+    //   mb->base_rbi().mass = 0;
+    //   mb->base_rbi().com = Algebra::zero3();
+    //   mb->base_rbi().inertia = Algebra::zero33();
+    //   double mass = 0.5;
+    //   Vector3 com(0.0, 0.0, 1.);
+    //   Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));
+    //   Link<Algebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+    //                        RigidBodyInertia(mass, com, I));
+    //   mb->attach(link_a);
+    //   Link<Algebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+    //                        RigidBodyInertia(mass, com, I));
+    //   mb->attach(link_b);
+    //   Link<Algebra> link_c(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+    //                        RigidBodyInertia(mass, com, I));
+    //   mb->attach(link_c);
+    //   mb->initialize();
+
+    //   mb->q(0) = M_PI_2;
+    //   forward_kinematics(*mb);
+    // }
 
 #if USE_RBDL
     {
@@ -443,7 +443,16 @@ int main(int argc, char **argv) {
       VectorND rbdl_qdd = VectorND::Zero(rbdl_model.qdot_size);
       VectorND rbdl_tau = VectorND::Zero(rbdl_model.qdot_size);
 
-      rbdl_q[0] = M_PI_2;
+      for (int i = 0; i < mb->dof(); ++i) {
+        rbdl_q[i] = Algebra::to_double(mb->q(i));
+      }
+      for (int i = 0; i < mb->dof_qd(); ++i) {
+        rbdl_qd[i] = Algebra::to_double(mb->qd(i));
+        rbdl_qdd[i] = Algebra::to_double(mb->qdd(i));
+      }
+      for (int i = 0; i < mb->dof_actuated(); ++i) {
+        rbdl_tau[i] = Algebra::to_double(mb->tau(i));
+      }
       RigidBodyDynamics::UpdateKinematics(rbdl_model, rbdl_q, rbdl_qd,
                                           rbdl_qdd);
       if (!is_equal<Algebra>(*mb, rbdl_model)) {
@@ -462,7 +471,7 @@ int main(int argc, char **argv) {
         int nd = mb->dof_actuated();
         // Algebra::Index j = 2;
         for (Algebra::Index j = 3; j < nd; ++j) {
-          mb->tau(j) = Algebra::sin(i * dt * 10.) * .2;
+          mb->tau(j) = Algebra::sin(i * dt * 10.) * 1e-4;
           rbdl_tau[j] = Algebra::to_double(mb->tau(j));
         }
         forward_dynamics(*mb, gravity);
@@ -545,9 +554,9 @@ int main(int argc, char **argv) {
       }
       int nd = mb->dof_actuated();
       // Algebra::Index j = 2;
-      // for (Algebra::Index j = 3; j < nd; ++j) {
-      //   mb->tau())j] = Algebra::sin(i * dt * 10.) * 1e-4;
-      // }
+      for (Algebra::Index j = 3; j < nd; ++j) {
+        mb->tau(j) = Algebra::sin(i * dt * 10.) * 1e-4;
+      }
       forward_dynamics(*mb, gravity);
       mb->print_state();
       // for (auto &link : mb) {
