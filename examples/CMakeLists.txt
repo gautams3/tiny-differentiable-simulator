@@ -119,6 +119,11 @@ if (Bullet_FOUND)
                 ${CERES_LIBRARIES})
         target_compile_definitions(billiard_opt_simple PRIVATE STAN_MATH)
 
+        add_executable(billiard_simple_trajOpt billiard_simple_trajOpt.cpp ${TDS_HDRS})
+        target_link_libraries(billiard_simple_trajOpt pybullet_visualizer_api ${DL}
+                ${CERES_LIBRARIES})
+        target_compile_definitions(billiard_simple_trajOpt PRIVATE STAN_MATH)
+
         add_executable(cartpole_opt cartpole_opt.cpp ${TDS_HDRS})
         target_link_libraries(cartpole_opt pybullet_visualizer_api ${DL}
                 ${CERES_LIBRARIES})
