@@ -69,8 +69,8 @@ int main(int argc, char* argv[]) {
   char basepath[1024];
   bool triangulate = true;
   std::string laikago_urdf_filename;
-  TinyFileUtils::find_file("laikago/chassis_zup.obj", laikago_urdf_filename);
-  TinyFileUtils::extract_path(laikago_urdf_filename.c_str(), basepath, 1024);
+  tds::FileUtils::find_file("laikago/chassis_zup.obj", laikago_urdf_filename);
+  tds::FileUtils::extract_path(laikago_urdf_filename.c_str(), basepath, 1024);
   bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, laikago_urdf_filename.c_str(),
       basepath, triangulate);
 

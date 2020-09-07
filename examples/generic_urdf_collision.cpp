@@ -51,6 +51,7 @@ int main(int argc, char *argv[]) {
   //"pendulum5.urdf"
   //"sphere2.urdf"
   tds::FileUtils::find_file("sphere8cube.urdf", urdf_filename);
+  // tds::FileUtils::find_file("pendulum5.urdf", urdf_filename);
   std::string plane_filename;
   tds::FileUtils::find_file("plane_implicit.urdf", plane_filename);
 
@@ -91,8 +92,8 @@ int main(int argc, char *argv[]) {
   constructor.is_floating = floating_base;
   constructor(sim2, sim, world, &system);
 
-  // world.set_mb_constraint_solver(
-  //     new tds::MultiBodyConstraintSolverSpring<Algebra>);
+  world.set_mb_constraint_solver(
+      new tds::MultiBodyConstraintSolverSpring<Algebra>);
 
   //  system->q()[0] = 2.;
   //  system->q()[1] = 1.2;

@@ -93,9 +93,9 @@ struct ArticulatedBodyInertia {
   typedef tds::ForceVector<Algebra> ForceVector;
   typedef tds::RigidBodyInertia<Algebra> RigidBodyInertia;
 
-  Matrix3 I{Algebra::diagonal3(1.)};
+  Matrix3 I{Algebra::diagonal3(Algebra::one())};
   Matrix3 H{Algebra::zero33()};
-  Matrix3 M{Algebra::diagonal3(1.)};
+  Matrix3 M{Algebra::diagonal3(Algebra::one())};
 
   ArticulatedBodyInertia() = default;
   ArticulatedBodyInertia(const Matrix3 &I, const Matrix3 &H, const Matrix3 &M)

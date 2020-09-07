@@ -1,5 +1,3 @@
-#include <fenv.h>
-
 #include <cassert>
 #include <chrono>
 #include <cstdio>
@@ -16,6 +14,7 @@
 namespace plt = matplotlibcpp;
 #endif
 
+#include "base.hpp"
 #include "dynamics/forward_dynamics.hpp"
 #include "dynamics/integrator.hpp"
 #include "dynamics/kinematics.hpp"
@@ -90,7 +89,7 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
       mb.q()[i] = state[i];
     }
     forward_kinematics(mb);
-    // mb.print_state();
+    mb.print_state();
 
     std::this_thread::sleep_for(std::chrono::duration<double>(dt));
 
@@ -108,7 +107,9 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
       parent_pos = link_pos;
       for (std::size_t j = 0; j < link.visual_ids.size(); ++j) {
         Transform X_visual = link.X_world * link.X_visuals[j];
-        // Algebra::print("X_visual", X_visual);
+        Algebra::print("link.X_world", link.X_world);
+        Algebra::print("X_visual", X_visual);
+        Algebra::print("link.X_visuals[j]", link.X_visuals[j]);
         // sync transform
         TinyVector3f geom_pos(static_cast<float>(X_visual.translation[0]),
                               static_cast<float>(X_visual.translation[1]),
@@ -169,7 +170,7 @@ RigidBodyDynamics::Math::SpatialTransform to_rbdl(
 
 template <typename Algebra>
 RigidBodyDynamics::Model to_rbdl(const MultiBody<Algebra> &mb) {
-  assert(!mb.is_floating);
+  assert(!mb.is_floating());
   RigidBodyDynamics::Model model;
   for (const Link<Algebra> &link : mb.links) {
     RigidBodyDynamics::Body body(Algebra::to_double(link.rbi.mass),
@@ -344,10 +345,7 @@ bool is_equal(const MultiBody<Algebra> &tds,
 #endif
 
 int main(int argc, char **argv) {
-#if !defined(_MSC_VER)
-  // Set NaN trap
-  feenableexcept(FE_INVALID | FE_OVERFLOW);
-#endif
+  tds::activate_nan_trap();
 
   // {
   //   using TinyAlgebra = ::TinyAlgebra<double, DoubleUtils>;
@@ -392,43 +390,43 @@ int main(int argc, char **argv) {
     World<Algebra> world;
     MultiBody<Algebra> *mb = nullptr;
 
-    {
-      std::string urdf_filename;
-      FileUtils::find_file("swimmer/swimmer05/swimmer05.urdf", urdf_filename);
-      mb = cache.construct(urdf_filename, world);
-
-      for (std::size_t j = 0; j < mb->size(); ++j) {
-        std::cout << "link " << j << ":\n";
-        Algebra::print("rbi", (*mb)[j].rbi);
-      }
-      std::cout << "\n\n\n";
-      forward_kinematics(*mb);
-      for (std::size_t j = 0; j < mb->size(); ++j) {
-        std::cout << "link " << j << ":\n";
-        Algebra::print("abi", (*mb)[j].abi);
-      }
-    }
-
     // {
-    //   mb = new MultiBody<Algebra>;
-    //   mb->base_rbi.mass = 0;
-    //   mb->base_rbi.com = Algebra::zero3();
-    //   mb->base_rbi.inertia = Algebra::zero33();
-    //   double mass = 0.5;
-    //   Vector3 com(0.2, 0.5, 1.);
-    //   Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));
-    //   Link<Algebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
-    //                        RigidBodyInertia(mass, com, I));
-    //   Link<Algebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
-    //                        RigidBodyInertia(mass, com, I));
-    //   mb->attach(link_a);
-    //   mb->attach(link_b);
-    //   mb->initialize();
+    //   std::string urdf_filename;
+    //   FileUtils::find_file("swimmer/swimmer05/swimmer05.urdf", urdf_filename);
+    //   mb = cache.construct(urdf_filename, world);
 
-    //   mb->q = VectorX({M_PI_2, 0.0});
-    //   // mb->q = VectorX({M_PI_2});
-    //   forward_kinematics(mb);
+    //   for (std::size_t j = 0; j < mb->size(); ++j) {
+    //     std::cout << "link " << j << ":\n";
+    //     Algebra::print("rbi", (*mb)[j].rbi);
+    //   }
+    //   std::cout << "\n\n\n";
+    //   forward_kinematics(*mb);
+    //   for (std::size_t j = 0; j < mb->size(); ++j) {
+    //     std::cout << "link " << j << ":\n";
+    //     Algebra::print("abi", (*mb)[j].abi);
+    //   }
     // }
+
+    {
+      mb = new MultiBody<Algebra>;
+      mb->base_rbi().mass = 0;
+      mb->base_rbi().com = Algebra::zero3();
+      mb->base_rbi().inertia = Algebra::zero33();
+      double mass = 0.5;
+      Vector3 com(0.0, 0.0, 1.);
+      Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));
+      Link<Algebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+                           RigidBodyInertia(mass, com, I));
+      Link<Algebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+                           RigidBodyInertia(mass, com, I));
+      mb->attach(link_a);
+      mb->attach(link_b);
+      mb->initialize();
+
+      mb->q() = VectorX({M_PI_2, 0.0});
+      // mb->q = VectorX({M_PI_2});
+      forward_kinematics(*mb);
+    }
 
 #if USE_RBDL
     {
@@ -516,6 +514,7 @@ int main(int argc, char **argv) {
     //   mb->attach(link_b);
     //   mb->attach(link_c);
     //   mb->attach(link_d);
+    // mb->initialize();
     // }
 
     // return 0;
@@ -530,7 +529,6 @@ int main(int argc, char **argv) {
 
     std::vector<typename Algebra::VectorX> traj;
 
-    mb->initialize();
     double dt = 0.001;
     for (int i = 0; i < 50000; ++i) {
       printf("\n\n\nt: %i\n", i);
@@ -541,9 +539,9 @@ int main(int argc, char **argv) {
       }
       int nd = mb->dof_actuated();
       // Algebra::Index j = 2;
-      for (Algebra::Index j = 3; j < nd; ++j) {
-        mb->tau()[j] = Algebra::sin(i * dt * 10.) * 1e-4;
-      }
+      // for (Algebra::Index j = 3; j < nd; ++j) {
+      //   mb->tau()[j] = Algebra::sin(i * dt * 10.) * 1e-4;
+      // }
       forward_dynamics(*mb, gravity);
       mb->print_state();
       // for (auto &link : mb->links) {
