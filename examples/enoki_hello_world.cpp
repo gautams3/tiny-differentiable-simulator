@@ -26,6 +26,8 @@ namespace plt = matplotlibcpp;
 #include "utils/file_utils.hpp"
 #include "world.hpp"
 
+#define USE_RBDL false
+
 #if USE_RBDL
 #include "rbdl/Dynamics.h"
 #include "rbdl/Model.h"
@@ -172,7 +174,7 @@ template <typename Algebra>
 RigidBodyDynamics::Model to_rbdl(const MultiBody<Algebra> &mb) {
   assert(!mb.is_floating());
   RigidBodyDynamics::Model model;
-  for (const Link<Algebra> &link : mb.links) {
+  for (const Link<Algebra> &link : mb) {
     RigidBodyDynamics::Body body(Algebra::to_double(link.rbi.mass),
                                  to_rbdl<Algebra>(link.rbi.com),
                                  to_rbdl<Algebra>(link.rbi.inertia));
@@ -283,59 +285,59 @@ bool is_equal(const ArticulatedBodyInertia<Algebra> &a,
 template <typename Algebra>
 bool is_equal(const MultiBody<Algebra> &tds,
               const RigidBodyDynamics::Model &rbdl) {
-  for (std::size_t j = 0; j < tds.links.size(); ++j) {
-    if (!is_equal<Algebra>(tds.links[j].S, rbdl.S[j + 1])) {
+  for (std::size_t j = 0; j < tds.size(); ++j) {
+    if (!is_equal<Algebra>(tds[j].S, rbdl.S[j + 1])) {
       fprintf(stderr, "Mismatch in S at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds.links[j].S);
+      Algebra::print("TDS:  ", tds[j].S);
       std::cerr << "RBDL: " << rbdl.S[j + 1].transpose() << std::endl;
       // return false;
     }
-    if (!is_equal<Algebra>(tds.links[j].v, rbdl.v[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].v, rbdl.v[j + 1])) {
       fprintf(stderr, "Mismatch in v at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds.links[j].v);
+      Algebra::print("TDS:  ", tds[j].v);
       std::cerr << "RBDL: " << rbdl.v[j + 1].transpose() << std::endl;
       // return false;
     }
-    if (!is_equal<Algebra>(tds.links[j].a, rbdl.a[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].a, rbdl.a[j + 1])) {
       fprintf(stderr, "Mismatch in a at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds.links[j].a);
+      Algebra::print("TDS:  ", tds[j].a);
       std::cerr << "RBDL: " << rbdl.a[j + 1].transpose() << std::endl;
       // return false;
     }
-    if (!is_equal<Algebra>(tds.links[j].c, rbdl.c[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].c, rbdl.c[j + 1])) {
       fprintf(stderr, "Mismatch in c at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds.links[j].c);
+      Algebra::print("TDS:  ", tds[j].c);
       std::cerr << "RBDL: " << rbdl.c[j + 1].transpose() << std::endl;
       // return false;
     }
-    if (!is_equal<Algebra>(tds.links[j].U, rbdl.U[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].U, rbdl.U[j + 1])) {
       fprintf(stderr, "Mismatch in U at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds.links[j].U);
+      Algebra::print("TDS:  ", tds[j].U);
       std::cerr << "RBDL: " << rbdl.U[j + 1].transpose() << std::endl;
       // return false;
     }
-    if (!is_equal<Algebra>(tds.links[j].pA, rbdl.pA[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].pA, rbdl.pA[j + 1])) {
       fprintf(stderr, "Mismatch in pA at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds.links[j].pA);
+      Algebra::print("TDS:  ", tds[j].pA);
       std::cerr << "RBDL: " << rbdl.pA[j + 1].transpose() << std::endl;
       // return false;
     }
-    if (!is_equal<Algebra>(tds.links[j].abi, rbdl.IA[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].abi, rbdl.IA[j + 1])) {
       fprintf(stderr, "Mismatch in ABI at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds.links[j].abi);
+      Algebra::print("TDS:  ", tds[j].abi);
       std::cerr << "RBDL:\n" << rbdl.IA[j + 1] << std::endl;
       // return false;
     }
-    if (!is_equal<Algebra>(tds.links[j].X_world, rbdl.X_base[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].X_world, rbdl.X_base[j + 1])) {
       fprintf(stderr, "Mismatch in X_base at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds.links[j].X_world);
+      Algebra::print("TDS:  ", tds[j].X_world);
       std::cerr << "RBDL:\n" << rbdl.X_base[j + 1] << std::endl;
       // return false;
     }
-    if (!is_equal<Algebra>(tds.links[j].X_parent, rbdl.X_lambda[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].X_parent, rbdl.X_lambda[j + 1])) {
       fprintf(stderr, "Mismatch in X_lambda at link %i.\n",
               static_cast<int>(j));
-      Algebra::print("TDS:  ", tds.links[j].X_parent);
+      Algebra::print("TDS:  ", tds[j].X_parent);
       std::cerr << "RBDL:\n" << rbdl.X_lambda[j + 1] << std::endl;
       // return false;
     }
@@ -392,8 +394,8 @@ int main(int argc, char **argv) {
 
     // {
     //   std::string urdf_filename;
-    //   FileUtils::find_file("swimmer/swimmer05/swimmer05.urdf", urdf_filename);
-    //   mb = cache.construct(urdf_filename, world);
+    //   FileUtils::find_file("swimmer/swimmer05/swimmer05.urdf",
+    //   urdf_filename); mb = cache.construct(urdf_filename, world);
 
     //   for (std::size_t j = 0; j < mb->size(); ++j) {
     //     std::cout << "link " << j << ":\n";
@@ -417,14 +419,16 @@ int main(int argc, char **argv) {
       Matrix3 I = Algebra::diagonal3(Vector3(1., 1., 1.));
       Link<Algebra> link_a(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
                            RigidBodyInertia(mass, com, I));
+      mb->attach(link_a);
       Link<Algebra> link_b(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
                            RigidBodyInertia(mass, com, I));
-      mb->attach(link_a);
       mb->attach(link_b);
+      Link<Algebra> link_c(JOINT_REVOLUTE_Y, Tf(0., 0., 1.),
+                           RigidBodyInertia(mass, com, I));
+      mb->attach(link_c);
       mb->initialize();
 
-      mb->q() = VectorX({M_PI_2, 0.0});
-      // mb->q = VectorX({M_PI_2});
+      mb->q(0) = M_PI_2;
       forward_kinematics(*mb);
     }
 
@@ -439,7 +443,7 @@ int main(int argc, char **argv) {
       VectorND rbdl_qdd = VectorND::Zero(rbdl_model.qdot_size);
       VectorND rbdl_tau = VectorND::Zero(rbdl_model.qdot_size);
 
-      // rbdl_q[0] = M_PI_2;
+      rbdl_q[0] = M_PI_2;
       RigidBodyDynamics::UpdateKinematics(rbdl_model, rbdl_q, rbdl_qd,
                                           rbdl_qdd);
       if (!is_equal<Algebra>(*mb, rbdl_model)) {
@@ -448,22 +452,22 @@ int main(int argc, char **argv) {
       // return 0;
 
       double dt = 0.001;
-      for (int i = 0; i < 50; ++i) {
+      for (int i = 0; i < 500; ++i) {
         printf("\n\n\nt: %i\n", i);
         // forward_kinematics(mb);
         // traj.push_back(mb->q);
-        for (auto &link : mb->links) {
+        for (auto &link : *mb) {
           Algebra::set_zero(link.a);
         }
         int nd = mb->dof_actuated();
         // Algebra::Index j = 2;
         for (Algebra::Index j = 3; j < nd; ++j) {
-          mb->tau[j] = Algebra::sin(i * dt * 10.) * .2;
-          rbdl_tau[j] = Algebra::to_double(mb->tau[j]);
+          mb->tau(j) = Algebra::sin(i * dt * 10.) * .2;
+          rbdl_tau[j] = Algebra::to_double(mb->tau(j));
         }
         forward_dynamics(*mb, gravity);
         mb->print_state();
-        // for (auto &link : mb->links) {
+        // for (auto &link : mb) {
         //   Algebra::print(
         //       ("link[" + std::to_string(link.q_index) + "].D").c_str(),
         //       link.D);
@@ -482,14 +486,16 @@ int main(int argc, char **argv) {
 
         RigidBodyDynamics::ForwardDynamics(rbdl_model, rbdl_q, rbdl_qd,
                                            rbdl_tau, rbdl_qdd);
-        std::cout << "RBDL qdd:  " << rbdl_qdd.transpose() << std::endl;
+        std::cout << "RBDL q: " << rbdl_q.transpose()
+                  << "   qd: " << rbdl_qd.transpose()
+                  << "   qdd:  " << rbdl_qdd.transpose() << std::endl;
 
         rbdl_qd += rbdl_qdd * dt;
         rbdl_q += rbdl_qd * dt;
 
-        if (!is_equal<Algebra>(*mb, rbdl_model)) {
-          exit(1);
-        }
+        // if (!is_equal<Algebra>(*mb, rbdl_model)) {
+        //   exit(1);
+        // }
       }
 
       return 0;
@@ -520,8 +526,8 @@ int main(int argc, char **argv) {
     // return 0;
 
     // mb->base_rbi = RigidBodyInertia(0.);
-    // for (std::size_t j = 2; j < mb->links.size(); ++j) {
-    //   mb->links[j].rbi = RigidBodyInertia(0.5);
+    // for (std::size_t j = 2; j < mb.size(); ++j) {
+    //   mb[j].rbi = RigidBodyInertia(0.5);
     // }
 
     // Vector3 gravity(0., 0., -9.81);
@@ -540,11 +546,11 @@ int main(int argc, char **argv) {
       int nd = mb->dof_actuated();
       // Algebra::Index j = 2;
       // for (Algebra::Index j = 3; j < nd; ++j) {
-      //   mb->tau()[j] = Algebra::sin(i * dt * 10.) * 1e-4;
+      //   mb->tau())j] = Algebra::sin(i * dt * 10.) * 1e-4;
       // }
       forward_dynamics(*mb, gravity);
       mb->print_state();
-      // for (auto &link : mb->links) {
+      // for (auto &link : mb) {
       //   Algebra::print(("link[" + std::to_string(link.q_index) +
       //   "].D").c_str(),
       //                  link.D);

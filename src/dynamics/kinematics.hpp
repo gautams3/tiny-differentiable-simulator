@@ -1,5 +1,7 @@
 #pragma once
 
+#define SWAP_TRANSFORM_ASSOCIATIVITY false
+
 #include "../multi_body.hpp"
 
 namespace tds {
@@ -62,14 +64,21 @@ void forward_kinematics(
     if (parent >= 0 || mb.is_floating()) {
       const Transform &parent_X_world =
           parent >= 0 ? mb[parent].X_world : mb.base_X_world();
+#if SWAP_TRANSFORM_ASSOCIATIVITY
+      link.X_world = link.X_parent * parent_X_world;  // RBDL style
+#else
       link.X_world = parent_X_world * link.X_parent;
-      // link.X_world = link.X_parent * parent_X_world;  // RBDL style
+#endif
       const MotionVector &parentVelocity =
           parent >= 0 ? mb[parent].v : mb.base_velocity();
       MotionVector xv = link.X_parent.apply(parentVelocity);
       link.v = xv + link.vJ;
     } else {
+      #if SWAP_TRANSFORM_ASSOCIATIVITY
       link.X_world = mb.base_X_world() * link.X_parent;
+      #else
+      link.X_world = link.X_parent * mb.base_X_world();
+      #endif
       link.v = link.vJ;
     }
     MotionVector v_x_vJ = Algebra::cross(link.v, link.vJ);
@@ -143,8 +152,7 @@ void forward_kinematics(MultiBody<Algebra> &mb) {
  */
 template <typename Algebra>
 void forward_kinematics_q(
-    const MultiBody<Algebra> &mb,
-    const typename Algebra::VectorX &q,
+    const MultiBody<Algebra> &mb, const typename Algebra::VectorX &q,
     tds::Transform<Algebra> *base_X_world,
     std::vector<tds::Transform<Algebra>> *links_X_world = nullptr,
     std::vector<tds::Transform<Algebra>> *links_X_base = nullptr) {
@@ -181,16 +189,31 @@ void forward_kinematics_q(
       if (links_X_world) {
         const Transform &parent_X_world =
             parent >= 0 ? (*links_X_world)[parent] : *base_X_world;
+
+#if SWAP_TRANSFORM_ASSOCIATIVITY
+        (*links_X_world)[i] = x_parent * parent_X_world;
+#else
         (*links_X_world)[i] = parent_X_world * x_parent;
+#endif
       }
       if (links_X_base) {
         const Transform &parent_X_base =
             parent >= 0 ? (*links_X_base)[parent] : ident;
+
+#if SWAP_TRANSFORM_ASSOCIATIVITY
+        (*links_X_base)[i] = x_parent * parent_X_base;
+#else
         (*links_X_base)[i] = parent_X_base * x_parent;
+#endif
       }
     } else {
       // first link in fixed-base system
+
+#if SWAP_TRANSFORM_ASSOCIATIVITY
+      if (links_X_world) (*links_X_world)[i] = x_parent * *base_X_world;
+#else
       if (links_X_world) (*links_X_world)[i] = *base_X_world * x_parent;
+#endif
       if (links_X_base) (*links_X_base)[i] = x_parent;
     }
   }

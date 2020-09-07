@@ -2,6 +2,7 @@
 
 #include <string>
 #include <fenv.h>
+#include <stdio.h>
 
 #if defined(_MSC_VER)
 #define TINY_INLINE inline

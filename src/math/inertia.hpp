@@ -246,6 +246,19 @@ struct ArticulatedBodyInertia {
     return abi;
   }
 
+  bool is_invertible() const {
+    if (Algebra::is_zero(Algebra::determinant(I))) {
+      return false;
+    }
+    Matrix3 Ainv = Algebra::inverse(I);
+    Matrix3 B = H;
+    Matrix3 C = -B;
+    if (Algebra::is_zero(Algebra::determinant(M - C * Ainv * B))) {
+      return false;
+    }
+    return true;
+  }
+
   ArticulatedBodyInertia inverse() const {
     // Inverse of a symmetric block matrix
     // according to (4.1) in

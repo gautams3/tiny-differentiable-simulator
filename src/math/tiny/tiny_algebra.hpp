@@ -162,6 +162,10 @@ struct TinyAlgebra {
     quat.set_identity();
   }
 
+  TINY_INLINE static Scalar determinant(const Matrix3& m) {
+    return m.determinant();
+  }
+
   TINY_INLINE static Scalar zero() { return TinyConstants::zero(); }
   TINY_INLINE static Scalar one() { return TinyConstants::one(); }
   TINY_INLINE static Scalar two() { return TinyConstants::two(); }
@@ -358,6 +362,11 @@ struct TinyAlgebra {
     v.top.set_zero();
     v.bottom.set_zero();
   }
+
+  /**
+   * Non-differentiable comparison operator.
+   */
+  TINY_INLINE static bool is_zero(const Scalar &a) { return a == zero(); }
 
   /**
    * Non-differentiable comparison operator.

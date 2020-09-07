@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <fenv.h>
-#include <stdio.h>
 
 #include <chrono>
 #include <iostream>
@@ -50,16 +48,16 @@ int main(int argc, char *argv[]) {
   //"cheetah_link0_1.urdf"
   //"pendulum5.urdf"
   //"sphere2.urdf"
-  tds::FileUtils::find_file("sphere8cube.urdf", urdf_filename);
-  // tds::FileUtils::find_file("pendulum5.urdf", urdf_filename);
+  // tds::FileUtils::find_file("sphere8cube.urdf", urdf_filename);
+  // bool floating_base = true;
+  tds::FileUtils::find_file("pendulum5.urdf", urdf_filename);
+  bool floating_base = false;
   std::string plane_filename;
   tds::FileUtils::find_file("plane_implicit.urdf", plane_filename);
 
   if (argc > 1) urdf_filename = std::string(argv[1]);
-  bool floating_base = true;
 
-  // Set NaN trap
-  feenableexcept(FE_INVALID | FE_OVERFLOW);
+  tds::activate_nan_trap();
 
   printf("floating_base=%d\n", floating_base);
   printf("urdf_filename=%s\n", urdf_filename.c_str());
@@ -92,8 +90,8 @@ int main(int argc, char *argv[]) {
   constructor.is_floating = floating_base;
   constructor(sim2, sim, world, &system);
 
-  world.set_mb_constraint_solver(
-      new tds::MultiBodyConstraintSolverSpring<Algebra>);
+  // world.set_mb_constraint_solver(
+  //     new tds::MultiBodyConstraintSolverSpring<Algebra>);
 
   //  system->q()[0] = 2.;
   //  system->q()[1] = 1.2;
@@ -128,6 +126,8 @@ int main(int argc, char *argv[]) {
     // system->q()[2] = 0.2477976811032405;
     // system->q()[3] = 0.9261693317298725;
     // system->q()[6] = 2;
+  } else {
+    system->base_X_world().translation = Algebra::unit3_z();
   }
   system->print_state();
 
@@ -147,14 +147,8 @@ int main(int argc, char *argv[]) {
     }
 
     {
-      sim->submitProfileTiming("integrate_q");
-      // system->integrate_q(dt);  //??
-      sim->submitProfileTiming("");
-    }
-
-    {
       sim->submitProfileTiming("world_step");
-      world.step(dt);
+      // world.step(dt);
       fflush(stdout);
       sim->submitProfileTiming("");
       time += dt;

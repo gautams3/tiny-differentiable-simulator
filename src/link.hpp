@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "math/transform.hpp"
 #include "geometry.hpp"
+#include "math/transform.hpp"
 
 namespace tds {
 enum JointType {
@@ -163,7 +163,11 @@ struct Link {
                 "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
                 __LINE__);
     }
+#if SWAP_TRANSFORM_ASSOCIATIVITY
+    *X_parent = (*X_J) * X_T;
+#else
     *X_parent = X_T * (*X_J);
+#endif
   }
 
   inline void jcalc(const Scalar &qd, MotionVector *v_J) const {
