@@ -36,8 +36,8 @@ typename Algebra::Matrix3X point_jacobian(
   point_tf.translation = world_point;
   if (mb.is_floating()) {
     // convert start point in world coordinates to base frame
-    const Vector3 base_point =// world_point - base_X_world.translation;
-    base_X_world.translation - world_point;
+    const Vector3 base_point = world_point - base_X_world.translation;
+    // base_X_world.translation - world_point;
         // mb.empty() ? base_X_world.apply_inverse(world_point)
         //            : links_X_world[link_index].apply_inverse(world_point);
     // see (Eq. 2.238) in
@@ -107,7 +107,9 @@ typename Algebra::Matrix3X point_jacobian_fd(
   //   return jac;
   // }
   // convert start point in world coordinates to base frame
-  const Vector3 base_point = // start_point - base_X_world.translation;
+  const Vector3 base_point = //start_point - base_X_world.translation;
+  // start_point - (mb.empty() ? base_X_world.translation
+  //                 : links_X_world[link_index].translation);
       mb.empty() ? base_X_world.apply_inverse(start_point)
                  : links_X_world[link_index].apply_inverse(start_point);
   Vector3 world_point;

@@ -294,6 +294,7 @@ IF(WIN32)
     target_link_libraries(tiny_urdf_parser_opengl_example Opengl32)
     target_link_libraries(opengl_test  Opengl32)
     target_link_libraries(opengl_imgui_test Opengl32)
+    target_link_libraries(generic_urdf_collision Opengl32)
 ENDIF()
 
 

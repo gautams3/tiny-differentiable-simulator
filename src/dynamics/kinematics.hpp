@@ -75,9 +75,9 @@ void forward_kinematics(
       link.v = xv + link.vJ;
     } else {
       #if SWAP_TRANSFORM_ASSOCIATIVITY
-      link.X_world = mb.base_X_world() * link.X_parent;
-      #else
       link.X_world = link.X_parent * mb.base_X_world();
+      #else
+      link.X_world = mb.base_X_world() * link.X_parent;
       #endif
       link.v = link.vJ;
     }

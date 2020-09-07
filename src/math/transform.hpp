@@ -62,13 +62,13 @@ struct Transform {
   }
 
   Matrix6 matrix() const {
-// #if RIGHT_ASSOCIATIVE_TRANSFORMS
-//     const Matrix3 &Et = rotation;
-//     Matrix3 E = Algebra::transpose(rotation);
-// #else
+#if RIGHT_ASSOCIATIVE_TRANSFORMS
+    const Matrix3 &Et = rotation;
+    Matrix3 E = Algebra::transpose(rotation);
+#else
     const Matrix3 &E = rotation;
     Matrix3 Et = Algebra::transpose(rotation);
-// #endif
+#endif
     Matrix6 m;
     Matrix3 mErx = -E * Algebra::cross_matrix(translation);
     Algebra::assign_block(m, E, 0, 0);
@@ -79,13 +79,13 @@ struct Transform {
   }
 
   Matrix6 matrix_transpose() const {
-// #if RIGHT_ASSOCIATIVE_TRANSFORMS
-//     const Matrix3 &Et = rotation;
-//     Matrix3 E = Algebra::transpose(rotation);
-// #else
+#if RIGHT_ASSOCIATIVE_TRANSFORMS
+    const Matrix3 &Et = rotation;
+    Matrix3 E = Algebra::transpose(rotation);
+#else
     const Matrix3 &E = rotation;
     Matrix3 Et = Algebra::transpose(rotation);
-// #endif
+#endif
     Matrix3 mErxT = Algebra::transpose(-E * Algebra::cross_matrix(translation));
     Matrix6 m;
     Algebra::assign_block(m, Et, 0, 0);
@@ -116,7 +116,8 @@ struct Transform {
     /// XXX this is different from Featherstone: we assume transforms are
     /// right-associative
     Transform tr = *this;
-    tr.translation += Algebra::transpose(rotation) * t.translation;
+    tr.translation += rotation * t.translation;
+    // tr.translation += Algebra::transpose(rotation) * t.translation;
     tr.rotation *= t.rotation;
     return tr;
   }
@@ -127,11 +128,25 @@ struct Transform {
     return Algebra::transpose(rotation) * (point - translation);
   }
 #else
+// Transform operator*(const Transform &t) const {
+//   Transform tr = *this;
+//   tr.translation = t.translation + t.rotation * translation;
+//   // tr.translation = t.translation + Algebra::transpose(t.rotation) * translation;
+//   tr.rotation *= t.rotation;
+//   return tr;
+// }
+// Transform operator*(const Transform &t) const {
+//   Transform tr = *this;
+//   tr.translation = t.translation + t.rotation * translation;
+//   tr.rotation *= t.rotation;
+//   return tr;
+// }
   Transform operator*(const Transform &t) const {
     /// XXX this is different from Featherstone: we assume transforms are
     /// right-associative
     Transform tr = *this;
     tr.translation += Algebra::transpose(rotation) * t.translation;
+    // tr.translation += rotation * t.translation;
     tr.rotation *= t.rotation;
     return tr;
   }

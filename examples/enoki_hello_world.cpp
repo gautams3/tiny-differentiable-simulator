@@ -26,7 +26,7 @@ namespace plt = matplotlibcpp;
 #include "utils/file_utils.hpp"
 #include "world.hpp"
 
-#define USE_RBDL true
+#define USE_RBDL false
 
 #if USE_RBDL
 #include "rbdl/Dynamics.h"
@@ -395,7 +395,10 @@ int main(int argc, char **argv) {
     {
       std::string urdf_filename;
       FileUtils::find_file("swimmer/swimmer05/swimmer05.urdf", urdf_filename);
+      FileUtils::find_file("pendulum5.urdf", urdf_filename);
       mb = cache.construct(urdf_filename, world);
+
+    mb->base_X_world().translation = Algebra::unit3_z();
 
       for (std::size_t j = 0; j < mb->size(); ++j) {
         std::cout << "link " << j << ":\n";
