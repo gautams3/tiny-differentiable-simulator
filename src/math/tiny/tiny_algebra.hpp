@@ -345,6 +345,11 @@ struct TinyAlgebra {
   TINY_INLINE static const Scalar &quat_z(const Quaternion &q) { return q.z(); }
   TINY_INLINE static const Scalar &quat_w(const Quaternion &q) { return q.w(); }
 
+  TINY_INLINE static const Quaternion quat_from_xyzw(const Scalar &x,
+  const Scalar &y, const Scalar &z, const Scalar &w) {
+    return Quaternion(x, y, z, w);
+  }
+
   TINY_INLINE static void set_zero(Matrix3 &m) { m.set_zero(); }
   template <typename S, typename U,
             template <typename, typename> typename ColumnType>
