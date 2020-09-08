@@ -121,7 +121,8 @@ if (Bullet_FOUND)
 
         add_executable(billiard_simple_trajOpt billiard_simple_trajOpt.cpp ${TDS_HDRS})
         target_link_libraries(billiard_simple_trajOpt pybullet_visualizer_api ${DL}
-                ${CERES_LIBRARIES})
+                ${CERES_LIBRARIES} enoki-autodiff enoki-cuda cuda)
+        set_target_properties(billiard_simple_trajOpt PROPERTIES FOLDER autodiff)
         target_compile_definitions(billiard_simple_trajOpt PRIVATE STAN_MATH)
 
         add_executable(cartpole_opt cartpole_opt.cpp ${TDS_HDRS})
