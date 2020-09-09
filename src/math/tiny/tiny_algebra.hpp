@@ -10,6 +10,7 @@
 #include "tiny_vector3.h"
 #include "tiny_vector_x.h"
 
+
 template <typename TinyScalar, typename TinyConstants>
 struct TinyAlgebra {
   using Index = int;

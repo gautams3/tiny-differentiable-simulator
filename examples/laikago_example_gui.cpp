@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "pybullet_urdf_import.h"
-#include "tiny_urdf_to_multi_body.h"
+#include "urdf/pybullet_urdf_import.hpp"
+#include "urdf/urdf_to_multi_body.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -24,7 +24,7 @@
 bool useLaikago = true;
 
 #define USE_TRB
-#include "tiny_double_utils.h"
+#include "math/tiny/tiny_double_utils.h"
 
 bool floating_base = true;
 

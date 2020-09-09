@@ -23,8 +23,15 @@ find_package(ct_optcon)
 find_package(Ceres)
 find_package(PkgConfig)
 
-add_definitions(-DBT_USE_DOUBLE_PRECISION)
-find_package(Bullet)
+if (DEFINED Bullet_DIR)
+   message("Finding local Bullet")
+   Find_Package(Bullet CONFIG)
+   SET(BULLET_INCLUDE_DIR ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_INCLUDE_DIR})
+   SET(BLA ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+else()
+   message("Finding system installed Bullet")
+   Find_Package(Bullet)
+endif()
 
 #find_package(tinyxml2)
 if (tinyxml2_FOUND)
@@ -99,7 +106,19 @@ if (Bullet_FOUND)
     target_link_libraries(pybullet_visualizer_api BulletRoboticsGUI BulletExampleBrowserLib
             BulletRobotics BulletFileLoader BulletWorldImporter BulletSoftBody BulletDynamics
             BulletCollision BulletInverseDynamicsUtils BulletInverseDynamics LinearMath
-            OpenGLWindow  gwen BussIK Bullet3Common pthread ${DL})
+            OpenGLWindow  gwen BussIK Bullet3Common )
+
+     if (WIN32)
+        target_link_libraries(pybullet_visualizer_api Ws2_32)
+     else()
+            target_link_libraries(pybullet_visualizer_api pthread ${DL})
+     endif()
+     target_include_directories(pybullet_visualizer_api PUBLIC ${BULLET_INCLUDE_DIR})
+     target_compile_definitions(pybullet_visualizer_api PUBLIC ${BULLET_DEFINITIONS})
+     target_link_directories(pybullet_visualizer_api PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+     
+
+
 
     if (Ceres_FOUND)
         FIND_PACKAGE(PythonLibs REQUIRED)
@@ -193,30 +212,57 @@ if (Bullet_FOUND)
                 -lpthread hpipm blasfeo)
     endif (ct_core_FOUND AND ct_optcon_FOUND AND Eigen3_FOUND)
 
-    add_executable(laikago_example_gui laikago_example_gui.cpp ${TDS_HDRS})
-    target_link_libraries(laikago_example_gui pybullet_visualizer_api)
+    #add_executable(laikago_example_gui laikago_example_gui.cpp ${TDS_HDRS})
+    #target_link_libraries(laikago_example_gui pybullet_visualizer_api)
 
     if (Eigen3_FOUND)
-      add_executable(laikago_footstep_ik laikago_footstep_ik.cpp ${TDS_HDRS})
-      target_link_libraries(laikago_footstep_ik pybullet_visualizer_api)
+      #add_executable(laikago_footstep_ik laikago_footstep_ik.cpp ${TDS_HDRS})
+      #target_link_libraries(laikago_footstep_ik pybullet_visualizer_api)
 
-      add_executable(pendulum_ik_gui pendulum_ik_gui.cpp)
-      target_link_libraries(pendulum_ik_gui pybullet_visualizer_api)
+      ##add_executable(pendulum_ik_gui pendulum_ik_gui.cpp)
+      ##target_link_libraries(pendulum_ik_gui pybullet_visualizer_api)
     endif()
 
     
     add_executable(generic_urdf_collision generic_urdf_collision.cpp ${TDS_HDRS})
-    target_link_libraries(generic_urdf_collision pybullet_visualizer_api)
+    target_link_libraries(generic_urdf_collision pybullet_visualizer_api tinyxml2)
+    IF(WIN32)
+      target_link_libraries(generic_urdf_collision Opengl32)
+    ENDIF(WIN32)
 
-    add_executable(gravity_compensation gravity_compensation.cpp ${TDS_HDRS})
-    target_link_libraries(gravity_compensation pybullet_visualizer_api)
+    #add_executable(gravity_compensation gravity_compensation.cpp ${TDS_HDRS})
+    #target_link_libraries(gravity_compensation pybullet_visualizer_api)
+    #target_include_directories(gravity_compensation PUBLIC ${BULLET_INCLUDE_DIR})
+    #target_compile_definitions(gravity_compensation PUBLIC ${BULLET_DEFINITIONS})
+    #target_link_directories(gravity_compensation PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+    #target_link_libraries(gravity_compensation PUBLIC BulletDynamics BulletCollision LinearMath)
+
 
 if (HAS_MESHCAT)
-    add_executable(laikago_meshcat_example laikago_meshcat_example.cpp ${TDS_HDRS})
-    target_link_libraries(laikago_meshcat_example pybullet_visualizer_api ${MESHCAT_LIBRARIES})
+    #add_executable(laikago_meshcat_example laikago_meshcat_example.cpp ${TDS_HDRS})
+    #target_link_libraries(laikago_meshcat_example pybullet_visualizer_api ${MESHCAT_LIBRARIES})
 endif (HAS_MESHCAT)
 
 endif (Bullet_FOUND)
+
+
+
+
+if (HAS_MESHCAT AND tinyxml2_FOUND)    
+
+    #add_executable(tiny_urdf_parser_meshcat_example tiny_urdf_parser_meshcat_example.cpp ${TDS_HDRS}) 
+    #target_link_libraries(tiny_urdf_parser_meshcat_example  tinyxml2 ${MESHCAT_LIBRARIES}) 
+
+    add_executable(meshcat_zmq_example meshcat_zmq_example.cpp ${TDS_HDRS})
+    target_link_libraries(meshcat_zmq_example  ${MESHCAT_LIBRARIES})
+
+endif (HAS_MESHCAT AND tinyxml2_FOUND)
+
+if (tinyxml2_FOUND)
+    add_executable(tiny_urdf_parser_example tiny_urdf_parser_example.cpp ${TDS_HDRS})
+    target_link_libraries(tiny_urdf_parser_example tinyxml2)
+
+if (Ceres_FOUND)
 
 if (tinyxml2_FOUND)
   include_directories(/usr/include/python3.8)
@@ -237,22 +283,6 @@ if (tinyxml2_FOUND)
 endif()
 
 
-
-if (HAS_MESHCAT AND tinyxml2_FOUND)    
-
-    add_executable(tiny_urdf_parser_meshcat_example tiny_urdf_parser_meshcat_example.cpp ${TDS_HDRS}) 
-    target_link_libraries(tiny_urdf_parser_meshcat_example  tinyxml2 ${MESHCAT_LIBRARIES}) 
-
-    add_executable(meshcat_zmq_example meshcat_zmq_example.cpp ${TDS_HDRS})
-    target_link_libraries(meshcat_zmq_example  ${MESHCAT_LIBRARIES})
-
-endif (HAS_MESHCAT AND tinyxml2_FOUND)
-
-if (tinyxml2_FOUND)
-    add_executable(tiny_urdf_parser_example tiny_urdf_parser_example.cpp ${TDS_HDRS})
-    target_link_libraries(tiny_urdf_parser_example tinyxml2)
-
-if (Ceres_FOUND)
     add_executable(neural_contact neural_contact.cpp ${TDS_HDRS})
     target_link_libraries(neural_contact opengl_window ${DL}
             ${CERES_LIBRARIES} ${MESHCAT_LIBRARIES} python2.7 tinyxml2)
@@ -260,7 +290,7 @@ endif (Ceres_FOUND)
 endif (tinyxml2_FOUND)
 
 add_executable(world_example world_example.cpp ${TDS_HDRS})
-add_executable(test_xarm test_xarm.cpp ${TDS_HDRS})
+#add_executable(test_xarm test_xarm.cpp ${TDS_HDRS})
 
 subdirs(opengl_window)
 
@@ -273,10 +303,10 @@ target_include_directories(opengl_test PRIVATE ../third_party)
 
 
 
-add_executable(tiny_urdf_parser_opengl_example tiny_urdf_parser_opengl_example.cpp ../third_party/stb_image/stb_image.cpp ../third_party/tinyobjloader/tiny_obj_loader.cc utils/tiny_clock.cpp utils/tiny_chrome_trace_util.cpp utils/tiny_logging.cpp ${TDS_HDRS}) 
-target_link_libraries(tiny_urdf_parser_opengl_example  tinyxml2 opengl_window) 
-target_include_directories(tiny_urdf_parser_opengl_example PRIVATE ../third_party/tinyobjloader)
-target_include_directories(tiny_urdf_parser_opengl_example PRIVATE ../third_party)
+#add_executable(tiny_urdf_parser_opengl_example tiny_urdf_parser_opengl_example.cpp ../third_party/stb_image/stb_image.cpp ../third_party/tinyobjloader/tiny_obj_loader.cc utils/tiny_clock.cpp utils/tiny_chrome_trace_util.cpp utils/tiny_logging.cpp ${TDS_HDRS}) 
+#target_link_libraries(tiny_urdf_parser_opengl_example  tinyxml2 opengl_window) 
+#target_include_directories(tiny_urdf_parser_opengl_example PRIVATE ../third_party/tinyobjloader)
+#target_include_directories(tiny_urdf_parser_opengl_example PRIVATE ../third_party)
 
 
 
@@ -291,10 +321,9 @@ target_include_directories(opengl_imgui_test PRIVATE ../third_party/glad ../thir
 
 IF(WIN32)
     target_link_libraries(pendulum_example_gui Opengl32)
-    target_link_libraries(tiny_urdf_parser_opengl_example Opengl32)
+    #target_link_libraries(tiny_urdf_parser_opengl_example Opengl32)
     target_link_libraries(opengl_test  Opengl32)
     target_link_libraries(opengl_imgui_test Opengl32)
-    target_link_libraries(generic_urdf_collision Opengl32)
 ENDIF()
 
 
@@ -308,45 +337,47 @@ ENDIF()
 
 
 
+IF(USE_ENOKI)
+  if (MSVC)
+      set(ENOKI_NONE_FLAGS /DENOKI_DISABLE_VECTORIZATION)
+      if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(ENOKI_SSE42_FLAGS /D__SSE4_2__)
+      else()
+        set(ENOKI_SSE42_FLAGS /arch:SSE2 /D__SSE4_2__)
+      endif()
+      set(ENOKI_AVX_FLAGS /arch:AVX)
+      set(ENOKI_AVX2_FLAGS /arch:AVX2)
+    elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+      add_compile_options(-wd11074 -wd11076)
+      set(ENOKI_NONE_FLAGS -DENOKI_DISABLE_VECTORIZATION -ffp-contract=off)
+      set(ENOKI_SSE42_FLAGS -xSSE4.2)
+      set(ENOKI_AVX_FLAGS -xCORE-AVX-I)
+      set(ENOKI_AVX2_FLAGS -xCORE-AVX2)
+      set(ENOKI_AVX512_KNL_FLAGS -xMIC-AVX512)
+      set(ENOKI_AVX512_SKX_FLAGS -xCORE-AVX512)
+    else()
+      set(ENOKI_NONE_FLAGS -DENOKI_DISABLE_VECTORIZATION -ffp-contract=off)
+      set(ENOKI_SSE42_FLAGS -msse4.2)
+      set(ENOKI_AVX_FLAGS -mavx)
+      set(ENOKI_AVX2_FLAGS -mavx2 -mfma -mf16c -mbmi -mbmi2 -mlzcnt)
+      if (APPLE AND ${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
+        set(ENOKI_AVX512_KNL_FLAGS -march=knl -Wa,-march=knl)
+        set(ENOKI_AVX512_SKX_FLAGS -march=skylake-avx512 -Wa,-march=skx)
+      else()
+        set(ENOKI_AVX512_KNL_FLAGS -march=knl)
+        set(ENOKI_AVX512_SKX_FLAGS -march=skylake-avx512)
+      endif()
+      set(ENOKI_NEON_FLAGS )
+      if (${CMAKE_SYSTEM_PROCESSOR} MATCHES armv7)
+        set(ENOKI_NEON_FLAGS -march=armv7-a -mtune=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard -mfp16-format=ieee)
+      elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES aarch64)
+        set(ENOKI_NEON_FLAGS -march=armv8-a+simd -mtune=cortex-a53)
+      endif()
+    
+  endif()
 
-if (MSVC)
-  set(ENOKI_NONE_FLAGS /DENOKI_DISABLE_VECTORIZATION)
-  if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(ENOKI_SSE42_FLAGS /D__SSE4_2__)
-  else()
-    set(ENOKI_SSE42_FLAGS /arch:SSE2 /D__SSE4_2__)
-  endif()
-  set(ENOKI_AVX_FLAGS /arch:AVX)
-  set(ENOKI_AVX2_FLAGS /arch:AVX2)
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
-  add_compile_options(-wd11074 -wd11076)
-  set(ENOKI_NONE_FLAGS -DENOKI_DISABLE_VECTORIZATION -ffp-contract=off)
-  set(ENOKI_SSE42_FLAGS -xSSE4.2)
-  set(ENOKI_AVX_FLAGS -xCORE-AVX-I)
-  set(ENOKI_AVX2_FLAGS -xCORE-AVX2)
-  set(ENOKI_AVX512_KNL_FLAGS -xMIC-AVX512)
-  set(ENOKI_AVX512_SKX_FLAGS -xCORE-AVX512)
-else()
-  set(ENOKI_NONE_FLAGS -DENOKI_DISABLE_VECTORIZATION -ffp-contract=off)
-  set(ENOKI_SSE42_FLAGS -msse4.2)
-  set(ENOKI_AVX_FLAGS -mavx)
-  set(ENOKI_AVX2_FLAGS -mavx2 -mfma -mf16c -mbmi -mbmi2 -mlzcnt)
-  if (APPLE AND ${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
-    set(ENOKI_AVX512_KNL_FLAGS -march=knl -Wa,-march=knl)
-    set(ENOKI_AVX512_SKX_FLAGS -march=skylake-avx512 -Wa,-march=skx)
-  else()
-    set(ENOKI_AVX512_KNL_FLAGS -march=knl)
-    set(ENOKI_AVX512_SKX_FLAGS -march=skylake-avx512)
-  endif()
-  set(ENOKI_NEON_FLAGS )
-  if (${CMAKE_SYSTEM_PROCESSOR} MATCHES armv7)
-    set(ENOKI_NEON_FLAGS -march=armv7-a -mtune=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard -mfp16-format=ieee)
-  elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES aarch64)
-    set(ENOKI_NEON_FLAGS -march=armv8-a+simd -mtune=cortex-a53)
-  endif()
-endif()
-
-enoki_set_compile_flags()
+  enoki_set_compile_flags()
+ENDIF(USE_ENOKI)
 
 # if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR
 #     CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR
@@ -438,14 +469,20 @@ endfunction()
 
 enoki_test(enoki_hello_world enoki_hello_world.cpp)
 set_target_properties(enoki_hello_world_none PROPERTIES FOLDER autodiff)
-target_link_libraries(enoki_hello_world_none PRIVATE enoki-autodiff opengl_window tinyxml2 ${PYTHON_LIBRARIES})
+target_link_libraries(enoki_hello_world_none PRIVATE opengl_window tinyxml2 ${PYTHON_LIBRARIES})
 if (ENOKI_CUDA)
   target_link_libraries(enoki_hello_world_none PRIVATE enoki-cuda cuda)
 endif()
 if (USE_RBDL)
-  target_link_libraries(enoki_hello_world_none PRIVATE rbdl)
+  target_link_libraries(enoki_hello_world_none PRIVATE rbdl-static)
 endif()
 IF(WIN32)
     target_link_libraries(enoki_hello_world_none Opengl32)
 ENDIF()
+
+target_include_directories(enoki_hello_world_none PUBLIC ${BULLET_INCLUDE_DIR})
+target_compile_definitions(enoki_hello_world_none PUBLIC ${BULLET_DEFINITIONS})
+target_link_directories(enoki_hello_world_none PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+target_link_libraries(enoki_hello_world_none PUBLIC BulletDynamics BulletCollision LinearMath)
+
 

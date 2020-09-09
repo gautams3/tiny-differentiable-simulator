@@ -16,7 +16,7 @@ TINY_INLINE void activate_nan_trap() {
   // Set NaN trap
   feenableexcept(FE_INVALID | FE_OVERFLOW);
 #else
-  fprintf(stderr, "Cannot set NaN trap: feenableexcept is not available.")
+	fprintf(stderr, "Cannot set NaN trap: feenableexcept is not available.");
 #endif
 }
 }  // namespace tds
