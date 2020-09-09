@@ -17,8 +17,8 @@
 
 #include "meshcat_cube_data.h"
 #include "meshcat_zmq.h"
-#include "tiny_double_utils.h"
-#include "tiny_matrix3x3.h"
+#include "math/tiny/tiny_double_utils.h"
+#include "math/tiny/tiny_matrix3x3.h"
 
 using nlohmann::json;
 

@@ -19,10 +19,10 @@
 
 #include <vector>
 
-#include "tiny_geometry.h"
-#include "tiny_multi_body.h"
-#include "tiny_spatial_transform.h"
-#include "tiny_world.h"
+#include "geometry.hpp"
+#include "multi_body.hpp"
+#include "spatial_transform.hpp"
+#include "world.hpp"
 
 template <typename TinyScalar, typename TinyConstants>
 void init_compound_pendulum(TinyMultiBody<TinyScalar, TinyConstants> &mb,

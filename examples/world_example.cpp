@@ -12,25 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "tiny_double_utils.h"
-#include "tiny_world.h"
+
+
+#include "math/tiny/tiny_double_utils.h"
+#include "math/tiny/tiny_algebra.hpp"
+#include "math/tiny/tiny_double_utils.h"
+#include "rigid_body.hpp"
+#include "world.hpp"
+
+using namespace tds;
+using Algebra = TinyAlgebra<double, DoubleUtils>;
 
 int main(int argc, char* argv[]) {
-  typedef ::TinyRigidBody<double, DoubleUtils> TinyRigidBodyDouble;
+  typedef RigidBody<Algebra> TinyRigidBodyDouble;
 
   double mass = 1.0;
 
-  TinyWorld<double, DoubleUtils> world;
+  World<Algebra> world;
   double radius = 0.5;
-  const TinyGeometry<double, DoubleUtils>* geom = world.create_sphere(radius);
-  const TinyRigidBody<double, DoubleUtils>* body =
+  const Geometry<Algebra>* geom = world.create_sphere(radius);
+  const RigidBody<Algebra>* body =
       world.create_rigid_body(mass, geom);
   double dt = 1. / 60.;
   for (int i = 0; i < 100; i++) {
     world.step(dt);
-    printf("pos=%f,%f,%f\n", body->m_world_pose.m_position.getX(),
-           body->m_world_pose.m_position.getY(),
-           body->m_world_pose.m_position.getZ());
+    printf("pos=%f,%f,%f\n", body->world_pose().position.getX(),
+           body->world_pose().position.getY(),
+           body->world_pose().position.getZ());
     // btQuaternion base_orn(body->m_world_pose.m_orientation.getX(),
     //                      body->m_world_pose.m_orientation.getY(),
     //                      body->m_world_pose.m_orientation.getZ(),

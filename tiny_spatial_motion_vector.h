@@ -18,7 +18,7 @@
 #define TINY_SPATIAL_MOTION_VECTOR_H
 
 #include <stdio.h>
-#include "tiny_vector3.h"
+#include "math/tiny/tiny_vector3.h"
 
 template <typename TinyScalar, typename TinyConstants>
 class TinySpatialMotionVector {

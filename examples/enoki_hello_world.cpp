@@ -18,7 +18,7 @@ namespace plt = matplotlibcpp;
 #include "dynamics/forward_dynamics.hpp"
 #include "dynamics/integrator.hpp"
 #include "dynamics/kinematics.hpp"
-#include "math/enoki_algebra.hpp"
+
 #include "math/tiny/tiny_algebra.hpp"
 #include "math/tiny/tiny_double_utils.h"
 #include "multi_body.hpp"
@@ -135,17 +135,6 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
   }
 }
 
-bool equals(const typename EnokiAlgebra::Matrix3 &e,
-            const typename TinyAlgebra<double, DoubleUtils>::Matrix3 &t) {
-  for (int i = 0; i < 3; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      if (std::abs(e(i, j) - t(i, j)) > ERROR_TOLERANCE) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
 
 #if USE_RBDL
 template <typename Algebra>
@@ -421,37 +410,10 @@ bool is_equal(const MultiBody<Algebra> &tds,
 int main(int argc, char **argv) {
   tds::activate_nan_trap();
 
-  // {
-  //   using TinyAlgebra = ::TinyAlgebra<double, DoubleUtils>;
-  //   for (int n = 0; n < 20; ++n) {
-  //     typename EnokiAlgebra::Matrix3 e1(0.), e2(0.);
-  //     typename TinyAlgebra::Matrix3 t1, t2;
-  //     double v1 = rand() * 1.0 / RAND_MAX;
-  //     t1 = TinyAlgebra::rotation_x_matrix(v1);
-  //     e1 = EnokiAlgebra::rotation_x_matrix(v1);
-  //     // for (int i = 0; i < 3; ++i) {
-  //     //   for (int j = 0; j < 3; ++j) {
-  //     //     double v1 = rand() * 1.0 / RAND_MAX;
-  //     //     e1(i, j) = v1;
-  //     //     t1(i, j) = v1;
-  //     //     // double v2 = rand() * 1.0 / RAND_MAX;
-  //     //     // e2(i, j) = v2;
-  //     //     // t2(i, j) = v2;
-  //     //   }
-  //     // }
-
-  //     std::cout << "e1:\n" << e1 << std::endl;
-  //     t1.print("t1");
-
-  //     std::cout << "Equals " << n << ": " << std::boolalpha
-  //               << equals(e1, t1) << std::endl;
-  //   }
-  //   return 0;
-  // }
-
+  
   {
     using Algebra = TinyAlgebra<double, DoubleUtils>;
-    // using Algebra = EnokiAlgebra;
+    
     using Tf = Transform<Algebra>;
     using Vector3 = Algebra::Vector3;
     using VectorX = typename Algebra::VectorX;
@@ -711,7 +673,7 @@ int main(int argc, char **argv) {
 
   {
     using Algebra = TinyAlgebra<double, DoubleUtils>;
-    // using Algebra = EnokiAlgebra;
+    
     using Tf = Transform<Algebra>;
     using Vector3 = Algebra::Vector3;
     using VectorX = typename Algebra::VectorX;
@@ -752,58 +714,6 @@ int main(int argc, char **argv) {
 
   return 0;
 
-  using namespace enoki;
 
-  using FloatC = CUDAArray<float>;
-  using FloatD = DiffArray<FloatC>;
 
-  {
-    FloatD a = 1.f;
-    set_requires_gradient(a);
-
-    FloatD b = erf(a);
-    set_label(a, "a");
-    set_label(b, "b");
-
-    // std::cout << graphviz(b) << std::endl;
-
-    backward(b);
-    std::cout << gradient(a) << std::endl;
-  }
-
-  {
-    /* Declare underlying packet type, could just be 'float' for scalar
-     * arithmetic
-     */
-    using FloatP = float;  // Packet<float, 4>;
-
-    /* Define vectorized quaternion type */
-    using QuaternionP = Quaternion<FloatP>;
-
-    QuaternionP a = QuaternionP(1.f, 0.f, 0.f, 0.f);
-    QuaternionP b = QuaternionP(0.f, 1.f, 0.f, 0.f);
-
-    /* Compute several rotations that interpolate between 'a' and 'b' */
-    FloatP t = linspace<FloatP>(0.f, 1.f);
-    std::cout << "t:  " << t << std::endl;
-    QuaternionP c = slerp(a, b, t);
-
-    std::cout << "Interpolated quaternions:" << std::endl;
-    std::cout << c << std::endl << std::endl;
-
-    /* Turn into a 4x4 homogeneous coordinate rotation matrix packet */
-    using Matrix4P = Matrix<FloatP, 4>;
-    Matrix4P c_rot = quat_to_matrix<Matrix4P>(c);
-
-    std::cout << "Rotation matrices:" << std::endl;
-    std::cout << c_rot << std::endl << std::endl;
-
-    /* Round trip: turn the rotation matrices back into rotation quaternions */
-    QuaternionP c2 = matrix_to_quat(c_rot);
-
-    if (hsum(abs(c - c2)) < ERROR_TOLERANCE)
-      std::cout << "Test passed." << std::endl;
-    else
-      std::cout << "Test failed." << std::endl;
-  }
 }

@@ -18,7 +18,7 @@
 #include <thread>  // std::this_thread::sleep_for
 
 #include "LinearMath/btQuaternion.h"
-#include "fix64_scalar.h"
+#include "math/tiny/fix64_scalar.h"
 #include "pendulum.h"
 #include "pybullet_visualizer_api.h"
 #include "tiny_double_utils.h"

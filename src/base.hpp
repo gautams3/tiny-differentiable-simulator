@@ -13,10 +13,14 @@
 namespace tds {
 TINY_INLINE void activate_nan_trap() {
 #if !defined(_MSC_VER)
+  #if __APPLE__
+fprintf(stderr, "Cannot set NaN trap: feenableexcept is not available.");
+  #else
   // Set NaN trap
   feenableexcept(FE_INVALID | FE_OVERFLOW);
+  #endif
 #else
-  fprintf(stderr, "Cannot set NaN trap: feenableexcept is not available.")
+	fprintf(stderr, "Cannot set NaN trap: feenableexcept is not available.");
 #endif
 }
 }  // namespace tds

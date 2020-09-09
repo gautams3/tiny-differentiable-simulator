@@ -20,11 +20,12 @@
 #include <thread>
 
 #include "pybullet_visualizer_api.h"
-#include "tiny_double_utils.h"
+
+#include "math/tiny/tiny_double_utils.h"
 #include "utils/file_utils.hpp"
-#include "tiny_mb_constraint_solver_spring.h"
-#include "tiny_multi_body.h"
-#include "tiny_system_constructor.h"
+#include "mb_constraint_solver_spring.hpp"
+#include "multi_body.hpp"
+#include "urdf/system_constructor.hpp"
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
