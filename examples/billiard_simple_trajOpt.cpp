@@ -1,14 +1,10 @@
 #include <stdio.h>
-
 #include <cassert>
 //#include "stan_double_utils.h"
-
 #include <ceres/autodiff_cost_function.h>
-
 #include <chrono>  // std::chrono::seconds
 #include <thread>  // std::this_thread::sleep_for
 
-#include "math/enoki_algebra.hpp"
 #include "math/pose.hpp"
 #include "math/tiny/ceres_utils.h"
 #include "math/tiny/tiny_algebra.hpp"
@@ -32,7 +28,8 @@ constexpr int steps = 50;
 using namespace tds;
 
 template <typename Algebra>
-typename Algebra::Scalar rollout(const typename Algebra::Scalar* force_y) {
+//forcing 'states' to be of type double
+typename Algebra::Scalar rollout(const typename Algebra::Scalar* force_y, std::vector<std::vector<TinyAlgebra<double, DoubleUtils>::Vector3>> &states) {
   typename Algebra::Scalar dt = Algebra::fraction(1, 20);
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
@@ -61,9 +58,17 @@ typename Algebra::Scalar rollout(const typename Algebra::Scalar* force_y) {
   white_ball->world_pose().position = Vector3(Algebra::zero(), -Algebra::two(), Algebra::zero());
   bodies.push_back(white_ball);
 
+  using DoubleVector3 = typename TinyAlgebra<double, DoubleUtils>::Vector3;
   for (int i = 0; i < steps; i++) {
     white_ball->apply_central_force(Vector3(Algebra::zero(), force_y[i], Algebra::zero()));
     world.step(dt);
+    //Store states
+    for (int b = 0; b < bodies.size(); b++) {
+      const RigidBody* body = bodies[b];
+      states[i][b][0] = Algebra::to_double(body->world_pose().position[0]);
+      states[i][b][1] = Algebra::to_double(body->world_pose().position[1]);
+      states[i][b][2] = Algebra::to_double(body->world_pose().position[2]);
+    }
   }
 
   // Compute error
@@ -73,7 +78,7 @@ typename Algebra::Scalar rollout(const typename Algebra::Scalar* force_y) {
 
 
 template <typename Algebra>
-void visualize_trajectory(const typename Algebra::Scalar* force_y, VisualizerAPI* vis = nullptr) {
+void visualize_trajectory(const typename Algebra::Scalar* force_y, std::vector<std::vector<typename Algebra::Vector3>> &states, VisualizerAPI* vis = nullptr) {
   typename Algebra::Scalar dt = Algebra::fraction(1, 10);
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
@@ -91,49 +96,36 @@ void visualize_trajectory(const typename Algebra::Scalar* force_y, VisualizerAPI
 
   Scalar radius = Algebra::half();
   Scalar mass = Algebra::one();
-
-  //Create target ball
-  // Scalar deg_60 = Algebra::pi() / Algebra::fraction(3, 1);  // even triangle
-  // Scalar dx = Algebra::cos(deg_60) * radius * Algebra::two();
-  // Scalar dy = Algebra::sin(deg_60) * radius * Algebra::two();
   Scalar x = Algebra::zero(), y = Algebra::zero();
-  int ball_id = 0;
-  // for (int column = 1; column <= 3; ++column) 
-  {
-    int column = 1;
-    // Scalar x = rx;
-    // for (int i = 0; i < column; ++i) 
-    {
-      int i = 0;
-      const Geometry* geom = world.create_sphere(radius);
-      RigidBody* body = world.create_rigid_body(mass, geom);
-      body->world_pose().position = Vector3(x, y, Algebra::zero());
-      bodies.push_back(body);
-      b3RobotSimulatorLoadUrdfFileArgs args;
-      args.m_startPosition.setX(Algebra::to_double(x));
-      args.m_startPosition.setY(Algebra::to_double(y));
-      int sphere_id = visualizer->loadURDF(sphere2red, args);
-      visuals.push_back(sphere_id);
-      if (ball_id == TARGET_ID) {
-        b3RobotSimulatorChangeVisualShapeArgs vargs;
-        vargs.m_objectUniqueId = sphere_id;
-        vargs.m_hasRgbaColor = true;
-        vargs.m_rgbaColor = btVector4(0, 0.6, 1, 1);
-        vis->changeVisualShape(vargs);
-      }
-      // ++ball_id;
-      // x += radius * Algebra::two();
-    }
-    // rx = rx - dx;
-    // y = y + dy;
+
+  { 
+    //Create target ball
+    const Geometry* geom = world.create_sphere(radius);
+    RigidBody* body = world.create_rigid_body(mass, geom);
+    body->world_pose().position = Vector3(x, y, Algebra::zero());
+    bodies.push_back(body);
+    b3RobotSimulatorLoadUrdfFileArgs args;
+    args.m_startPosition.setX(Algebra::to_double(x));
+    args.m_startPosition.setY(Algebra::to_double(y));
+    int sphere_id = visualizer->loadURDF(sphere2red, args);
+    visuals.push_back(sphere_id);
+  
+    // change colour
+    b3RobotSimulatorChangeVisualShapeArgs vargs;
+    vargs.m_objectUniqueId = sphere_id;
+    vargs.m_hasRgbaColor = true;
+    vargs.m_rgbaColor = btVector4(0, 0.6, 1, 1);
+    vis->changeVisualShape(vargs);
   }
 
-  // Create white ball
-  Vector3 white = Vector3(Algebra::zero(), -Algebra::two(), Algebra::zero());
-  const Geometry* white_geom = world.create_sphere(radius);
-  RigidBody* white_ball = world.create_rigid_body(mass, white_geom);
-  white_ball->world_pose().position = Vector3(white.x(), white.y(), white.z());
-  bodies.push_back(white_ball);
+  {
+    // Create white ball
+    Vector3 white = Vector3(Algebra::zero(), -Algebra::two(), Algebra::zero());
+    const Geometry* white_geom = world.create_sphere(radius);
+    RigidBody* white_ball = world.create_rigid_body(mass, white_geom);
+    white_ball->world_pose().position = Vector3(white.x(), white.y(), white.z());
+    bodies.push_back(white_ball);
+  }
 
   {
     // visualize white ball
@@ -165,38 +157,25 @@ void visualize_trajectory(const typename Algebra::Scalar* force_y, VisualizerAPI
     vis->changeVisualShape(vargs);
   }
 
+  // Visualization over time
+  double dtd = Algebra::to_double(dt);
   for (int i = 0; i < steps; i++) {
-    visualizer->submitProfileTiming("world.step");
-    white_ball->apply_central_force(Vector3(Algebra::zero(), force_y[i], Algebra::zero()));
-    world.step(dt);
-    visualizer->submitProfileTiming("");
-
-    {
-      double dtd = Algebra::to_double(dt);
-      // update visualization
-      std::this_thread::sleep_for(std::chrono::duration<double>(dtd));
-      for (int b = 0; b < bodies.size(); b++) {
-        const RigidBody* body = bodies[b];
-        int sphere_id = visuals[b];
-        btVector3 base_pos(Algebra::to_double(body->world_pose().position[0]),
-                           Algebra::to_double(body->world_pose().position[1]),
-                           Algebra::to_double(body->world_pose().position[2]));
-        btQuaternion base_orn(
-            Algebra::to_double(Algebra::quat_x(body->world_pose().orientation)),
-            Algebra::to_double(Algebra::quat_y(body->world_pose().orientation)),
-            Algebra::to_double(Algebra::quat_z(body->world_pose().orientation)),
-            Algebra::to_double(
-                Algebra::quat_w(body->world_pose().orientation)));
-        visualizer->resetBasePositionAndOrientation(sphere_id, base_pos,
-                                                    base_orn);
-      }
+    std::this_thread::sleep_for(std::chrono::duration<double>(dtd));
+    for (int b = 0; b < bodies.size(); b++) {
+      const RigidBody* body = bodies[b];
+      btVector3 base_pos(states[i][b][0],
+                          states[i][b][1],
+                          states[i][b][2]);
+      //fix quat. ASSUMING ALL SPHERES
+      btQuaternion base_orn(0.0, 0.0, 0.0, 1.0);
+      visualizer->resetBasePositionAndOrientation(sphere_id, base_pos,
+                                                  base_orn);
     }
   }
 }
 
 
 struct CeresFunctional {
-  // int steps{steps};
 
   template <typename T>
   bool operator()(const T* f, T* e) const {
@@ -204,21 +183,22 @@ struct CeresFunctional {
     typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils,
                                CeresUtils<steps>>
         Utils;
-    *e = rollout<TinyAlgebra<T, Utils>>(f);
+    using DoubleVector3 = typename TinyAlgebra<double, DoubleUtils>::Vector3;
+    DoubleVector3 init_posn(0.0, 0.0, 0.0);
+    std::vector<DoubleVector3> init_state(2, init_posn); //magic number 2 = num_bodies
+    std::vector<std::vector<DoubleVector3>> dummy_states(steps, init_state);
+    *e = rollout<TinyAlgebra<T, Utils>>(f, dummy_states);
     return true;
   }
 };
 
 ceres::AutoDiffCostFunction<CeresFunctional, 1, steps> cost_function(
     new CeresFunctional);
-double* parameters = new double[steps];
-double* gradient = new double[steps];
 
 void grad_ceres(double* force_y, double* cost,
                 double* d_force_y) {
   double const* const* params = &force_y;
-  cost_function.Evaluate(params, cost, &gradient);
-  d_force_y = gradient;
+  cost_function.Evaluate(params, cost, &d_force_y);
 }
 
 int main(int argc, char* argv[]) {
@@ -237,33 +217,43 @@ int main(int argc, char* argv[]) {
 
   visualizer->resetSimulation();
 
-  double init_force_y = 1.;
+  double init_force_y = 3.;
   using DoubleAlgebra = TinyAlgebra<double, DoubleUtils>;
-  
-  {
-    double cost;
-    std::vector<double> d_force_y(steps, 0.0);
-    std::vector<double> force_y(steps, init_force_y);
-    double learning_rate = 1e2;
-    for (int iter = 0; iter < 50; ++iter) {
-      grad_ceres(force_y.data(), &cost, d_force_y.data());
-      printf("Iteration %02d - cost: %.3f \n", iter, cost);
-      
-      for (size_t i = 0; i < steps; i++)
-      {
-        force_y[i] -= learning_rate * d_force_y[i];
-      }
-    }
-    // Print decision variables (force_y)
-    printf("Final force: [");
-    for (auto i: force_y)
-      printf("%.2f, ", i);
-    std::cout<<"]\n";
+  DoubleAlgebra::Vector3 init_posn(0.0, 0.0, 0.0);
+  std::vector<DoubleAlgebra::Vector3> init_state(2, init_posn); //magic number 2 = num_bodies
+  std::vector<std::vector<DoubleAlgebra::Vector3>> states(steps, init_state);
+  double cost;
+  std::vector<double> d_force_y(steps, 0.0);
+  std::vector<double> force_y(steps, init_force_y);
+  double learning_rate = 1e0;
 
-    fflush(stdout);
-    rollout<DoubleAlgebra>(force_y.data());
-    visualize_trajectory<DoubleAlgebra>(force_y.data(), visualizer);
+  // Before optimization
+  printf("ROLLOUT BEFORE OPTIM (see bullet)");
+  rollout<DoubleAlgebra>(force_y.data(), states);
+  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, visualizer);
+
+  for (int iter = 0; iter < 50; ++iter) {
+    grad_ceres(force_y.data(), &cost, d_force_y.data());
+    printf("Iteration %02d - cost: %.3f \n", iter, cost);
+
+    for (size_t i = 0; i < steps; i++)
+    {
+      force_y[i] -= learning_rate * d_force_y[i];
+    }
   }
+  
+  // Print decision variables (force_y)
+  printf("Final force: [");
+  for (auto i: force_y)
+    printf("%.2f, ", i);
+  std::cout<<"]\n";
+
+  fflush(stdout);
+
+  // After optimization
+  printf("ROLLOUT AFTER OPTIM (see bullet)");
+  rollout<DoubleAlgebra>(force_y.data(), states);
+  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, visualizer);
 
   visualizer->disconnect();
   delete visualizer;
