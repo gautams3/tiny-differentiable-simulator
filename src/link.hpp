@@ -98,6 +98,12 @@ struct Link {
         S.bottom[2] = 1.;
         break;
       case JOINT_PRISMATIC_AXIS:
+        if (Algebra::norm(axis) == Algebra::zero()) {
+          fprintf(stderr,
+                  "Error: tried to set zero vector as prismatic joint axis.\n");
+          assert(0);
+          exit(1);
+        }
         S.bottom = axis;
         break;
       case JOINT_REVOLUTE_X:
@@ -110,14 +116,27 @@ struct Link {
         S.top[2] = 1.;
         break;
       case JOINT_REVOLUTE_AXIS:
+        if (Algebra::norm(axis) == Algebra::zero()) {
+          fprintf(stderr,
+                  "Error: tried to set zero vector as revolute joint axis.\n");
+          assert(0);
+          exit(1);
+        }
         S.top = axis;
         break;
       case JOINT_FIXED:
         break;
       default:
         fprintf(stderr,
-                "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
+                "Error: unknown joint type encountered in " __FILE__ ":%i\n",
                 __LINE__);
+    }
+    if (Algebra::norm(S) == Algebra::zero()) {
+      fprintf(stderr,
+              "Error: subspace matrix S is zero after setting joint type on "
+              "link.\n");
+      assert(0);
+      exit(1);
     }
   }
 
@@ -149,7 +168,7 @@ struct Link {
         X_J->rotation = Algebra::rotation_z_matrix(q);
         break;
       case JOINT_REVOLUTE_AXIS: {
-        const Vector3 &axis = S.bottom;
+        const Vector3 &axis = S.top;
         const auto quat = Algebra::axis_angle_quaternion(axis, q);
         X_J->rotation = Algebra::quat_to_matrix(quat);
         break;

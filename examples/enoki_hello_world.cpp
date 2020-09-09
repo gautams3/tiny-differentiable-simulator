@@ -17,8 +17,8 @@ namespace plt = matplotlibcpp;
 #include "base.hpp"
 #include "dynamics/forward_dynamics.hpp"
 #include "dynamics/integrator.hpp"
+#include "dynamics/jacobian.hpp"
 #include "dynamics/kinematics.hpp"
-
 #include "math/tiny/tiny_algebra.hpp"
 #include "math/tiny/tiny_double_utils.h"
 #include "multi_body.hpp"
@@ -135,7 +135,6 @@ void visualize_trajectory(const std::vector<typename Algebra::VectorX> &states,
   }
 }
 
-
 #if USE_RBDL
 template <typename Algebra>
 RigidBodyDynamics::Math::Vector3d to_rbdl(const typename Algebra::Vector3 &v) {
@@ -200,6 +199,10 @@ RigidBodyDynamics::Model to_rbdl(const MultiBody<Algebra> &mb) {
         break;
     }
     unsigned int parent_id = link.parent_index < 0 ? 0u : link.parent_index + 1;
+    if (mb.is_floating()) {
+      // TODO fix this
+      parent_id += 2;
+    }
     model.AddBody(parent_id, to_rbdl<Algebra>(link.X_T), joint, body);
   }
   return model;
@@ -270,6 +273,44 @@ bool is_equal(const typename Algebra::Matrix3 &a,
 }
 
 template <typename Algebra>
+bool is_equal(const typename Algebra::MatrixX &a,
+              const RigidBodyDynamics::Math::MatrixNd &b) {
+  for (int i = 0; i < Algebra::num_rows(a); ++i) {
+    for (int j = 0; j < Algebra::num_cols(a); ++j) {
+      if (std::abs(Algebra::to_double(a(i, j)) - b(i, j)) > ERROR_TOLERANCE) {
+        std::cout << "a[" << i << "," << j
+                  << "] = " << Algebra::to_double(a(i, j));
+        std::cout << "\tb[" << i << "," << j << "] = " << b(i, j);
+        std::cout << "\terror = "
+                  << std::abs(Algebra::to_double(a(i, j)) - b(i, j))
+                  << std::endl;
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+template <typename Algebra>
+bool is_equal(const typename Algebra::Matrix3X &a,
+              const RigidBodyDynamics::Math::MatrixNd &b) {
+  for (int i = 0; i < Algebra::num_rows(a); ++i) {
+    for (int j = 0; j < Algebra::num_cols(a); ++j) {
+      if (std::abs(Algebra::to_double(a(i, j)) - b(i, j)) > ERROR_TOLERANCE) {
+        std::cout << "a[" << i << "," << j
+                  << "] = " << Algebra::to_double(a(i, j));
+        std::cout << "\tb[" << i << "," << j << "] = " << b(i, j);
+        std::cout << "\terror = "
+                  << std::abs(Algebra::to_double(a(i, j)) - b(i, j))
+                  << std::endl;
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+template <typename Algebra>
 bool is_equal(const Transform<Algebra> &a,
               const RigidBodyDynamics::Math::SpatialTransform &b) {
   return is_equal<Algebra>(a.translation, b.r) &&
@@ -298,62 +339,66 @@ bool is_equal(const ArticulatedBodyInertia<Algebra> &a,
 template <typename Algebra>
 bool is_equal(const MultiBody<Algebra> &tds,
               const RigidBodyDynamics::Model &rbdl) {
+  // floating-base models in RBDL have a TranslationXYZ and a spherical joint
+  // first
+  std::size_t id_offset = tds.is_floating() ? 3 : 1;
   for (std::size_t j = 0; j < tds.size(); ++j) {
-    if (!is_equal<Algebra>(tds[j].S, rbdl.S[j + 1])) {
+    std::size_t rbdl_j = j + id_offset;
+    if (!is_equal<Algebra>(tds[j].S, rbdl.S[rbdl_j])) {
       fprintf(stderr, "Mismatch in S at link %i.\n", static_cast<int>(j));
       Algebra::print("TDS:  ", tds[j].S);
-      std::cerr << "RBDL: " << rbdl.S[j + 1].transpose() << std::endl;
+      std::cerr << "RBDL: " << rbdl.S[rbdl_j].transpose() << std::endl;
       return false;
     }
-    if (!is_equal<Algebra>(tds[j].v, rbdl.v[j + 1])) {
-      fprintf(stderr, "Mismatch in v at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds[j].v);
-      std::cerr << "RBDL: " << rbdl.v[j + 1].transpose() << std::endl;
-      return false;
-    }
-    if (!is_equal<Algebra>(tds[j].a, rbdl.a[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].a, rbdl.a[rbdl_j])) {
       fprintf(stderr, "Mismatch in a at link %i.\n", static_cast<int>(j));
       Algebra::print("TDS:  ", tds[j].a);
-      std::cerr << "RBDL: " << rbdl.a[j + 1].transpose() << std::endl;
-      return false;
-    }
-    if (!is_equal<Algebra>(tds[j].c, rbdl.c[j + 1])) {
-      fprintf(stderr, "Mismatch in c at link %i.\n", static_cast<int>(j));
-      Algebra::print("TDS:  ", tds[j].c);
-      std::cerr << "RBDL: " << rbdl.c[j + 1].transpose() << std::endl;
+      std::cerr << "RBDL: " << rbdl.a[rbdl_j].transpose() << std::endl;
       // return false;
     }
-    if (!is_equal<Algebra>(tds[j].U, rbdl.U[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].v, rbdl.v[rbdl_j])) {
+      fprintf(stderr, "Mismatch in v at link %i.\n", static_cast<int>(j));
+      Algebra::print("TDS:  ", tds[j].v);
+      std::cerr << "RBDL: " << rbdl.v[rbdl_j].transpose() << std::endl;
+      // return false;
+    }
+    if (!is_equal<Algebra>(tds[j].c, rbdl.c[rbdl_j])) {
+      fprintf(stderr, "Mismatch in c at link %i.\n", static_cast<int>(j));
+      Algebra::print("TDS:  ", tds[j].c);
+      std::cerr << "RBDL: " << rbdl.c[rbdl_j].transpose() << std::endl;
+      // return false;
+    }
+    if (!is_equal<Algebra>(tds[j].U, rbdl.U[rbdl_j])) {
       fprintf(stderr, "Mismatch in U at link %i.\n", static_cast<int>(j));
       Algebra::print("TDS:  ", tds[j].U);
-      std::cerr << "RBDL: " << rbdl.U[j + 1].transpose() << std::endl;
-      return false;
+      std::cerr << "RBDL: " << rbdl.U[rbdl_j].transpose() << std::endl;
+      // return false;
     }
-    if (!is_equal<Algebra>(tds[j].pA, rbdl.pA[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].pA, rbdl.pA[rbdl_j])) {
       fprintf(stderr, "Mismatch in pA at link %i.\n", static_cast<int>(j));
       Algebra::print("TDS:  ", tds[j].pA);
-      std::cerr << "RBDL: " << rbdl.pA[j + 1].transpose() << std::endl;
-      return false;
+      std::cerr << "RBDL: " << rbdl.pA[rbdl_j].transpose() << std::endl;
+      // return false;
     }
-    if (!is_equal<Algebra>(tds[j].abi, rbdl.IA[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].abi, rbdl.IA[rbdl_j])) {
       fprintf(stderr, "Mismatch in ABI at link %i.\n", static_cast<int>(j));
       Algebra::print("TDS:  ", tds[j].abi);
-      std::cerr << "RBDL:\n" << rbdl.IA[j + 1] << std::endl;
+      std::cerr << "RBDL:\n" << rbdl.IA[rbdl_j] << std::endl;
       return false;
     }
-    if (!is_equal<Algebra>(tds[j].X_world, rbdl.X_base[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].X_world, rbdl.X_base[rbdl_j])) {
       fprintf(stderr, "Mismatch in X_base (X_world) at link %i.\n",
               static_cast<int>(j));
       Algebra::print("TDS:  ", tds[j].X_world);
-      std::cerr << "RBDL:\n" << rbdl.X_base[j + 1] << std::endl;
-      return false;
+      std::cerr << "RBDL:\n" << rbdl.X_base[rbdl_j] << std::endl;
+      // return false;
     }
-    if (!is_equal<Algebra>(tds[j].X_parent, rbdl.X_lambda[j + 1])) {
+    if (!is_equal<Algebra>(tds[j].X_parent, rbdl.X_lambda[rbdl_j])) {
       fprintf(stderr, "Mismatch in X_lambda (X_parent) at link %i.\n",
               static_cast<int>(j));
       Algebra::print("TDS:  ", tds[j].X_parent);
-      std::cerr << "RBDL:\n" << rbdl.X_lambda[j + 1] << std::endl;
-      return false;
+      std::cerr << "RBDL:\n" << rbdl.X_lambda[rbdl_j] << std::endl;
+      // return false;
     }
   }
   return true;
@@ -410,10 +455,9 @@ bool is_equal(const MultiBody<Algebra> &tds,
 int main(int argc, char **argv) {
   tds::activate_nan_trap();
 
-  
   {
     using Algebra = TinyAlgebra<double, DoubleUtils>;
-    
+
     using Tf = Transform<Algebra>;
     using Vector3 = Algebra::Vector3;
     using VectorX = typename Algebra::VectorX;
@@ -428,10 +472,12 @@ int main(int argc, char **argv) {
 
     {
       std::string urdf_filename;
+      bool is_floating = false;
       FileUtils::find_file("swimmer/swimmer05/swimmer05.urdf", urdf_filename);
       FileUtils::find_file("pendulum5.urdf", urdf_filename);
-      FileUtils::find_file("sphere8cube.urdf", urdf_filename);
-      bool is_floating = true;
+      // FileUtils::find_file("sphere8cube.urdf", urdf_filename);
+      // FileUtils::find_file("laikago/laikago.urdf", urdf_filename);
+      // bool is_floating = true;
       mb = cache.construct(urdf_filename, world, false, is_floating);
 
       // mb->base_X_world().translation = Algebra::unit3_z();
@@ -535,20 +581,26 @@ int main(int argc, char **argv) {
           rbdl_tau[j] = Algebra::to_double(mb->tau(j));
         }
         forward_dynamics(*mb, gravity);
-        // for (auto &link : mb) {
-        //   Algebra::print(
-        //       ("link[" + std::to_string(link.q_index) + "].D").c_str(),
-        //       link.D);
-        //   Algebra::print(
-        //       ("link[" + std::to_string(link.q_index) + "].U").c_str(),
-        //       link.U);
-        //   Algebra::print(
-        //       ("link[" + std::to_string(link.q_index) + "].S").c_str(),
-        //       link.S);
-        //   Algebra::print(
-        //       ("link[" + std::to_string(link.q_index) + "].u").c_str(),
-        //       link.u);
-        // }
+        for (auto &link : *mb) {
+          // Algebra::print(
+          //     ("link[" + std::to_string(link.q_index) + "].D").c_str(),
+          //     link.D);
+          // Algebra::print(
+          //     ("link[" + std::to_string(link.q_index) + "].U").c_str(),
+          //     link.U);
+          // Algebra::print(
+          //     ("link[" + std::to_string(link.q_index) + "].S").c_str(),
+          //     link.S);
+          // Algebra::print(
+          //     ("link[" + std::to_string(link.q_index) + "].u").c_str(),
+          //     link.u);
+          // Algebra::print(
+          //     ("TDS link[" + std::to_string(link.q_index) + "].X_world")
+          //         .c_str(),
+          //     link.X_world);
+          // std::cout << "RBDL link[" << link.q_index << "].X_base\n"
+          //           << rbdl_model.X_base[link.q_index + 1] << std::endl;
+        }
         mb->clear_forces();
         integrate_euler(*mb, dt);
 
@@ -586,9 +638,33 @@ int main(int argc, char **argv) {
                   << "   qdd:  " << rbdl_qdd.transpose() << std::endl;
 
         if (!is_equal<Algebra>(*mb, rbdl_model)) {
+          assert(0);
           exit(1);
         }
         if (!is_equal<Algebra>(*mb, rbdl_q, rbdl_qd, rbdl_qdd)) {
+          exit(1);
+        }
+
+        // compare Jacobians
+        tds::forward_kinematics(*mb);
+        int jac_link_id = 2;
+        Algebra::Vector3 world_point(1., 2., 3.);
+        auto tds_jac = tds::point_jacobian(*mb, jac_link_id, world_point);
+        RigidBodyDynamics::Math::MatrixNd rbdl_jac(Algebra::num_rows(tds_jac),
+                                                   Algebra::num_cols(tds_jac));
+        rbdl_jac.setZero();
+        // left-associative inverse transform of body_to_world transform
+        // (rotation matrix is not inverted)
+        Transform<Algebra> link_tf = (*mb)[jac_link_id].X_world;
+        Algebra::Vector3 body_point =
+            link_tf.rotation * (world_point - link_tf.translation);
+        RigidBodyDynamics::CalcPointJacobian(
+            rbdl_model, rbdl_q, jac_link_id + 1, to_rbdl<Algebra>(body_point),
+            rbdl_jac);
+
+        Algebra::print("TDS Jacobian", tds_jac);
+        std::cout << "RBDL Jacobian:\n" << rbdl_jac << std::endl;
+        if (!is_equal<Algebra>(tds_jac, rbdl_jac)) {
           exit(1);
         }
       }
@@ -673,7 +749,7 @@ int main(int argc, char **argv) {
 
   {
     using Algebra = TinyAlgebra<double, DoubleUtils>;
-    
+
     using Tf = Transform<Algebra>;
     using Vector3 = Algebra::Vector3;
     using VectorX = typename Algebra::VectorX;
@@ -713,7 +789,4 @@ int main(int argc, char **argv) {
   }
 
   return 0;
-
-
-
 }

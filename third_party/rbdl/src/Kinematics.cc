@@ -261,6 +261,8 @@ RBDL_DLLAPI void CalcPointJacobian (
           point_position, 
           false));
 
+  // std::cout << "RBDL point_trans " << point_trans.r.transpose() << std::endl;
+
   assert (G.rows() == 3 && G.cols() == model.qdot_size );
 
   unsigned int reference_body_id = body_id;

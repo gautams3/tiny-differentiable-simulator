@@ -36,10 +36,10 @@ typename Algebra::Matrix3X point_jacobian(
   point_tf.translation = world_point;
   if (mb.is_floating()) {
     // convert start point in world coordinates to base frame
-    const Vector3 base_point = world_point - base_X_world.translation;
-    // base_X_world.translation - world_point;
-        // mb.empty() ? base_X_world.apply_inverse(world_point)
-        //            : links_X_world[link_index].apply_inverse(world_point);
+    const Vector3 base_point =  // world_point - base_X_world.translation;
+        // base_X_world.translation - world_point;
+        mb.empty() ? base_X_world.apply_inverse(world_point)
+                   : links_X_world[link_index].apply_inverse(world_point);
     // see (Eq. 2.238) in
     // https://ethz.ch/content/dam/ethz/special-interest/mavt/robotics-n-intelligent-systems/rsl-dam/documents/RobotDynamics2016/FloatingBaseKinematics.pdf
     Matrix3 cr = Algebra::cross_matrix(base_point);
@@ -107,9 +107,10 @@ typename Algebra::Matrix3X point_jacobian_fd(
   //   return jac;
   // }
   // convert start point in world coordinates to base frame
-  const Vector3 base_point = //start_point - base_X_world.translation;
-  // start_point - (mb.empty() ? base_X_world.translation
-  //                 : links_X_world[link_index].translation);
+  const Vector3
+      base_point =  // start_point - base_X_world.translation;
+                    // start_point - (mb.empty() ? base_X_world.translation
+                    //                 : links_X_world[link_index].translation);
       mb.empty() ? base_X_world.apply_inverse(start_point)
                  : links_X_world[link_index].apply_inverse(start_point);
   Vector3 world_point;
@@ -146,6 +147,14 @@ typename Algebra::Matrix3X point_jacobian_fd(
   }
 
   return jac;
+}
+
+template <typename Algebra>
+typename Algebra::Matrix3X point_jacobian_fd(
+    const MultiBody<Algebra> &mb, int link_index,
+    const typename Algebra::Vector3 &start_point,
+    const typename Algebra::Scalar &eps = Algebra::fraction(1, 1000)) {
+  return point_jacobian_fd(mb, mb.q(), link_index, start_point, eps);
 }
 
 }  // namespace tds
