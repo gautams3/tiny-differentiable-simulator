@@ -8,18 +8,18 @@
 #ifndef RBDL_CONFIG_H
 #define RBDL_CONFIG_H
 
-#define RBDL_API_VERSION (@RBDL_VERSION_MAJOR@ << 16) + (@RBDL_VERSION_MINOR@ << 8) + @RBDL_VERSION_PATCH@
+#define RBDL_API_VERSION (2 << 16) + (6 << 8) + 0
 
-#cmakedefine RBDL_USE_SIMPLE_MATH
-#cmakedefine RBDL_ENABLE_LOGGING
-#cmakedefine RBDL_BUILD_REVISION "@RBDL_BUILD_REVISION@"
-#cmakedefine RBDL_BUILD_TYPE "@RBDL_BUILD_TYPE@"
-#cmakedefine RBDL_BUILD_BRANCH "@RBDL_BUILD_BRANCH@"
-#cmakedefine RBDL_BUILD_ADDON_LUAMODEL
-#cmakedefine RBDL_BUILD_ADDON_URDFREADER
-#cmakedefine RBDL_BUILD_STATIC
-#cmakedefine RBDL_USE_ROS_URDF_LIBRARY
-#cmakedefine RBDL_BUILD_ADDON_MUSCLE_FITTING
+/* #undef RBDL_USE_SIMPLE_MATH */
+/* #undef RBDL_ENABLE_LOGGING */
+#define RBDL_BUILD_REVISION "unknown"
+#define RBDL_BUILD_TYPE "unknown"
+#define RBDL_BUILD_BRANCH "unknown"
+/* #undef RBDL_BUILD_ADDON_LUAMODEL */
+/* #undef RBDL_BUILD_ADDON_URDFREADER */
+/* #undef RBDL_BUILD_STATIC */
+/* #undef RBDL_USE_ROS_URDF_LIBRARY */
+/* #undef RBDL_BUILD_ADDON_MUSCLE_FITTING */
 
 /* compatibility defines */
 #ifdef _WIN32

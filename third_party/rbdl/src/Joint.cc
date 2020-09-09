@@ -14,13 +14,6 @@
 #include "rbdl/Model.h"
 #include "rbdl/Joint.h"
 
-#ifdef _WIN32
-void sincos(double val, double* s, double* c)
-{
-  *s = sin(val);
-  *c = cos(val);
-}
-#endif
 namespace RigidBodyDynamics {
 
 using namespace Math;

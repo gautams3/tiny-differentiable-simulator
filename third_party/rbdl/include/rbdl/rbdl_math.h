@@ -10,6 +10,10 @@
 
 #include "rbdl/rbdl_config.h"
 
+#ifdef __APPLE__
+#define sincos __sincos
+#endif
+
 #ifdef RBDL_USE_SIMPLE_MATH
 
 #include "rbdl/SimpleMath/SimpleMath.h"
