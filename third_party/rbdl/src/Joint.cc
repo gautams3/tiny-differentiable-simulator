@@ -13,6 +13,15 @@
 
 #include "rbdl/Model.h"
 #include "rbdl/Joint.h"
+#ifdef WIN32
+void sincos(double angle, double* s, double* c)
+{
+    if (s)
+        *s = ::sin(angle);
+    if (c)
+        *c = ::cos(angle);
+}
+#endif //WIN32
 
 namespace RigidBodyDynamics {
 

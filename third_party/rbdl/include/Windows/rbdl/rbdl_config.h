@@ -15,6 +15,7 @@
 /* #undef RBDL_ENABLE_LOGGING */
 #define RBDL_BUILD_COMMIT "unknown"
 #define RBDL_BUILD_TYPE "unknown"
+#define RBDL_BUILD_REVISION "unknown"
 #define RBDL_BUILD_BRANCH "unknown"
 #define RBDL_BUILD_COMPILER_ID "MSVC"
 #define RBDL_BUILD_COMPILER_VERSION "19.27.29111.0"
@@ -27,7 +28,9 @@
 /* compatibility defines */
 #ifdef _WIN32
 #define __func__ __FUNCTION__
+#ifndef M_PI
 #define M_PI 3.1415926535897932384
+#endif //M_PI
 #endif
 
 // Handle portable symbol export.
