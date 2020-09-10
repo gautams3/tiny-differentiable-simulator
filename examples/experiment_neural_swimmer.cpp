@@ -15,13 +15,14 @@
 #include <ceres/loss_function.h>
 #include <ceres/types.h>
 
-#include <cassert>
+#include <cxxopts.hpp>
 
 #include "math/tiny/tiny_algebra.hpp"
 #define NEURAL_SIM 1
 
 #include <fenv.h>
 
+#include <cassert>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -399,9 +400,17 @@ void WriteRollout(const std::string &output_prefix,
 }
 
 int main(int argc, char *argv[]) {
+  // Add options.
+  cxxopts::Options options("experiment_neural_swimmer",
+                           "Neural swimmer experiment.");
+  options.add_options()                                               //
+      ("dataset", "Path to npy file", cxxopts::value<std::string>())  //
+      ("urdf", "Path to model URDF", cxxopts::value<std::string>());
+  auto parsed_args = options.parse(argc, argv);
+
   // Filenames.
-  const std::string urdf_filename = "swimmer/swimmer05/swimmer05.urdf";
-  const std::string dataset_filename = "swimmer/swimmer05.npy";
+  const std::string urdf_filename = parsed_args["urdf"].as<std::string>();
+  const std::string dataset_filename = parsed_args["dataset"].as<std::string>();
 
   // Write some sanity check rollout.
   const std::vector<double> all_zero_params(kParamDim, 0.0);

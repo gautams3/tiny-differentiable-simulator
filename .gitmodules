@@ -1,9 +1,6 @@
 [submodule "third_party/matplotlib-cpp"]
 	path = third_party/matplotlib-cpp
 	url = https://github.com/lava/matplotlib-cpp
-[submodule "third_party/cxxopts"]
-	path = third_party/cxxopts
-	url = https://github.com/jarro2783/cxxopts
 [submodule "third_party/HighFive"]
 	path = third_party/HighFive
 	url = https://github.com/BlueBrain/HighFive
