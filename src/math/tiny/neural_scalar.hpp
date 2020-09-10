@@ -1,12 +1,15 @@
-#ifndef NEURAL_SCALAR_H
-#define NEURAL_SCALAR_H
+#ifndef NEURAL_SCALAR_HPP
+#define NEURAL_SCALAR_HPP
 
 #include <iostream>
 #include <map>
 #include <sstream>
 #include <thread>
 
-#include "../tiny_neural_network.h"
+#include "../neural_network.hpp"
+#include "tiny_algebra.hpp"
+
+namespace tds {
 
 /**
  * Implements a "neural network" scalar type that accepts input connections from
@@ -15,23 +18,22 @@
  * scalar, or computed solely by the neural network ignoring the scalar's stored
  * value.
  */
-template <typename Scalar, typename Utils>
+template <typename Algebra>
 class NeuralScalar {
  public:
-  typedef ::TinyNeuralNetwork<Scalar, Utils> NeuralNetworkType;
-  typedef Scalar InnerScalarType;
-  typedef Utils InnerUtilsType;
+  using NeuralNetworkType = tds::NeuralNetwork<Algebra>;
+  using InnerAlgebra = Algebra;
 
  private:
   /**
    * Value assigned from outside.
    */
-  Scalar value_{Utils::zero()};
+  typename Algebra::Scalar value_{Algebra::zero()};
 
   /**
    * Cached value from last evaluation.
    */
-  mutable Scalar cache_;
+  mutable typename Algebra::Scalar cache_;
 
   /**
    * Whether evaluation is necessary, or the cached value can be returned.
@@ -67,7 +69,7 @@ class NeuralScalar {
     std::vector<std::string> output_names;
     NeuralNetworkType net;
 
-    std::vector<Scalar> output_cache;
+    std::vector<typename Algebra::Scalar> output_cache;
     mutable bool is_dirty{true};
   };
 
@@ -93,8 +95,8 @@ class NeuralScalar {
     return data;
   }
 
-  static const Scalar& evaluate_network_(int network_id,
-                                         std::size_t output_id) {
+  static const typename Algebra::Scalar& evaluate_network_(
+      int network_id, std::size_t output_id) {
     assert(network_id >= 0);
 
     auto& data = get_data_();
@@ -104,7 +106,7 @@ class NeuralScalar {
       blueprint.is_dirty = true;
     }
     if (blueprint.is_dirty) {
-      std::vector<Scalar> input(blueprint.input_names.size());
+      std::vector<typename Algebra::Scalar> input(blueprint.input_names.size());
       for (std::size_t i = 0; i < blueprint.input_names.size(); ++i) {
         auto input_itr = data.named_scalars.find(blueprint.input_names[i]);
         if (input_itr == data.named_scalars.end()) {
@@ -137,7 +139,9 @@ class NeuralScalar {
 
   NeuralScalar() = default;
 
-  inline NeuralScalar(const Scalar& value) : value_(value) { is_dirty_ = true; }
+  inline NeuralScalar(const typename Algebra::Scalar& value) : value_(value) {
+    is_dirty_ = true;
+  }
 
   // NeuralScalar(const std::vector<NeuralScalar*>& inputs,
   //              bool use_input_bias = true)
@@ -155,7 +159,7 @@ class NeuralScalar {
     is_dirty_ = true;
     return *this;
   }
-  NeuralScalar& operator=(const Scalar& rhs) {
+  NeuralScalar& operator=(const typename Algebra::Scalar& rhs) {
     value_ = rhs;
     is_dirty_ = true;
     return *this;
@@ -247,7 +251,7 @@ class NeuralScalar {
     // }
   }
 
-  const Scalar& evaluate() const {
+  const typename Algebra::Scalar& evaluate() const {
     if (!is_dirty_) {
       return cache_;
     }
@@ -256,7 +260,8 @@ class NeuralScalar {
       cache_ = value_;
       return value_;
     }
-    Scalar net_output = evaluate_network_(blueprint_id_, output_id_);
+    typename Algebra::Scalar net_output =
+        evaluate_network_(blueprint_id_, output_id_);
     cache_ = is_residual ? value_ + net_output : net_output;
     is_dirty_ = false;
     return cache_;
@@ -323,7 +328,8 @@ class NeuralScalar {
     return total;
   }
 
-  static void set_blueprint_parameters(const std::vector<Scalar>& params) {
+  static void set_blueprint_parameters(
+      const std::vector<typename Algebra::Scalar>& params) {
     int provided = static_cast<int>(params.size());
     int total = num_blueprint_parameters();
     if (provided != total) {
@@ -339,8 +345,8 @@ class NeuralScalar {
     for (auto& blueprint : blueprints) {
       int num_net = blueprint.net.num_parameters();
       next_index = index + num_net;
-      std::vector<Scalar> net_params(params.begin() + index,
-                                     params.begin() + next_index);
+      std::vector<typename Algebra::Scalar> net_params(
+          params.begin() + index, params.begin() + next_index);
       blueprint.net.set_parameters(net_params);
       // #if DEBUG
       //       printf("Assigned %d parameters to network of scalar \"%s\".\n",
@@ -461,9 +467,9 @@ class NeuralScalar {
   }
 };
 
-template <typename Scalar, typename Utils>
+template <typename Algebra>
 struct NeuralScalarUtils {
-  typedef ::NeuralScalar<Scalar, Utils> NeuralScalar;
+  using NeuralScalar = typename ::tds::NeuralScalar<Algebra>;
 
   template <class T>
   static NeuralScalar fraction(T, T) = delete;  // C++11
@@ -473,43 +479,43 @@ struct NeuralScalarUtils {
   }
 
   static NeuralScalar cos1(const NeuralScalar& v) {
-    return Utils::cos1(v.evaluate());
+    return Algebra::cos(v.evaluate());
   }
   static NeuralScalar sin1(const NeuralScalar& v) {
-    return Utils::sin1(v.evaluate());
+    return Algebra::sin(v.evaluate());
   }
   static NeuralScalar sqrt1(const NeuralScalar& v) {
-    return Utils::sqrt1(v.evaluate());
+    return Algebra::sqrt(v.evaluate());
   }
   static NeuralScalar atan2(const NeuralScalar& dy, const NeuralScalar& dx) {
-    return Utils::atan2(dy.evaluate(), dx.evaluate());
+    return Algebra::atan2(dy.evaluate(), dx.evaluate());
   }
   static NeuralScalar asin(const NeuralScalar& v) {
-    return Utils::asin(v.evaluate());
+    return Algebra::asin(v.evaluate());
   }
   static NeuralScalar copysign(const NeuralScalar& x, const NeuralScalar& y) {
-    return Utils::copysign(x.evaluate(), y.evaluate());
+    return Algebra::copysign(x.evaluate(), y.evaluate());
   }
   static NeuralScalar abs(const NeuralScalar& v) {
-    return Utils::abs(v.evaluate());
+    return Algebra::abs(v.evaluate());
   }
   static NeuralScalar pow(const NeuralScalar& a, const NeuralScalar& b) {
-    return Utils::pow(a.evaluate(), b.evaluate());
+    return Algebra::pow(a.evaluate(), b.evaluate());
   }
   static NeuralScalar exp(const NeuralScalar& v) {
-    return Utils::exp(v.evaluate());
+    return Algebra::exp(v.evaluate());
   }
   static NeuralScalar log(const NeuralScalar& v) {
-    return Utils::log(v.evaluate());
+    return Algebra::log(v.evaluate());
   }
   static NeuralScalar tanh(const NeuralScalar& v) {
-    return Utils::tanh(v.evaluate());
+    return Algebra::tanh(v.evaluate());
   }
   static NeuralScalar min1(const NeuralScalar& a, const NeuralScalar& b) {
-    return Utils::min1(a.evaluate(), b.evaluate());
+    return Algebra::min(a.evaluate(), b.evaluate());
   }
   static NeuralScalar max1(const NeuralScalar& a, const NeuralScalar& b) {
-    return Utils::max1(a.evaluate(), b.evaluate());
+    return Algebra::max(a.evaluate(), b.evaluate());
   }
 
   static NeuralScalar zero() { return scalar_from_double(0.); }
@@ -521,14 +527,14 @@ struct NeuralScalarUtils {
   static NeuralScalar half_pi() { return scalar_from_double(M_PI / 2.); }
 
   static double getDouble(const NeuralScalar& v) {
-    return Utils::getDouble(v.evaluate());
+    return Algebra::to_double(v.evaluate());
   }
   static inline NeuralScalar scalar_from_double(double value) {
-    return NeuralScalar(Scalar(value));
+    return NeuralScalar(Algebra::from_double(value));
   }
 
   static NeuralScalar scalar_from_string(const std::string& txt) {
-    return NeuralScalar(Utils::scalar_from_string(txt));
+    return NeuralScalar(Algebra::scalar_from_string(txt));
   }
 
   template <class T>
@@ -544,35 +550,46 @@ struct NeuralScalarUtils {
       exit(0);
     }
   }
-
-  static inline std::vector<NeuralScalar> to_neural(
-      const std::vector<Scalar>& values) {
-    std::vector<NeuralScalar> output(values.begin(), values.end());
-    return output;
-  }
-  static inline std::vector<Scalar> from_neural(
-      const std::vector<NeuralScalar>& values) {
-    std::vector<Scalar> output(values.size());
-    for (std::size_t i = 0; i < values.size(); ++i) {
-      output[i] = values[i].evaluate();
-    }
-    return output;
-  }
 };
 
-template <typename Scalar, typename Utils>
-struct is_neural_scalar {
+template <typename Algebra>
+using NeuralAlgebra =
+    TinyAlgebra<NeuralScalar<Algebra>, NeuralScalarUtils<Algebra>>;
+
+template <typename Algebra>
+struct is_neural_algebra {
   static constexpr bool value = false;
 };
-template <typename Scalar, typename Utils>
-struct is_neural_scalar<NeuralScalar<Scalar, Utils>,
-                        NeuralScalarUtils<Scalar, Utils>> {
+template <typename Algebra>
+struct is_neural_algebra<NeuralAlgebra<Algebra>> {
   static constexpr bool value = true;
 };
+
+template <typename Algebra>
+inline std::vector<typename Algebra::Scalar> to_neural(
+    const std::vector<typename Algebra::Scalar::InnerAlgebra::Scalar>& values) {
+  static_assert(is_neural_algebra<Algebra>::value, "");
+  std::vector<typename Algebra::Scalar> output(values.begin(), values.end());
+  return output;
+}
+
+template <typename Algebra>
+inline std::vector<typename Algebra::Scalar::InnerAlgebra::Scalar> from_neural(
+    const std::vector<typename Algebra::Scalar>& values) {
+  static_assert(is_neural_algebra<Algebra>::value, "");
+  std::vector<typename Algebra::Scalar::InnerAlgebra::Scalar> output(
+      values.size());
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    output[i] = values[i].evaluate();
+  }
+  return output;
+}
 
 #define NEURAL_ASSIGN(var, name)                                      \
   if constexpr (is_neural_scalar<TinyScalar, TinyConstants>::value) { \
     var.assign(name);                                                 \
   }
 
-#endif  // NEURAL_SCALAR_H
+}  // namespace tds
+
+#endif  // NEURAL_SCALAR_HPP

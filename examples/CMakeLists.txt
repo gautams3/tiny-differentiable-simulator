@@ -264,7 +264,7 @@ if (tinyxml2_FOUND)
 
 if (Ceres_FOUND)
 
-if (DISABLED) #tinyxml2_FOUND)
+if (tinyxml2_FOUND)
   include_directories(/usr/include/python3.8)
   add_executable(experiment_neural_swimmer experiment_neural_swimmer.cpp ${TDS_HDRS})
   target_compile_options(experiment_neural_swimmer PRIVATE

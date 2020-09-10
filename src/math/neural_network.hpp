@@ -20,11 +20,13 @@
 #include <cassert>
 #include <cmath>
 #include <fstream>
+#include <iostream>
 #include <random>
 #include <vector>
-#include <iostream>
 
-enum TinyNeuralNetworkActivation {
+namespace tds {
+
+enum NeuralNetworkActivation {
   NN_ACT_IDENTITY = -1,
   NN_ACT_TANH,
   NN_ACT_SIN,
@@ -35,7 +37,7 @@ enum TinyNeuralNetworkActivation {
   NN_ACT_SOFTSIGN
 };
 
-enum TinyNeuralNetworkInitialization {
+enum NeuralNetworkInitialization {
   NN_INIT_ZERO = -1,
   NN_INIT_XAVIER = 0,  // good for tanh activations
   NN_INIT_HE,          // good for sigmoid activations
@@ -45,22 +47,21 @@ enum TinyNeuralNetworkInitialization {
  * Implements a fully-connected neural network consisting of linear layers with
  * weights and optional biases to be stored externally.
  */
-class TinyNeuralNetworkSpecification {
+class NeuralNetworkSpecification {
  protected:
-  std::vector<TinyNeuralNetworkActivation> activations_;
+  std::vector<NeuralNetworkActivation> activations_;
   std::vector<int> layers_{std::vector<int>{0}};
   std::vector<bool> use_bias_{true};
 
  public:
-  explicit TinyNeuralNetworkSpecification(int input_dim = 0,
-                                          bool use_input_bias = true) {
+  explicit NeuralNetworkSpecification(int input_dim = 0,
+                                      bool use_input_bias = true) {
     layers_[0] = input_dim;
     use_bias_[0] = use_input_bias;
   }
-  TinyNeuralNetworkSpecification(int input_dim,
-                                 const std::vector<int>& layer_sizes,
-                                 TinyNeuralNetworkActivation activation,
-                                 bool learn_bias = true) {
+  NeuralNetworkSpecification(int input_dim, const std::vector<int>& layer_sizes,
+                             NeuralNetworkActivation activation,
+                             bool learn_bias = true) {
     layers_[0] = input_dim;
     for (int size : layer_sizes) {
       add_linear_layer(activation, size, learn_bias);
@@ -69,7 +70,7 @@ class TinyNeuralNetworkSpecification {
 
   void set_input_dim(int dim) { layers_[0] = dim; }
 
-  void add_linear_layer(TinyNeuralNetworkActivation activation, int units,
+  void add_linear_layer(NeuralNetworkActivation activation, int units,
                         bool learn_bias = true) {
     activations_.push_back(activation);
     layers_.push_back(units);
@@ -97,10 +98,11 @@ class TinyNeuralNetworkSpecification {
   int num_parameters() const { return num_weights() + num_biases(); }
   int num_layers() const { return static_cast<int>(layers_.size()); }
 
-  template <typename TinyScalar, typename TinyConstants>
-  static void print_states(const std::vector<TinyScalar>& numbers) {
+  template <typename Algebra>
+  static void print_states(
+      const std::vector<typename Algebra::Scalar>& numbers) {
     for (const auto& n : numbers) {
-      printf("%.2f ", TinyConstants::getDouble(n));
+      printf("%.2f ", Algebra::from_double(n));
     }
     printf("\n");
   }
@@ -108,12 +110,13 @@ class TinyNeuralNetworkSpecification {
   /**
    * Initializes the weights and biases using the given method.
    */
-  template <typename TinyScalar, typename TinyConstants>
+  template <typename Algebra>
   void initialize(
-      std::vector<TinyScalar>& weights, std::vector<TinyScalar>& biases,
-      TinyNeuralNetworkInitialization init_method = NN_INIT_XAVIER) const {
+      std::vector<typename Algebra::Scalar>& weights,
+      std::vector<typename Algebra::Scalar>& biases,
+      NeuralNetworkInitialization init_method = NN_INIT_XAVIER) const {
     weights.resize(num_weights());
-    biases.resize(num_biases(), TinyConstants::zero());
+    biases.resize(num_biases(), Algebra::zero());
 
     std::random_device rd_;
     std::mt19937 gen_{rd_()};
@@ -135,38 +138,38 @@ class TinyNeuralNetworkSpecification {
       for (int ci = 0; ci < layers_[i]; ++ci) {
         for (int pi = 0; pi < layers_[i - 1]; ++pi, ++weight_i) {
           if (init_method == NN_INIT_ZERO) {
-            weights[weight_i] = TinyConstants::zero();
+            weights[weight_i] = Algebra::zero();
           } else {
-            weights[weight_i] = TinyScalar(d(gen_));
+            weights[weight_i] = Algebra::from_double(d(gen_));
           }
         }
       }
     }
     printf("NN weights:  ");
-    this->template print_states<TinyScalar, TinyConstants>(weights);
+    this->template print_states<Algebra>(weights);
     printf("NN biases:  ");
-    this->template print_states<TinyScalar, TinyConstants>(biases);
+    this->template print_states<Algebra>(biases);
   }
 
   /**
    * Infers the output of the neural network for the given input, and the
    * provided weights and biases.
    */
-  template <typename TinyScalar, typename TinyConstants>
-  void compute(const std::vector<TinyScalar>& weights,
-               const std::vector<TinyScalar>& biases,
-               const std::vector<TinyScalar>& input,
-               std::vector<TinyScalar>& output) const {
+  template <typename Algebra>
+  void compute(const std::vector<typename Algebra::Scalar>& weights,
+               const std::vector<typename Algebra::Scalar>& biases,
+               const std::vector<typename Algebra::Scalar>& input,
+               std::vector<typename Algebra::Scalar>& output) const {
     assert(static_cast<int>(weights.size() == num_weights()));
     assert(static_cast<int>(biases.size() == num_biases()));
     assert(static_cast<int>(input.size()) == input_dim());
 
-    const TinyScalar zero = TinyConstants::zero();
-    const TinyScalar one = TinyConstants::one();
+    const typename Algebra::Scalar zero = Algebra::zero();
+    const typename Algebra::Scalar one = Algebra::one();
 
     output.resize(layers_.back());
-    std::vector<TinyScalar> previous = input;
-    std::vector<TinyScalar> current;
+    std::vector<typename Algebra::Scalar> previous = input;
+    std::vector<typename Algebra::Scalar> current;
     std::size_t weight_i = 0;
     std::size_t bias_i = 0;
 
@@ -187,30 +190,28 @@ class TinyNeuralNetworkSpecification {
         }
         switch (activations_[i - 1]) {
           case NN_ACT_TANH:
-            current[ci] = TinyConstants::tanh(current[ci]);
+            current[ci] = Algebra::tanh(current[ci]);
             break;
           case NN_ACT_SIN:
-            current[ci] = TinyConstants::sin1(current[ci]);
+            current[ci] = Algebra::sin(current[ci]);
             break;
           case NN_ACT_RELU:
-            current[ci] = TinyConstants::max1(zero, current[ci]);
+            current[ci] = Algebra::max(zero, current[ci]);
             break;
           case NN_ACT_SOFT_RELU:
-            current[ci] =
-                TinyConstants::log(one + TinyConstants::exp(current[ci]));
+            current[ci] = Algebra::log(one + Algebra::exp(current[ci]));
             break;
           case NN_ACT_ELU:
-            current[ci] = current[ci] >= zero
-                              ? current[ci]
-                              : TinyConstants::exp(current[ci]) - one;
+            current[ci] = current[ci] >= zero ? current[ci]
+                                              : Algebra::exp(current[ci]) - one;
             break;
           case NN_ACT_SIGMOID: {
-            TinyScalar exp_x = TinyConstants::exp(current[ci]);
+            typename Algebra::Scalar exp_x = Algebra::exp(current[ci]);
             current[ci] = exp_x / (exp_x + one);
             break;
           }
           case NN_ACT_SOFTSIGN:
-            current[ci] = current[ci] / (one + TinyConstants::abs(current[ci]));
+            current[ci] = current[ci] / (one + Algebra::abs(current[ci]));
             break;
           case NN_ACT_IDENTITY:
           default:
@@ -222,12 +223,13 @@ class TinyNeuralNetworkSpecification {
     output = current;
   }
 
-  template <typename Scalar, typename Utils>
-  void save_graphviz(const std::string& filename,
-                     const std::vector<std::string>& input_names = {},
-                     const std::vector<std::string>& output_names = {},
-                     const std::vector<Scalar>& weights = {},
-                     const std::vector<Scalar>& biases = {}) const {
+  template <typename Algebra>
+  void save_graphviz(
+      const std::string& filename,
+      const std::vector<std::string>& input_names = {},
+      const std::vector<std::string>& output_names = {},
+      const std::vector<typename Algebra::Scalar>& weights = {},
+      const std::vector<typename Algebra::Scalar>& biases = {}) const {
     std::ofstream file(filename);
     file << "graph G {\n\t";
     file << "rankdir=LR;\n\tsplines=false;\n\tedge[style=invis];\n\tranksep="
@@ -256,9 +258,9 @@ class TinyNeuralNetworkSpecification {
     file << "edge[style=solid, tailport=e, headport=w];\n\t";
     double max_weight = 0;
     if (!weights.empty()) {
-      max_weight = std::abs(Utils::getDouble(weights[0]));
+      max_weight = std::abs(Algebra::from_double(weights[0]));
       for (const auto& w : weights) {
-        max_weight = std::max(max_weight, std::abs(Utils::getDouble(w)));
+        max_weight = std::max(max_weight, std::abs(Algebra::from_double(w)));
       }
     }
     std::size_t weight_i = 0;
@@ -269,7 +271,7 @@ class TinyNeuralNetworkSpecification {
           if (!weights.empty()) {
             file << "[penwidth="
                  << std::to_string(
-                        std::abs(Utils::getDouble(weights[weight_i])) /
+                        std::abs(Algebra::from_double(weights[weight_i])) /
                         max_weight * 3.0)
                  << "]";
           }
@@ -286,38 +288,34 @@ class TinyNeuralNetworkSpecification {
  * Implements a fully-connected neural network consisting of linear layers with
  * weights and optional biases to be stored internally.
  */
-template <typename TinyScalar, typename TinyConstants>
-class TinyNeuralNetwork : public TinyNeuralNetworkSpecification {
+template <typename Algebra>
+class NeuralNetwork : public NeuralNetworkSpecification {
  public:
-  std::vector<TinyScalar> weights;
-  std::vector<TinyScalar> biases;
+  std::vector<typename Algebra::Scalar> weights;
+  std::vector<typename Algebra::Scalar> biases;
 
-  using TinyNeuralNetworkSpecification::compute;
-  using TinyNeuralNetworkSpecification::initialize;
+  using NeuralNetworkSpecification::compute;
+  using NeuralNetworkSpecification::initialize;
 
-  explicit TinyNeuralNetwork(int input_dim = 0, bool use_input_bias = true)
-      : TinyNeuralNetworkSpecification(input_dim, use_input_bias) {}
-  TinyNeuralNetwork(int input_dim, const std::vector<int>& layer_sizes,
-                    TinyNeuralNetworkActivation activation,
-                    bool learn_bias = true)
-      : TinyNeuralNetworkSpecification(input_dim, layer_sizes, activation,
-                                       learn_bias) {}
-  explicit TinyNeuralNetwork(const TinyNeuralNetworkSpecification& spec)
-      : TinyNeuralNetworkSpecification(spec) {}
+  explicit NeuralNetwork(int input_dim = 0, bool use_input_bias = true)
+      : NeuralNetworkSpecification(input_dim, use_input_bias) {}
+  NeuralNetwork(int input_dim, const std::vector<int>& layer_sizes,
+                NeuralNetworkActivation activation, bool learn_bias = true)
+      : NeuralNetworkSpecification(input_dim, layer_sizes, activation,
+                                   learn_bias) {}
+  explicit NeuralNetwork(const NeuralNetworkSpecification& spec)
+      : NeuralNetworkSpecification(spec) {}
 
-  void initialize(
-      TinyNeuralNetworkInitialization init_method = NN_INIT_XAVIER) {
-    this->template initialize<TinyScalar, TinyConstants>(weights, biases,
-                                                         init_method);
+  void initialize(NeuralNetworkInitialization init_method = NN_INIT_XAVIER) {
+    this->template initialize<Algebra>(weights, biases, init_method);
   }
 
-  void compute(const std::vector<TinyScalar>& input,
-               std::vector<TinyScalar>& output) const {
-    this->template compute<TinyScalar, TinyConstants>(weights, biases, input,
-                                                      output);
+  void compute(const std::vector<typename Algebra::Scalar>& input,
+               std::vector<typename Algebra::Scalar>& output) const {
+    this->template compute<Algebra>(weights, biases, input, output);
   }
 
-  void set_parameters(const std::vector<TinyScalar>& params) {
+  void set_parameters(const std::vector<typename Algebra::Scalar>& params) {
     assert(static_cast<int>(params.size()) == num_parameters());
     weights.resize(num_weights());
     biases.resize(num_biases());
@@ -327,17 +325,20 @@ class TinyNeuralNetwork : public TinyNeuralNetworkSpecification {
 
   void print_params() const {
     printf("NN weights:  ");
-    this->template print_states<TinyScalar, TinyConstants>(weights);
+    this->template print_states<Algebra>(weights);
     printf("NN biases:  ");
-    this->template print_states<TinyScalar, TinyConstants>(biases);
+    this->template print_states<Algebra>(biases);
   }
 
   void save_graphviz(const std::string& filename,
                      const std::vector<std::string>& input_names = {},
                      const std::vector<std::string>& output_names = {}) const {
-    dynamic_cast<TinyNeuralNetworkSpecification*>(this)->template save_graphviz<TinyScalar, TinyConstants>(
-        filename, input_names, output_names, weights, biases);
+    dynamic_cast<NeuralNetworkSpecification*>(this)
+        ->template save_graphviz<Algebra>(filename, input_names, output_names,
+                                          weights, biases);
   }
 };
+
+}  // namespace tds
 
 #endif  // TINY_NEURAL_NETWORK_H

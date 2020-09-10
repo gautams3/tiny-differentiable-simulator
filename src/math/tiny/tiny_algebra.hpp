@@ -449,6 +449,10 @@ struct TinyAlgebra {
     return TinyConstants::tan1(s);
   }
 
+  TINY_INLINE static Scalar atan2(const Scalar &y, const Scalar &x) {
+    return TinyConstants::atan2(y, x);
+  }
+
   TINY_INLINE static Scalar sqrt(const Scalar &s) {
     return TinyConstants::sqrt1(s);
   }
@@ -463,6 +467,10 @@ struct TinyAlgebra {
 
   TINY_INLINE static Scalar exp(const Scalar &s) {
     return TinyConstants::exp(s);
+  }
+
+  TINY_INLINE static Scalar log(const Scalar &s) {
+    return TinyConstants::log(s);
   }
 
   TINY_INLINE static Scalar tanh(const Scalar &s) {
