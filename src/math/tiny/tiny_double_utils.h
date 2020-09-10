@@ -25,6 +25,7 @@
 #include <string>
 
 #include "math.h"
+#include "math/tiny/tiny_algebra.hpp"
 
 struct DoubleUtils {
   static double zero() { return 0.; }
@@ -85,5 +86,9 @@ struct DoubleUtils {
     }
   }
 };
+
+namespace tds {
+using DoubleAlgebra = TinyAlgebra<double, DoubleUtils>;
+}  // namespace tds
 
 #endif  // DOUBLE_UTILS_H

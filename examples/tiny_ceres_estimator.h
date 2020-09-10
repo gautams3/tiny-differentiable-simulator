@@ -20,14 +20,14 @@
 #include <ceres/ceres.h>
 
 #include <algorithm>
+#include <atomic>
 #include <mutex>
 #include <random>
 #include <string>
 #include <thread>
-#include <atomic>
 
-#include "ceres_utils.h"
-#include "tiny_double_utils.h"
+#include "math/tiny/ceres_utils.h"
+#include "math/tiny/tiny_double_utils.h"
 
 #define USE_MATPLOTLIB 1
 
@@ -63,7 +63,7 @@ enum ResidualMode { RES_MODE_1D, RES_MODE_STATE };
 
 template <int ParameterDim, int StateDim, ResidualMode ResMode = RES_MODE_1D>
 class TinyCeresEstimator : ceres::IterationCallback {
-public:
+ public:
   static const int kParameterDim = ParameterDim;
   static const int kStateDim = StateDim;
   static const ResidualMode kResidualMode = ResMode;
@@ -136,10 +136,10 @@ public:
     options.callbacks.push_back(this);
   }
 
-private:
+ private:
   ceres::CostFunction *cost_function_{nullptr};
 
-public:
+ public:
   virtual void rollout(const std::vector<ADScalar> &params,
                        std::vector<std::vector<ADScalar>> &output_states,
                        double &dt, std::size_t ref_id) const = 0;
@@ -244,8 +244,8 @@ public:
     }
   }
 
-  const std::vector<std::array<double, kParameterDim>> &
-  parameter_evolution() const {
+  const std::vector<std::array<double, kParameterDim>> &parameter_evolution()
+      const {
     return param_evolution_;
   }
 
@@ -255,7 +255,7 @@ public:
     return best_params_;
   }
 
-private:
+ private:
   ceres::Problem problem_;
   double *vars_{nullptr};
   std::vector<std::array<double, kParameterDim>> param_evolution_;
@@ -310,7 +310,8 @@ private:
     }
 
     // Computes the cost (residual) for input parameters x.
-    template <typename T> bool operator()(const T *const x, T *residual) const {
+    template <typename T>
+    bool operator()(const T *const x, T *residual) const {
       static thread_local int num_evaluations = 0;
       ++num_evaluations;
       // ref_indices[0] = 26; //92;
@@ -502,8 +503,8 @@ private:
     }
   };
 
-  ceres::CallbackReturnType
-  operator()(const ceres::IterationSummary &summary) override {
+  ceres::CallbackReturnType operator()(
+      const ceres::IterationSummary &summary) override {
     param_evolution_.push_back(current_param_);
     return ceres::SOLVER_CONTINUE;
   }
@@ -517,11 +518,12 @@ private:
  * McCarty & McGuire "Parallel Monotonic Basin Hopping for Low Thrust
  * Trajectory Optimization"
  */
-template <int ParameterDim, typename Estimator> class BasinHoppingEstimator {
+template <int ParameterDim, typename Estimator>
+class BasinHoppingEstimator {
   static const int kParameterDim = ParameterDim;
   typedef std::function<std::unique_ptr<Estimator>()> EstimatorConstructor;
 
-public:
+ public:
   EstimatorConstructor estimator_constructor;
   std::array<double, kParameterDim> params;
   std::size_t num_workers;
@@ -552,7 +554,8 @@ public:
       const EstimatorConstructor &estimator_constructor,
       const std::array<double, kParameterDim> &initial_guess,
       std::size_t num_workers = std::thread::hardware_concurrency())
-      : estimator_constructor(estimator_constructor), params(initial_guess),
+      : estimator_constructor(estimator_constructor),
+        params(initial_guess),
         num_workers(num_workers) {
     workers_.reserve(num_workers);
   }
@@ -576,8 +579,8 @@ public:
         std::mt19937 eng(seed);
 
         auto estimator = this->estimator_constructor();
-        estimator->setup(new ceres::TrivialLoss); // new ceres::HuberLoss(1.));
-                                                  // // TODO expose this
+        estimator->setup(new ceres::TrivialLoss);  // new ceres::HuberLoss(1.));
+                                                   // // TODO expose this
         if (k == 0) {
           // set initial guess
           estimator->set_params(this->params);
@@ -670,7 +673,7 @@ public:
 
   double best_cost() const { return best_cost_; }
 
-private:
+ private:
   std::vector<std::thread> workers_;
   std::mutex mutex_;
   bool stop_{false};
@@ -678,4 +681,4 @@ private:
   double best_cost_;
 };
 
-#endif // TINY_CERES_ESTIMATOR_H
+#endif  // TINY_CERES_ESTIMATOR_H

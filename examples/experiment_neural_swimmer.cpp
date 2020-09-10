@@ -16,6 +16,8 @@
 #include <ceres/types.h>
 
 #include <cassert>
+
+#include "math/tiny/tiny_algebra.hpp"
 #define NEURAL_SIM 1
 
 #include <fenv.h>
@@ -24,18 +26,21 @@
 #include <string>
 #include <thread>
 
+#include "dynamics/forward_dynamics.hpp"
+#include "dynamics/integrator.hpp"
+#include "dynamics/kinematics.hpp"
+#include "math/neural_network.hpp"
+#include "math/tiny/neural_scalar.hpp"
+#include "math/tiny/tiny_double_utils.h"
+#include "multi_body.hpp"
 #include "neural_augmentation.h"
-#include "neural_scalar.h"
 #include "tiny_ceres_estimator.h"
-#include "tiny_dataset.h"
-#include "tiny_double_utils.h"
+#include "urdf/urdf_parser.hpp"
+#include "urdf/urdf_structures.hpp"
+#include "urdf/urdf_to_multi_body.hpp"
 #include "utils/file_utils.hpp"
-#include "tiny_multi_body.h"
-#include "tiny_neural_network.h"
-#include "tiny_urdf_parser.h"
-#include "tiny_urdf_structures.h"
-#include "tiny_urdf_to_multi_body.h"
-#include "tiny_world.h"
+#include "utils/tiny_dataset.h"
+#include "world.hpp"
 
 constexpr bool kUsePBH = false;
 constexpr bool kStopAfterSetup = false;
@@ -60,21 +65,21 @@ constexpr std::size_t kUrdfJoint0Offset = 3;  // x, y, yaw come first
 constexpr std::size_t kUrdfLink0Offset = 2;   // xslide, yslide
 
 // Global neural augmentation tracker.
-NeuralAugmentation gAugmentation;
+tds::NeuralAugmentation gAugmentation;
 
 // Cache for URDF Structures, especially in case we need to load multiple types.
-template <typename T, typename TUtils>
+template <typename Algebra>
 struct UrdfCache {
-  using UrdfStructures = TinyUrdfStructures<T, TUtils>;
+  using UrdfStructures = tds::UrdfStructures<Algebra>;
   static thread_local inline std::map<std::string, UrdfStructures> cache;
 
   // Load a structure from the cache, by filename.
   static const UrdfStructures &Get(const std::string &urdf_filename) {
     if (cache.find(urdf_filename) == cache.end()) {
       std::string real_filename;
-      TinyFileUtils::find_file(urdf_filename, real_filename);
+      tds::FileUtils::find_file(urdf_filename, real_filename);
       printf("Loading URDF \"%s\".\n", real_filename.c_str());
-      TinyUrdfParser<T, TUtils> parser;
+      tds::UrdfParser<Algebra> parser;
       cache[urdf_filename] = parser.load_urdf(real_filename);
     }
     return cache[urdf_filename];
@@ -96,7 +101,7 @@ struct DatasetCache {
   static const Dataset &Get(const std::string &dataset_filename) {
     if (cache.find(dataset_filename) == cache.end()) {
       std::string real_filename;
-      TinyFileUtils::find_file(dataset_filename, real_filename);
+      tds::FileUtils::find_file(dataset_filename, real_filename);
       printf("Loading dataset \"%s\".\n", real_filename.c_str());
       TinyNumpyReader<double, 3> reader;
       const bool status = reader.Open(real_filename);
@@ -137,14 +142,14 @@ struct DatasetCache {
 };
 
 // Load a urdf from structure cache.
-template <typename T, typename TUtils>
-TinyMultiBody<T, TUtils> *LoadURDF(
-    TinyWorld<T, TUtils> *world,
-    const TinyUrdfStructures<T, TUtils> &urdf_structures) {
-  TinyMultiBody<T, TUtils> *system = world->create_multi_body();
-  system->m_isFloating = false;
-  TinyUrdfToMultiBody<T, TUtils>::convert_to_multi_body(urdf_structures, *world,
-                                                        *system);
+template <typename Algebra>
+tds::MultiBody<Algebra> *LoadURDF(
+    tds::World<Algebra> *world,
+    const tds::UrdfStructures<Algebra> &urdf_structures) {
+  tds::MultiBody<Algebra> *system = world->create_multi_body();
+  system->set_floating_base(false);
+  tds::UrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_structures, *world,
+                                                       *system);
   system->initialize();
 
   return system;
@@ -152,32 +157,31 @@ TinyMultiBody<T, TUtils> *LoadURDF(
 
 // Rollout a swimmer given the system parameters, from a trajectory id
 // specified on the first axis of the dataset.
-template <typename T = double, typename TUtils = DoubleUtils>
-void RolloutSwimmer(const TinyUrdfStructures<T, TUtils> urdf_structures,
-                    const std::vector<T> &params,
+template <typename Algebra = tds::DoubleAlgebra>
+void RolloutSwimmer(const tds::UrdfStructures<Algebra> urdf_structures,
+                    const std::vector<typename Algebra::Scalar> &params,
                     const TinyDataset<double, 3> &dataset, std::size_t traj_id,
                     std::size_t requested_timesteps, double *dt,
-                    std::vector<std::vector<T>> *output,
+                    std::vector<std::vector<typename Algebra::Scalar>> *output,
                     std::vector<std::vector<double>> *full_qs_debug = nullptr) {
   if (full_qs_debug != nullptr) {
     full_qs_debug->clear();
   }
 
   // Create the world and load the system.
-  TinyWorld<T, TUtils> world;
-  TinyMultiBody<T, TUtils> *system = LoadURDF(&world, urdf_structures);
+  tds::World<Algebra> world;
+  tds::MultiBody<Algebra> *system = LoadURDF(&world, urdf_structures);
   *dt = kDT * kControlTimesteps;
 
   // Initialize the neural network from the parameters.
-  if constexpr (is_neural_scalar<T, TUtils>::value) {
+  if constexpr (tds::is_neural_algebra<Algebra>::value) {
+    using InnerAlgebra = typename Algebra::Scalar::InnerAlgebra;
     if (!params.empty()) {
-      using InnerT = typename T::InnerScalarType;
-      using InnerTUtils = typename T::InnerUtilsType;
-      std::vector<InnerT> iparams(params.size());
+      std::vector<typename InnerAlgebra::Scalar> iparams(params.size());
       for (std::size_t i = 0; i < params.size(); ++i) {
         iparams[i] = params[i].evaluate();
       }
-      gAugmentation.template instantiate<InnerT, InnerTUtils>(iparams);
+      gAugmentation.template instantiate<InnerAlgebra>(iparams);
     }
   }
 
@@ -191,36 +195,34 @@ void RolloutSwimmer(const TinyUrdfStructures<T, TUtils> urdf_structures,
   // Set the initial state from the data file.
   // Global yaw.
   const std::array<std::size_t, 3> idx = {traj_id, 0, kPosOffset + 2};
-  system->m_q[kUrdfJoint0Offset - 1] = TUtils::scalar_from_double(dataset[idx]);
+  system->q()[kUrdfJoint0Offset - 1] = Algebra::from_double(dataset[idx]);
   // Full Q.
   for (int joint = 0; joint < kJoints; ++joint) {
     const std::array<std::size_t, 3> idx = {traj_id, 0, kQOffset + joint};
-    system->m_q[kUrdfJoint0Offset + joint] =
-        TUtils::scalar_from_double(dataset[idx]);
+    system->q()[kUrdfJoint0Offset + joint] = Algebra::from_double(dataset[idx]);
   }
   // Update forward kinematics.
-  system->forward_kinematics();
+  forward_kinematics(*system);
 
   // Run the actual rollout.
   output->reserve(requested_timesteps);
   for (std::size_t timestep = 0; timestep < requested_timesteps; ++timestep) {
     // Save state to output.
-    std::vector<T> state;
+    std::vector<typename Algebra::Scalar> state;
     state.reserve(kStateDim);
     for (std::size_t i = 0; i < kLinks; ++i) {
-      const TinyLink<T, TUtils> &link = system->m_links[kUrdfLink0Offset + i];
-      state.push_back(link.m_X_world.m_translation[0]);  // pos_x
-      state.push_back(link.m_X_world.m_translation[1]);  // pos_y
-      state.push_back(
-          TUtils::atan2(-link.m_X_world.m_rotation(0, 1),
-                        link.m_X_world.m_rotation(0, 0)));  // pos_yaw
+      const tds::Link<Algebra> &link = system->links()[kUrdfLink0Offset + i];
+      state.push_back(link.X_world.translation[0]);  // pos_x
+      state.push_back(link.X_world.translation[1]);  // pos_y
+      state.push_back(Algebra::atan2(-link.X_world.rotation(0, 1),
+                                     link.X_world.rotation(0, 0)));  // pos_yaw
     }
     if (kStateHasVel) {
       for (std::size_t i = 0; i < kLinks; ++i) {
-        const TinyLink<T, TUtils> &link = system->m_links[kUrdfLink0Offset + i];
-        state.push_back(link.m_v[3]);  // vel_x
-        state.push_back(link.m_v[4]);  // vel_y
-        state.push_back(link.m_v[2]);  // vel_yaw
+        const tds::Link<Algebra> &link = system->links()[kUrdfLink0Offset + i];
+        state.push_back(link.v[3]);  // vel_x
+        state.push_back(link.v[4]);  // vel_y
+        state.push_back(link.v[2]);  // vel_yaw
       }
     }
     output->push_back(state);
@@ -232,28 +234,28 @@ void RolloutSwimmer(const TinyUrdfStructures<T, TUtils> urdf_structures,
       for (std::size_t joint = 0; joint < kJoints; ++joint) {
         const std::array<std::size_t, 3> idx = {traj_id, timestep,
                                                 kTauOffset + joint};
-        system->m_tau[kUrdfJoint0Offset + joint] =
-            TUtils::scalar_from_double(dataset[idx]);
+        system->tau()[kUrdfJoint0Offset + joint] =
+            Algebra::from_double(dataset[idx]);
       }
 
-      if (TUtils::getDouble(system->m_tau[0]) != 0 ||
-          TUtils::getDouble(system->m_tau[1]) != 0 ||
-          TUtils::getDouble(system->m_tau[2]) != 0) {
+      if (Algebra::to_double(system->tau()[0]) != 0 ||
+          Algebra::to_double(system->tau()[1]) != 0 ||
+          Algebra::to_double(system->tau()[2]) != 0) {
         std::cout << "\n\nActuating unactuated joint!\n\n";
         std::exit(1);
       }
 
       if (full_qs_debug != nullptr) {
         std::vector<double> full_q;
-        for (const T &qi : system->m_q) {
-          full_q.push_back(TUtils::getDouble(qi));
+        for (int i = 0; i < system->q().m_size; ++i) {
+          full_q.push_back(Algebra::to_double(system->q()[i]));
         }
         full_qs_debug->push_back(full_q);
       }
 
-      system->forward_dynamics(TinyVector3<T, TUtils>::zero());
+      forward_dynamics(*system, Algebra::zero3());
       system->clear_forces();
-      system->integrate(TUtils::scalar_from_double(*dt));
+      integrate_euler(*system, Algebra::from_double(*dt));
     }
   }
 }
@@ -261,7 +263,7 @@ void RolloutSwimmer(const TinyUrdfStructures<T, TUtils> urdf_structures,
 class SwimmerEstimator
     : public TinyCeresEstimator<kParamDim, kStateDim, RES_MODE_1D> {
  public:
-  typedef TinyCeresEstimator<kParamDim, kStateDim, RES_MODE_1D> CeresEstimator;
+  using CeresEstimator = TinyCeresEstimator<kParamDim, kStateDim, RES_MODE_1D>;
   using CeresEstimator::kStateDim, CeresEstimator::kParameterDim;
   using CeresEstimator::parameters;
   using typename CeresEstimator::ADScalar;
@@ -304,32 +306,28 @@ class SwimmerEstimator
   void rollout(const std::vector<ADScalar> &params,
                std::vector<std::vector<ADScalar>> &output_states, double &dt,
                std::size_t ref_id) const override {
-    typedef CeresUtils<kParameterDim> ADUtils;
-    typedef NeuralScalar<ADScalar, ADUtils> NScalar;
-    typedef NeuralScalarUtils<ADScalar, ADUtils> NUtils;
-    auto n_params = NUtils::to_neural(params);
-    std::vector<std::vector<NScalar>> n_output_states;
-    RolloutSwimmer<NScalar, NUtils>(
-        UrdfCache<NScalar, NUtils>::Get(urdf_filename_), n_params,
-        DatasetCache::Get(dataset_filename_), ref_id, timesteps_, &dt,
-        &n_output_states);
+    using CeresAlgebra = TinyAlgebra<ADScalar, CeresUtils<kParameterDim>>;
+    using NCAlgebra = tds::NeuralAlgebra<CeresAlgebra>;
+    auto n_params = tds::to_neural<NCAlgebra>(params);
+    std::vector<std::vector<NCAlgebra::Scalar>> n_output_states;
+    RolloutSwimmer<NCAlgebra>(UrdfCache<NCAlgebra>::Get(urdf_filename_),
+                              n_params, DatasetCache::Get(dataset_filename_),
+                              ref_id, timesteps_, &dt, &n_output_states);
     for (const auto &state : n_output_states) {
-      output_states.push_back(NUtils::from_neural(state));
+      output_states.push_back(tds::from_neural<NCAlgebra>(state));
     }
   }
   void rollout(const std::vector<double> &params,
                std::vector<std::vector<double>> &output_states, double &dt,
                std::size_t ref_id) const override {
-    typedef NeuralScalar<double, DoubleUtils> NScalar;
-    typedef NeuralScalarUtils<double, DoubleUtils> NUtils;
-    auto n_params = NUtils::to_neural(params);
-    std::vector<std::vector<NScalar>> n_output_states;
-    RolloutSwimmer<NScalar, NUtils>(
-        UrdfCache<NScalar, NUtils>::Get(urdf_filename_), n_params,
-        DatasetCache::Get(dataset_filename_), ref_id, timesteps_, &dt,
-        &n_output_states);
+    using NAlgebra = tds::NeuralAlgebra<tds::DoubleAlgebra>;
+    auto n_params = tds::to_neural<NAlgebra>(params);
+    std::vector<std::vector<NAlgebra::Scalar>> n_output_states;
+    RolloutSwimmer<NAlgebra>(UrdfCache<NAlgebra>::Get(urdf_filename_), n_params,
+                             DatasetCache::Get(dataset_filename_), ref_id,
+                             timesteps_, &dt, &n_output_states);
     for (const auto &state : n_output_states) {
-      output_states.push_back(NUtils::from_neural(state));
+      output_states.push_back(tds::from_neural<NAlgebra>(state));
     }
   }
 };
@@ -341,8 +339,8 @@ void WriteRollout(const std::string &output_prefix,
   double rollout_dt;
   std::vector<std::vector<double>> states;
   std::vector<std::vector<double>> full_qs_debug;
-  RolloutSwimmer<double, DoubleUtils>(
-      UrdfCache<double, DoubleUtils>::Get(urdf_filename), params,
+  RolloutSwimmer<tds::DoubleAlgebra>(
+      UrdfCache<tds::DoubleAlgebra>::Get(urdf_filename), params,
       DatasetCache::Get(dataset_filename), 0, kTimesteps, &rollout_dt, &states,
       &full_qs_debug);
 

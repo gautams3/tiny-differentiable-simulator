@@ -17,6 +17,7 @@
 #ifndef TINY_VECTOR_X_H
 #define TINY_VECTOR_X_H
 
+#include <assert.h>
 #include <stdio.h>
 
 #include <vector>

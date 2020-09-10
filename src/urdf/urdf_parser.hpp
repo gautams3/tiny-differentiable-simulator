@@ -316,14 +316,14 @@ struct UrdfParser {
     {
       const char* group_char = config->Attribute("group");
       if (group_char) {
-        collision.collision_group = Algebra::scalar_from_string(group_char);
+        collision.collision_group = std::atoi(group_char);
       }
     }
 
     {
       const char* mask_char = config->Attribute("mask");
       if (mask_char) {
-        collision.collision_mask = Algebra::scalar_from_string(mask_char);
+        collision.collision_mask = std::atoi(mask_char);
       }
     }
 
