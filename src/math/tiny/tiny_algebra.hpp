@@ -10,7 +10,6 @@
 #include "tiny_vector3.h"
 #include "tiny_vector_x.h"
 
-
 template <typename TinyScalar, typename TinyConstants>
 struct TinyAlgebra {
   using Index = int;
@@ -138,9 +137,19 @@ struct TinyAlgebra {
     return TinyVectorCrossMatrix(v);
   }
 
+  TINY_INLINE static Vector3 zero3() { return Vector3::zero(); }
+  TINY_INLINE static Vector3 unit3_x() { return Vector3::makeUnitX(); }
+  TINY_INLINE static Vector3 unit3_y() { return Vector3::makeUnitY(); }
+  TINY_INLINE static Vector3 unit3_z() { return Vector3::makeUnitZ(); }
+
   TINY_INLINE static Matrix3 zero33() {
     const Scalar o = TinyConstants::zero();
     return Matrix3(o, o, o, o, o, o, o, o, o);
+  }
+  TINY_INLINE static Matrix6 zero66() {
+    const Scalar o = TinyConstants::zero();
+    return Matrix6(o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o,
+                   o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o);
   }
   TINY_INLINE static VectorX zerox(Index size) {
     VectorX v(size);
@@ -163,7 +172,7 @@ struct TinyAlgebra {
     quat.set_identity();
   }
 
-  TINY_INLINE static Scalar determinant(const Matrix3& m) {
+  TINY_INLINE static Scalar determinant(const Matrix3 &m) {
     return m.determinant();
   }
 
@@ -179,11 +188,6 @@ struct TinyAlgebra {
   TINY_INLINE static Scalar scalar_from_string(const std::string &s) {
     return TinyConstants::scalar_from_string(s);
   }
-
-  TINY_INLINE static Vector3 zero3() { return Vector3::zero(); }
-  TINY_INLINE static Vector3 unit3_x() { return Vector3::makeUnitX(); }
-  TINY_INLINE static Vector3 unit3_y() { return Vector3::makeUnitY(); }
-  TINY_INLINE static Vector3 unit3_z() { return Vector3::makeUnitZ(); }
 
   TINY_INLINE static void assign_block(Matrix3 &output, const Matrix6 &input,
                                        Index i, Index j, Index m = 3,
@@ -222,11 +226,11 @@ struct TinyAlgebra {
     }
   }
 
-  template <template <typename, typename> typename ColumnType>   
-  TINY_INLINE static void assign_block(TinyMatrixXxX_<TinyScalar, TinyConstants, ColumnType> &output, const Matrix3 &input,
-                                       Index i, Index j, Index m = 3,
-                                       Index n = 3, Index input_i = 0,
-                                       Index input_j = 0) {
+  template <template <typename, typename> typename ColumnType>
+  TINY_INLINE static void assign_block(
+      TinyMatrixXxX_<TinyScalar, TinyConstants, ColumnType> &output,
+      const Matrix3 &input, Index i, Index j, Index m = 3, Index n = 3,
+      Index input_i = 0, Index input_j = 0) {
     for (int ii = 0; ii < m; ++ii) {
       for (int jj = 0; jj < n; ++jj) {
         output(ii + i, jj + j) = input(ii + input_i, jj + input_j);
@@ -331,7 +335,7 @@ struct TinyAlgebra {
   TINY_INLINE static Quaternion quat_velocity(const Quaternion &q,
                                               const Vector3 &w,
                                               const Scalar &dt) {
-                                                return w * q * (dt * half());
+    return w * q * (dt * half());
     // Quaternion delta(q[3] * w[0] + q[1] * w[2] - q[2] * w[1],
     //                  q[3] * w[1] + q[2] * w[0] - q[0] * w[2],
     //                  q[3] * w[2] + q[0] * w[1] - q[1] * w[0],
@@ -347,7 +351,9 @@ struct TinyAlgebra {
   TINY_INLINE static const Scalar &quat_w(const Quaternion &q) { return q.w(); }
 
   TINY_INLINE static const Quaternion quat_from_xyzw(const Scalar &x,
-  const Scalar &y, const Scalar &z, const Scalar &w) {
+                                                     const Scalar &y,
+                                                     const Scalar &z,
+                                                     const Scalar &w) {
     return Quaternion(x, y, z, w);
   }
 
@@ -451,7 +457,7 @@ struct TinyAlgebra {
     return TinyConstants::abs(s);
   }
 
-  TINY_INLINE static Scalar pow(const Scalar &s,const Scalar &e) {
+  TINY_INLINE static Scalar pow(const Scalar &s, const Scalar &e) {
     return TinyConstants::pow(s, e);
   }
 

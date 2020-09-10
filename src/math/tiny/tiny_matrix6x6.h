@@ -97,7 +97,7 @@ struct TinyMatrix6x6 {
       }
     }
 
-    return TinyConstants::zero();
+    return m_bottomRightMat(0, 0);
   }
 
   TinyScalar& operator()(int r, int c) {
