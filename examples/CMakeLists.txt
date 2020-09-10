@@ -143,9 +143,9 @@ if(Bullet_FOUND)
     #target_link_libraries(cartpole_opt pybullet_visualizer_api ${DL}
     #        ${CERES_LIBRARIES})
 
-    #add_executable(ceres_estimation ceres_estimation.cpp ${TDS_HDRS})
-    #target_link_libraries(ceres_estimation pybullet_visualizer_api ${DL}
-    #        ${CERES_LIBRARIES})
+    add_executable(ceres_estimation ceres_estimation.cpp ${TDS_HDRS})
+    target_link_libraries(ceres_estimation pybullet_visualizer_api ${DL}
+           ${CERES_LIBRARIES})
 
     set(DUSE_MATPLOTLIB true)
     #add_executable(ceres_estimation_real ceres_estimation_real.cpp ${TDS_HDRS})
@@ -260,14 +260,14 @@ if(HAS_MESHCAT AND tinyxml2_FOUND)
   #add_executable(tiny_urdf_parser_meshcat_example tiny_urdf_parser_meshcat_example.cpp ${TDS_HDRS})
   #target_link_libraries(tiny_urdf_parser_meshcat_example  tinyxml2 ${MESHCAT_LIBRARIES})
 
-  add_executable(meshcat_zmq_example meshcat_zmq_example.cpp ${TDS_HDRS})
-  target_link_libraries(meshcat_zmq_example ${MESHCAT_LIBRARIES})
+  # add_executable(meshcat_zmq_example meshcat_zmq_example.cpp ${TDS_HDRS})
+  # target_link_libraries(meshcat_zmq_example ${MESHCAT_LIBRARIES})
 
 endif(HAS_MESHCAT AND tinyxml2_FOUND)
 
 if(tinyxml2_FOUND)
-  add_executable(tiny_urdf_parser_example tiny_urdf_parser_example.cpp ${TDS_HDRS})
-  target_link_libraries(tiny_urdf_parser_example tinyxml2)
+  # add_executable(tiny_urdf_parser_example tiny_urdf_parser_example.cpp ${TDS_HDRS})
+  # target_link_libraries(tiny_urdf_parser_example tinyxml2)
 
   if(Ceres_FOUND)
     add_executable(experiment_neural_swimmer experiment_neural_swimmer.cpp ${TDS_HDRS})
@@ -280,8 +280,8 @@ if(tinyxml2_FOUND)
   endif(Ceres_FOUND)
 endif(tinyxml2_FOUND)
 
-add_executable(world_example world_example.cpp ${TDS_HDRS})
-#add_executable(test_xarm test_xarm.cpp ${TDS_HDRS})
+# add_executable(world_example world_example.cpp ${TDS_HDRS})
+# add_executable(test_xarm test_xarm.cpp ${TDS_HDRS})
 
 subdirs(opengl_window)
 

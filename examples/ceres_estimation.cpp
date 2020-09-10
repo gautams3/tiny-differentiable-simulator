@@ -14,57 +14,66 @@
 
 #include <fstream>
 
-#include "pendulum.h"
-#include "tiny_ceres_estimator.h"
-#include "tiny_multi_body.h"
-#include "tiny_world.h"
+#include "dynamics/forward_dynamics.hpp"
+#include "dynamics/integrator.hpp"
+#include "multi_body.hpp"
+#include "pendulum.hpp"
+#include "utils/ceres_estimator.hpp"
+#include "world.hpp"
+
+using namespace tds;
+
+const int time_steps = 50;
+const double dt = 1. / 60.;
 
 template <typename Scalar = double, typename Utils = DoubleUtils>
 void rollout_pendulum(const std::vector<Scalar>& params,
-                      std::vector<std::vector<Scalar>>& output_states,
-                      int time_steps) {
-  static const Scalar dt = Utils::fraction(1, 60);
-  TinyVector3<Scalar, Utils> gravity(Utils::zero(), Utils::zero(),
-                                     Utils::fraction(-981, 100));
+                      std::vector<std::vector<Scalar>>& output_states) {
+  using Algebra = TinyAlgebra<Scalar, Utils>;
+  using Vector3 = typename Algebra::Vector3;
+  Vector3 gravity(Utils::zero(), Utils::zero(), Utils::fraction(-981, 100));
   output_states.resize(time_steps);
-  TinyWorld<Scalar, Utils> world;
-  TinyMultiBody<Scalar, Utils>* mb = world.create_multi_body();
-  init_compound_pendulum<Scalar, Utils>(
-      *mb, world, static_cast<int>(params.size()), params);
+  World<Algebra> world;
+  MultiBody<Algebra>* mb = world.create_multi_body();
+  init_compound_pendulum<Algebra>(*mb, world, static_cast<int>(params.size()),
+                                  params);
   for (int t = 0; t < time_steps; ++t) {
-    output_states[t] = mb->m_q;
-    mb->forward_dynamics(gravity);
-    mb->integrate(dt);
+    std::vector<Scalar> state(mb->dof());
+    for (int i = 0; i < mb->dof(); ++i) {
+      state[i] = mb->q(i);
+    }
+    output_states[t] = state;
+    forward_dynamics(*mb, gravity);
+    integrate_euler(*mb, Algebra::from_double(dt));
   }
 }
 
-template <int TimeSteps, int NumLinks, ResidualMode ResMode>
-class PendulumEstimator
-    : public TinyCeresEstimator<NumLinks, NumLinks, TimeSteps, ResMode> {
+template <int NumLinks, ResidualMode ResMode = RES_MODE_1D>
+class PendulumEstimator : public CeresEstimator<NumLinks, NumLinks, ResMode> {
  public:
-  typedef TinyCeresEstimator<NumLinks, NumLinks, TimeSteps, ResMode>
-      CeresEstimator;
-  using CeresEstimator::kStateDim, CeresEstimator::kParameterDim;
-  using CeresEstimator::parameters;
-  using typename CeresEstimator::ADScalar;
+  typedef CeresEstimator<NumLinks, NumLinks, ResMode> CE;
+  using CE::kStateDim, CE::kParameterDim;
+  using CE::parameters;
+  using typename CE::ADScalar;
 
   // sane parameter initialization (link lengths)
-  PendulumEstimator(double initial_link_length = 0.5) {
+  PendulumEstimator(double initial_link_length = 0.5) : CE(dt) {
     for (int i = 0; i < kParameterDim; ++i) {
       parameters[i] = {"link_length_" + std::to_string(i + 1),
                        initial_link_length, 0.1, 10.};
     }
   }
 
-  void rollout(
-      const std::vector<ADScalar>& params,
-      std::vector<std::vector<ADScalar>>& output_states) const override {
-    rollout_pendulum<ADScalar, CeresUtils<kParameterDim>>(params, output_states,
-                                                          TimeSteps);
+  void rollout(const std::vector<ADScalar>& params,
+               std::vector<std::vector<ADScalar>>& output_states, double& dt,
+               std::size_t ref_id) const override {
+    rollout_pendulum<ADScalar, CeresUtils<kParameterDim>>(params,
+                                                          output_states);
   }
   void rollout(const std::vector<double>& params,
-               std::vector<std::vector<double>>& output_states) const override {
-    rollout_pendulum(params, output_states, TimeSteps);
+               std::vector<std::vector<double>>& output_states, double& dt,
+               std::size_t ref_id) const override {
+    rollout_pendulum(params, output_states);
   }
 };
 
@@ -78,36 +87,36 @@ void print_states(const std::vector<std::vector<double>>& states) {
 }
 
 // int main(int argc, char* argv[]) {
-//  const int time_steps = 50;
-//  double init_params = 0.5;
-//  PendulumEstimator<time_steps, 2, RES_MODE_TIME> estimator(init_params);
-//  // collect training data from the "real" system
-//  rollout_pendulum(std::vector<double>{3., 4.}, estimator.target_states,
-//                   time_steps);
-//  //  printf("Target states: ");
-//  //  print_states(estimator.target_states);
-//  estimator.setup(new ceres::HuberLoss(1.));
-//  auto summary = estimator.solve();
-//  std::cout << summary.FullReport() << std::endl;
-//
-//  for (const auto& p : estimator.parameters) {
-//    printf("%s: %.3f\n", p.name.c_str(), p.value);
-//  }
-//
-//  std::ofstream file("param_evolution.txt");
-//  for (const auto& params : estimator.parameter_evolution()) {
-//    for (int i = 0; i < static_cast<int>(params.size()); ++i) {
-//      file << params[i];
-//      if (i < static_cast<int>(params.size()) - 1) file << "\t";
-//    }
-//    file << "\n";
-//  }
-//  file.close();
-//
-//  fflush(stdout);
-//
-//  return EXIT_SUCCESS;
-//}
+//   double init_params = 0.5;
+//   PendulumEstimator<2> estimator(init_params);
+//   // collect training data from the "real" system
+//   std::vector<std::vector<double>> target_states;
+//   rollout_pendulum(std::vector<double>{3., 4.}, target_states);
+//   //  printf("Target states: ");
+//   //  print_states(target_states);
+//   estimator.target_trajectories = {target_states};
+//   estimator.setup(new ceres::HuberLoss(1.));
+//   auto summary = estimator.solve();
+//   std::cout << summary.FullReport() << std::endl;
+
+//   for (const auto& p : estimator.parameters) {
+//     printf("%s: %.3f\n", p.name.c_str(), p.value);
+//   }
+
+//   std::ofstream file("param_evolution.txt");
+//   for (const auto& params : estimator.parameter_evolution()) {
+//     for (int i = 0; i < static_cast<int>(params.size()); ++i) {
+//       file << params[i];
+//       if (i < static_cast<int>(params.size()) - 1) file << "\t";
+//     }
+//     file << "\n";
+//   }
+//   file.close();
+
+//   fflush(stdout);
+
+//   return EXIT_SUCCESS;
+// }
 
 // int main(int argc, char* argv[]) {
 //  const int time_steps = 50;
@@ -143,17 +152,16 @@ void print_states(const std::vector<std::vector<double>>& states) {
 //}
 
 int main(int argc, char* argv[]) {
-  const int time_steps = 50;
   const int param_dim = 2;
-  typedef PendulumEstimator<time_steps, param_dim, RES_MODE_TIME> Estimator;
+  typedef PendulumEstimator<param_dim> Estimator;
   // collect training data from the "real" system
   std::vector<std::vector<double>> target_states;
-  rollout_pendulum(std::vector<double>{3., 4.}, target_states, time_steps);
+  rollout_pendulum(std::vector<double>{3., 4.}, target_states);
 
   std::function<std::unique_ptr<Estimator>()> construct_estimator =
       [&target_states]() {
         auto estimator = std::make_unique<Estimator>();
-        estimator->target_states = target_states;
+        estimator->target_trajectories = {target_states};
         estimator->options.minimizer_progress_to_stdout = false;
         return estimator;
       };
@@ -161,7 +169,7 @@ int main(int argc, char* argv[]) {
   std::array<double, param_dim> initial_guess{8, 4};
   BasinHoppingEstimator<param_dim, Estimator> bhe(construct_estimator,
                                                   initial_guess);
-  bhe.time_limit = 0.2;
+  bhe.time_limit = 5.;
   bhe.run();
 
   printf("Optimized parameters:");

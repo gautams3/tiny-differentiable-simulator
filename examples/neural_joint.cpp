@@ -4,7 +4,7 @@
 #include "neural_scalar.h"
 #include "pendulum.h"
 #include "pybullet_visualizer_api.h"
-#include "tiny_ceres_estimator.h"
+#include "utils/ceres_estimator.hpp"
 #include "utils/file_utils.hpp"
 #include "tiny_multi_body.h"
 #include "tiny_world.h"

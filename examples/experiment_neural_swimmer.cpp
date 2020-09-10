@@ -35,7 +35,7 @@
 #include "math/tiny/tiny_double_utils.h"
 #include "multi_body.hpp"
 #include "neural_augmentation.h"
-#include "tiny_ceres_estimator.h"
+#include "utils/ceres_estimator.hpp"
 #include "urdf/urdf_parser.hpp"
 #include "urdf/urdf_structures.hpp"
 #include "urdf/urdf_to_multi_body.hpp"

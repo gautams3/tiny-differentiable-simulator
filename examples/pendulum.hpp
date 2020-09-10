@@ -62,7 +62,7 @@ void init_compound_pendulum(tds::MultiBody<Algebra>& mb,
     l.collision_geometries.push_back(sphere);
     l.X_collisions.push_back(base_X_geom);
     l.X_visuals.push_back(base_X_geom);
-    l.rbi.print("inertia");
+    // l.rbi.print("inertia");
     mb.attach(l);
   }
 

@@ -23,7 +23,7 @@
 #include "dynamics/kinematics.hpp"
 #include "dynamics/forward_dynamics.hpp"
 #include "dynamics/integrator.hpp"
-#include "pendulum_new.hpp"
+#include "pendulum.hpp"
 
 #include "math/tiny/tiny_double_utils.h"
 #include "utils/file_utils.hpp"
