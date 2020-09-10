@@ -45,14 +45,14 @@ else(tinyxml2_FOUND)
 
   set(tinyxml2_FOUND TRUE)
   set(tinyxml2_INCLUDE_DIRS ../third_party/tinyxml2/include)
-  subdirs(../third_party/tinyxml2)
+  subdirs(${CMAKE_CURRENT_SOURCE_DIR}/../third_party/tinyxml2)
 endif(tinyxml2_FOUND)
 
 
 find_package(crossguid)
 if(crossguid_FOUND)
 else()
-  subdirs(../third_party/crossguid)
+  subdirs(${CMAKE_CURRENT_SOURCE_DIR}/../third_party/crossguid)
   set(crossguid_INCLUDE_DIRS ../third_party/crossguid)
   include_directories(${crossguid_INCLUDE_DIRS})
 endif()
@@ -65,7 +65,7 @@ if(cppzmq_FOUND)
 else()
   message("USING third_party/zmq")
   set(cppzmq_FOUND TRUE)
-  subdirs(../third_party/zeromq)
+  subdirs(${CMAKE_CURRENT_SOURCE_DIR}/../third_party/zeromq)
   set(cppzmq_INCLUDE_DIRS ../third_party/zeromq/include)
   include_directories(${cppzmq_INCLUDE_DIRS})
   add_definitions(-DZMQ_STATIC)
@@ -283,7 +283,7 @@ endif(tinyxml2_FOUND)
 # add_executable(world_example world_example.cpp ${TDS_HDRS})
 # add_executable(test_xarm test_xarm.cpp ${TDS_HDRS})
 
-subdirs(opengl_window)
+subdirs(${CMAKE_CURRENT_SOURCE_DIR}/opengl_window)
 
 add_executable(pendulum_example_gui pendulum_example_gui.cpp utils/tiny_clock.cpp utils/tiny_chrome_trace_util.cpp utils/tiny_logging.cpp ${TDS_HDRS})
 target_link_libraries(pendulum_example_gui opengl_window)
@@ -303,7 +303,7 @@ target_include_directories(opengl_test PRIVATE ../third_party)
 
 target_link_libraries(opengl_test opengl_window)
 
-subdirs(../third_party/dear_imgui)
+subdirs(${CMAKE_CURRENT_SOURCE_DIR}/../third_party/dear_imgui)
 
 add_executable(opengl_imgui_test opengl_imgui_test.cpp ../third_party/dear_imgui/opengl3/imgui_impl_opengl3.cpp utils/tiny_clock.cpp utils/tiny_chrome_trace_util.cpp utils/tiny_logging.cpp ${TDS_HDRS})
 target_link_libraries(opengl_imgui_test opengl_window dear_imgui)
