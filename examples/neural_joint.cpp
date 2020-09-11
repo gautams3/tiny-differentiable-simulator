@@ -1,6 +1,6 @@
 #include <fstream>
 
-#include "neural_augmentation.h"
+#include "utils/neural_augmentation.hpp"
 #include "neural_scalar.h"
 #include "pendulum.h"
 #include "pybullet_visualizer_api.h"
