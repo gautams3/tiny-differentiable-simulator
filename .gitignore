@@ -8,3 +8,4 @@ logs/
 .gdb_history
 .vagrant/
 vcpkg_installed/
+third_party/

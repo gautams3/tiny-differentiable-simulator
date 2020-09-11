@@ -19,10 +19,10 @@ std::string sphere2red;
 VisualizerAPI* visualizer = nullptr;
 
 const int TARGET_ID = 0;  // ID of the ball whose position is optimized for
-constexpr int gSteps = 50; //global specification of steps
+constexpr int kSteps = 50;  // global specification of steps
 using DoubleAlgebra = TinyAlgebra<double, DoubleUtils>;
-constexpr DoubleAlgebra::Scalar gfps = 20; //global fps
-constexpr int gNumBodies = 2; //number of bodies in this experiment
+constexpr DoubleAlgebra::Scalar kfps = 20;  // global fps
+constexpr int kNumBodies = 2;  // number of bodies in this experiment
 
 using namespace tds;
 
@@ -32,8 +32,7 @@ typename Algebra::Scalar rollout(
     const typename Algebra::Scalar* force_y,
     std::vector<std::vector<DoubleAlgebra::Vector3>>& states,
     size_t steps) {
-  typename Algebra::Scalar dt = Algebra::fraction(
-      1, gfps);
+  typename Algebra::Scalar dt = Algebra::fraction(1, kfps);
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   typedef tds::RigidBody<Algebra> RigidBody;
@@ -62,7 +61,8 @@ typename Algebra::Scalar rollout(
       Vector3(Algebra::zero(), -Algebra::two(), Algebra::zero());
   bodies.push_back(white_ball);
 
-  assert(("Optim problem setup assuming gNumBodies number of bodies", bodies.size() == gNumBodies));
+  assert(("Optim problem setup assuming kNumBodies number of bodies",
+          bodies.size() == kNumBodies));
 
   for (int i = 0; i < steps; i++) {
     white_ball->apply_central_force(
@@ -88,7 +88,7 @@ void visualize_trajectory(
     std::vector<std::vector<DoubleAlgebra::Vector3>>& states,
     size_t steps,
     VisualizerAPI* vis = nullptr) {
-  typename Algebra::Scalar dt = Algebra::fraction(1, gfps);
+  typename Algebra::Scalar dt = Algebra::fraction(1, kfps);
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   typedef tds::RigidBody<Algebra> RigidBody;
@@ -184,15 +184,15 @@ void visualize_trajectory(
 struct CeresFunctional {
   template <typename T>
   bool operator()(const T* force, T* cost) const {
-    typedef ceres::Jet<double, gSteps> Jet;
+    typedef ceres::Jet<double, kSteps> Jet;
     typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils,
-                               CeresUtils<gSteps>>
+                               CeresUtils<kSteps>>
         Utils;
     DoubleAlgebra::Vector3 init_posn(0.0, 0.0, 0.0);
-    std::vector<DoubleAlgebra::Vector3> init_state(gNumBodies, init_posn);
-    std::vector<std::vector<DoubleAlgebra::Vector3>> dummy_states(gSteps,
+    std::vector<DoubleAlgebra::Vector3> init_state(kNumBodies, init_posn);
+    std::vector<std::vector<DoubleAlgebra::Vector3>> dummy_states(kSteps,
                                                                   init_state);
-    *cost = rollout<TinyAlgebra<T, Utils>>(force, dummy_states, gSteps);
+    *cost = rollout<TinyAlgebra<T, Utils>>(force, dummy_states, kSteps);
     return true;
   }
 };
@@ -206,8 +206,7 @@ void print_trajectory(const std::vector<std::vector<DoubleAlgebra::Vector3>> &st
 
 int main(int argc, char* argv[]) {
   tds::FileUtils::find_file("sphere2red.urdf", sphere2red);
-  // requires pybullet server running in background
-  // TODO: direct mode not working on my machine
+  // 'shared_memory' requires pybullet server running in background
   std::string connection_mode = "shared_memory";
 
   using namespace std::chrono;
@@ -224,15 +223,14 @@ int main(int argc, char* argv[]) {
   //Initialize variables
   double init_force_y = 3.;
   DoubleAlgebra::Vector3 init_posn(0.0, 0.0, 0.0);
-  std::vector<DoubleAlgebra::Vector3> init_state(gNumBodies, init_posn);
-  std::vector<std::vector<DoubleAlgebra::Vector3>> states(gSteps, init_state);
+  std::vector<DoubleAlgebra::Vector3> init_state(kNumBodies, init_posn);
+  std::vector<std::vector<DoubleAlgebra::Vector3>> states(kSteps, init_state);
   double cost;
-   // TODO: how to use DoubleAlgebra::VectorX here
-  std::vector<double> force_y(gSteps, init_force_y);
+  std::vector<double> force_y(kSteps, init_force_y);
 
   ceres::Problem problem;
-  ceres::AutoDiffCostFunction<CeresFunctional, 1, gSteps> cost_function(
-    new CeresFunctional);
+  ceres::AutoDiffCostFunction<CeresFunctional, 1, kSteps> cost_function(
+      new CeresFunctional);
   problem.AddResidualBlock(&cost_function, NULL, force_y.data());
   double max_force = 10.0;
   for (size_t i = 0; i < force_y.size(); i++)
@@ -243,8 +241,9 @@ int main(int argc, char* argv[]) {
 
   // Before optimization
   printf("ROLLOUT BEFORE OPTIM (see bullet)\n");
-  rollout<DoubleAlgebra>(force_y.data(), states, gSteps);
-  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, gSteps, visualizer);
+  rollout<DoubleAlgebra>(force_y.data(), states, kSteps);
+  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, kSteps,
+                                      visualizer);
 
   ceres::Solver::Options options;
   options.minimizer_progress_to_stdout = true;
@@ -256,9 +255,10 @@ int main(int argc, char* argv[]) {
 
   // After optimization
   printf("ROLLOUT AFTER OPTIM (see bullet)\n");
-  rollout<DoubleAlgebra>(force_y.data(), states, gSteps);
-  print_trajectory(states, force_y, gSteps);
-  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, gSteps, visualizer);
+  rollout<DoubleAlgebra>(force_y.data(), states, kSteps);
+  print_trajectory(states, force_y, kSteps);
+  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, kSteps,
+                                      visualizer);
 
   visualizer->disconnect();
   delete visualizer;
