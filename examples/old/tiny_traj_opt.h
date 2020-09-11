@@ -23,7 +23,7 @@
 #include "pybullet_visualizer_api.h"
 #include "tiny_pd_control.h"
 #include "tiny_urdf_to_multi_body.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
 

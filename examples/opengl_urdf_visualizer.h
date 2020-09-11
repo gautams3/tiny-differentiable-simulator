@@ -22,7 +22,7 @@
 #include <map>
 #include <string>
 
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_urdf_structures.h"
 #include "opengl_window/tiny_opengl3_app.h"
 #include "tiny_obj_loader.h"

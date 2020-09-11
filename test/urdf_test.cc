@@ -25,8 +25,8 @@
 #include "testing/base/public/gunit.h"
 #include "third_party/absl/flags/flag.h"
 #include "tiny_double_utils.h"
-#include "tiny_multi_body.h"
-#include "tiny_world.h"
+#include "multi_body.hpp
+#include "world.hpp
 #include "urdf_import.h"
 
 namespace {

@@ -24,16 +24,18 @@ class NeuralScalar {
   using NeuralNetworkType = tds::NeuralNetwork<Algebra>;
   using InnerAlgebra = Algebra;
 
+  using Scalar = typename Algebra::Scalar;
+
  private:
   /**
    * Value assigned from outside.
    */
-  typename Algebra::Scalar value_{Algebra::zero()};
+  Scalar value_{Algebra::zero()};
 
   /**
    * Cached value from last evaluation.
    */
-  mutable typename Algebra::Scalar cache_;
+  mutable Scalar cache_;
 
   /**
    * Whether evaluation is necessary, or the cached value can be returned.
@@ -69,7 +71,7 @@ class NeuralScalar {
     std::vector<std::string> output_names;
     NeuralNetworkType net;
 
-    std::vector<typename Algebra::Scalar> output_cache;
+    std::vector<Scalar> output_cache;
     mutable bool is_dirty{true};
   };
 
@@ -95,7 +97,7 @@ class NeuralScalar {
     return data;
   }
 
-  static const typename Algebra::Scalar& evaluate_network_(
+  static const Scalar& evaluate_network_(
       int network_id, std::size_t output_id) {
     assert(network_id >= 0);
 
@@ -106,7 +108,7 @@ class NeuralScalar {
       blueprint.is_dirty = true;
     }
     if (blueprint.is_dirty) {
-      std::vector<typename Algebra::Scalar> input(blueprint.input_names.size());
+      std::vector<Scalar> input(blueprint.input_names.size());
       for (std::size_t i = 0; i < blueprint.input_names.size(); ++i) {
         auto input_itr = data.named_scalars.find(blueprint.input_names[i]);
         if (input_itr == data.named_scalars.end()) {
@@ -139,7 +141,7 @@ class NeuralScalar {
 
   NeuralScalar() = default;
 
-  inline NeuralScalar(const typename Algebra::Scalar& value) : value_(value) {
+  inline NeuralScalar(const Scalar& value) : value_(value) {
     is_dirty_ = true;
   }
 
@@ -159,7 +161,7 @@ class NeuralScalar {
     is_dirty_ = true;
     return *this;
   }
-  NeuralScalar& operator=(const typename Algebra::Scalar& rhs) {
+  NeuralScalar& operator=(const Scalar& rhs) {
     value_ = rhs;
     is_dirty_ = true;
     return *this;
@@ -251,7 +253,7 @@ class NeuralScalar {
     // }
   }
 
-  const typename Algebra::Scalar& evaluate() const {
+  const Scalar& evaluate() const {
     if (!is_dirty_) {
       return cache_;
     }
@@ -260,7 +262,7 @@ class NeuralScalar {
       cache_ = value_;
       return value_;
     }
-    typename Algebra::Scalar net_output =
+    Scalar net_output =
         evaluate_network_(blueprint_id_, output_id_);
     cache_ = is_residual ? value_ + net_output : net_output;
     is_dirty_ = false;
@@ -329,7 +331,7 @@ class NeuralScalar {
   }
 
   static void set_blueprint_parameters(
-      const std::vector<typename Algebra::Scalar>& params) {
+      const std::vector<Scalar>& params) {
     int provided = static_cast<int>(params.size());
     int total = num_blueprint_parameters();
     if (provided != total) {
@@ -345,7 +347,7 @@ class NeuralScalar {
     for (auto& blueprint : blueprints) {
       int num_net = blueprint.net.num_parameters();
       next_index = index + num_net;
-      std::vector<typename Algebra::Scalar> net_params(
+      std::vector<Scalar> net_params(
           params.begin() + index, params.begin() + next_index);
       blueprint.net.set_parameters(net_params);
       // #if DEBUG

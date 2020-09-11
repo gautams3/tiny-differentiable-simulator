@@ -20,7 +20,7 @@
 #include "SharedMemory/b3RobotSimulatorClientAPI_InternalData.h"
 #include "SharedMemory/b3RobotSimulatorClientAPI_NoDirect.h"
 #include "assert.h"
-#include "tiny_world.h"
+#include "world.hpp
 #include "xarm.h"
 // DoubleScalar
 // FixedPointScalar
@@ -35,7 +35,7 @@ typedef TinyDual<double> TinyDualDouble;
 
 #include "tiny_double_utils.h"
 #include "tiny_dual_double_utils.h"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_pose.h"
 #include "tiny_rigid_body.h"
 

@@ -25,12 +25,12 @@ int logId = -1;
 #include "tiny_matrix3x3.h"
 #include "tiny_quaternion.h"
 #include "tiny_vector3.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 #include "pybullet_visualizer_api.h"
 #include "tiny_double_utils.h"
 #include "tiny_dual_double_utils.h"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_pose.h"
 #include "tiny_rigid_body.h"
 

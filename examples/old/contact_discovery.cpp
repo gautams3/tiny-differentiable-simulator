@@ -27,7 +27,7 @@
 #include "tiny_quaternion.h"
 #include "tiny_smooth_constraint_solver.h"
 #include "tiny_vector3.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 #include "ceres_utils.h"
 #include "tiny_double_utils.h"

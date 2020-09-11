@@ -5,8 +5,8 @@
 #include "pybullet_visualizer_api.h"
 #include "utils/ceres_estimator.hpp"
 #include "utils/file_utils.hpp"
-#include "tiny_multi_body.h"
-#include "tiny_world.h"
+#include "multi_body.hpp
+#include "world.hpp
 
 // whether to use Parallel Basin Hopping
 #define USE_PBH false

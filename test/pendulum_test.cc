@@ -18,9 +18,9 @@
 #include "testing/base/public/gunit.h"
 #include "tiny_double_utils.h"
 #include "tiny_dual_double_utils.h"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_spatial_transform.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 namespace {
 

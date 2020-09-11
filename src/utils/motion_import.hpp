@@ -23,6 +23,7 @@
 #include <iostream>
 #include <regex>
 
+namespace tds {
 enum LoopMode {
   LOOP_CLAMP = 0,  // stop at the last frame
   LOOP_WRAP        // loop at the last frame
@@ -126,5 +127,6 @@ struct Motion {
     return true;
   }
 };
+}  // namespace tds
 
 #endif  // MOTION_IMPORT_H

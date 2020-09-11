@@ -11,7 +11,7 @@
 #include "tiny_double_utils.h"
 #include "utils/file_utils.hpp"
 #include "tiny_mb_constraint_solver_spring.h"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_system_constructor.h"
 
 struct TorchUtils {

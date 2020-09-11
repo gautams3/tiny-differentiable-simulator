@@ -25,7 +25,7 @@
 
 #include "meshcat_cube_data.h"
 #include "meshcat_zmq.h"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_urdf_structures.h"
 
 inline std::string correct_non_utf_8(const std::string &str) {

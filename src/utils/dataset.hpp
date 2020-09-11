@@ -8,19 +8,20 @@
 #include <string>
 #include <vector>
 
+namespace tds {
 // Dataset class, for storing multi-axis data.
 template <typename Scalar, int Dims>
-class TinyDataset {
+class Dataset {
  public:
   // Constructs an empty dataset with the given dimensions.
-  explicit TinyDataset() : size_(0) {
+  explicit Dataset() : size_(0) {
     std::fill(shape_.begin(), shape_.end(), 0);
     std::fill(cumprod_shape_.begin(), cumprod_shape_.end(), 0);
   }
 
   // Constructs a dataset with the given shape.
   template <typename ShapeT>
-  explicit TinyDataset(const ShapeT& shape) {
+  explicit Dataset(const ShapeT& shape) {
     Resize(shape);
   }
 
@@ -71,7 +72,7 @@ class TinyDataset {
   }
 
  private:
-  using MyType = TinyDataset<Scalar, Dims>;
+  using MyType = Dataset<Scalar, Dims>;
   std::size_t size_;
   std::array<std::size_t, Dims> shape_;
   std::array<std::size_t, Dims> cumprod_shape_;
@@ -80,7 +81,7 @@ class TinyDataset {
 
 // Reader for numpy's .npy files.
 template <typename Scalar, int Dims>
-class TinyNumpyReader {
+class NumpyReader {
  public:
   // Opens a file for reading and extracts .npy header. Returns false for
   // invalid files, check ErrorStatus() to find out what happened.
@@ -149,11 +150,11 @@ class TinyNumpyReader {
     return true;
   }
 
-  // Reads the dataset and returns a TinyDataset containing the information.
-  TinyDataset<Scalar, Dims> Read() {
+  // Reads the dataset and returns a Dataset containing the information.
+  Dataset<Scalar, Dims> Read() {
     file_.seekg(data_start_);
 
-    TinyDataset<Scalar, Dims> output(shape_);
+    Dataset<Scalar, Dims> output(shape_);
 
     std::vector<char> data;
     data.resize(8 * output.Size());
@@ -224,5 +225,6 @@ class TinyNumpyReader {
   std::ifstream file_;
   std::string error_status_;
 };
+}  // namespace tds
 
 #endif

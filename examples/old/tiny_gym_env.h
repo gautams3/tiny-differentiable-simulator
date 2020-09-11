@@ -20,9 +20,9 @@
 #include <chrono>
 #include <thread>
 
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_system_constructor.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 /**
  * Implements a differentiable gym environment.

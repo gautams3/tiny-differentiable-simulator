@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "tiny_matrix3x3.h"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_spatial_transform.h"
 
 template <typename TinyScalar, typename TinyConstants>

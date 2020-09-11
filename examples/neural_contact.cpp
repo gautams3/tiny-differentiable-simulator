@@ -6,9 +6,9 @@
 #include "utils/ceres_estimator.hpp"
 #include "utils/file_utils.hpp"
 #include "tiny_mb_constraint_solver_spring.h"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_system_constructor.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 // whether to use Parallel Basin Hopping
 #define USE_PBH true

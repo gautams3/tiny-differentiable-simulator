@@ -26,10 +26,10 @@
 #include "tiny_dual_double_utils.h"
 #include "tiny_eigen_helper.h"
 #include "utils/file_utils.hpp"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_rigid_body.h"
 #include "tiny_vector3.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 int main(int argc, char* argv[]) {
   std::string plane_filename;

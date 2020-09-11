@@ -270,10 +270,6 @@ if(tinyxml2_FOUND)
   # target_link_libraries(tiny_urdf_parser_example tinyxml2)
 
   if(Ceres_FOUND)
-    add_executable(experiment_neural_swimmer experiment_neural_swimmer.cpp ${TDS_HDRS})
-    target_include_directories(experiment_neural_swimmer PRIVATE /usr/include/python3.8)
-    target_link_libraries(experiment_neural_swimmer PRIVATE ${CERES_LIBRARIES} tinyxml2 cxxopts::cxxopts)
-
     #add_executable(neural_contact neural_contact.cpp ${TDS_HDRS})
     #target_link_libraries(neural_contact opengl_window ${DL}
     #        ${CERES_LIBRARIES} ${MESHCAT_LIBRARIES} python2.7 tinyxml2)

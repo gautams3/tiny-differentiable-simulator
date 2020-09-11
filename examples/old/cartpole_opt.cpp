@@ -31,9 +31,9 @@ typedef PyBulletVisualizerAPI VisualizerAPI;
 #include "pybullet_urdf_import.h"
 #include "tiny_double_utils.h"
 #include "utils/file_utils.hpp"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_urdf_to_multi_body.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 /**
  * Direct shooting trajectory optimization problem formulated as Nonlinear
