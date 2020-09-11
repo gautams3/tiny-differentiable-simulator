@@ -124,21 +124,16 @@ if(Bullet_FOUND)
       ${PYTHON_NUMPY_INCLUDE_DIR}
     )
 
-    #add_executable(billiard_opt_gui billiard_opt_gui.cpp ${TDS_HDRS})
-    #target_link_libraries(billiard_opt_gui pybullet_visualizer_api ${DL}
-    #        ${CERES_LIBRARIES} enoki-autodiff enoki-cuda cuda)
+    add_executable(billiard_opt_gui billiard_opt_gui.cpp ${TDS_HDRS})
+    target_link_libraries(billiard_opt_gui pybullet_visualizer_api ${DL}
+            ${CERES_LIBRARIES} cuda)
 
-    #set_target_properties(billiard_opt_gui PROPERTIES FOLDER autodiff)
-    #target_compile_definitions(billiard_opt_gui PRIVATE STAN_MATH)
-
-    add_executable(billiard_opt_simple billiard_opt_simple.cpp ${TDS_HDRS})
-    target_link_libraries(billiard_opt_simple pybullet_visualizer_api ${DL}
-            ${CERES_LIBRARIES})
-    target_compile_definitions(billiard_opt_simple PRIVATE STAN_MATH)
+    set_target_properties(billiard_opt_gui PROPERTIES FOLDER autodiff)
+    target_compile_definitions(billiard_opt_gui PRIVATE STAN_MATH)
 
     add_executable(billiard_simple_trajOpt billiard_simple_trajOpt.cpp ${TDS_HDRS})
     target_link_libraries(billiard_simple_trajOpt pybullet_visualizer_api ${DL}
-            ${CERES_LIBRARIES} enoki-autodiff enoki-cuda cuda)
+            ${CERES_LIBRARIES} cuda)
     set_target_properties(billiard_simple_trajOpt PROPERTIES FOLDER autodiff)
     target_compile_definitions(billiard_simple_trajOpt PRIVATE STAN_MATH)
 
@@ -158,11 +153,6 @@ if(Bullet_FOUND)
     add_executable(box_opt_simple box_opt_simple.cpp ${TDS_HDRS})
     target_link_libraries(box_opt_simple opengl_window ${DL}
     ${CERES_LIBRARIES} ${MESHCAT_LIBRARIES} python2.7 tinyxml2)
-
-    add_executable(ceres_box_example ceres_box_example.cpp ${TDS_HDRS})
-    target_link_libraries(ceres_box_example ${DL} ${CERES_LIBRARIES}
-            python2.7 ${PYTHON_LIBRARIES})
-    target_compile_definitions(ceres_box_example PRIVATE -DUSE_MATPLOTLIB)
 
     #add_executable(neural_pendulum neural_pendulum.cpp ${TDS_HDRS})
     #target_link_libraries(neural_pendulum pybullet_visualizer_api ${DL}
