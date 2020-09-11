@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <cassert>
-#include <ceres/autodiff_cost_function.h>
+#include "ceres/ceres.h"
 #include <chrono>  // std::chrono::seconds
 #include <thread>  // std::this_thread::sleep_for
 
@@ -19,20 +19,21 @@ std::string sphere2red;
 VisualizerAPI* visualizer = nullptr;
 
 const int TARGET_ID = 0;  // ID of the ball whose position is optimized for
-constexpr int steps = 50;
+constexpr int gSteps = 50; //global specification of steps
 using DoubleAlgebra = TinyAlgebra<double, DoubleUtils>;
-constexpr DoubleAlgebra::Scalar fps = 20;
+constexpr DoubleAlgebra::Scalar gfps = 20; //global fps
+constexpr int gNumBodies = 2; //number of bodies in this experiment
 
 using namespace tds;
 
 template <typename Algebra>
 // forcing 'states' to be of type double, not part of decision variables
-// TODO: What's the preferred design here
 typename Algebra::Scalar rollout(
     const typename Algebra::Scalar* force_y,
-    std::vector<std::vector<DoubleAlgebra::Vector3>>& states) {
+    std::vector<std::vector<DoubleAlgebra::Vector3>>& states,
+    size_t steps) {
   typename Algebra::Scalar dt = Algebra::fraction(
-      1, fps);  // TODO: want to specify dtd as double instead of fps as int
+      1, gfps);
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   typedef tds::RigidBody<Algebra> RigidBody;
@@ -61,6 +62,8 @@ typename Algebra::Scalar rollout(
       Vector3(Algebra::zero(), -Algebra::two(), Algebra::zero());
   bodies.push_back(white_ball);
 
+  assert(("Optim problem setup assuming gNumBodies number of bodies", bodies.size() == gNumBodies));
+
   for (int i = 0; i < steps; i++) {
     white_ball->apply_central_force(
         Vector3(Algebra::zero(), force_y[i], Algebra::zero()));
@@ -83,8 +86,9 @@ template <typename Algebra>
 void visualize_trajectory(
     const typename Algebra::Scalar* force_y,
     std::vector<std::vector<DoubleAlgebra::Vector3>>& states,
+    size_t steps,
     VisualizerAPI* vis = nullptr) {
-  typename Algebra::Scalar dt = Algebra::fraction(1, fps);
+  typename Algebra::Scalar dt = Algebra::fraction(1, gfps);
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   typedef tds::RigidBody<Algebra> RigidBody;
@@ -179,27 +183,25 @@ void visualize_trajectory(
 
 struct CeresFunctional {
   template <typename T>
-  bool operator()(const T* f, T* e) const {
-    typedef ceres::Jet<double, steps> Jet;
+  bool operator()(const T* force, T* cost) const {
+    typedef ceres::Jet<double, gSteps> Jet;
     typedef std::conditional_t<std::is_same_v<T, double>, DoubleUtils,
-                               CeresUtils<steps>>
+                               CeresUtils<gSteps>>
         Utils;
     DoubleAlgebra::Vector3 init_posn(0.0, 0.0, 0.0);
-    // 2 = num_bodies. TODO How to make bodies.size() global?
-    std::vector<DoubleAlgebra::Vector3> init_state(2, init_posn);
-    std::vector<std::vector<DoubleAlgebra::Vector3>> dummy_states(steps,
+    std::vector<DoubleAlgebra::Vector3> init_state(gNumBodies, init_posn);
+    std::vector<std::vector<DoubleAlgebra::Vector3>> dummy_states(gSteps,
                                                                   init_state);
-    *e = rollout<TinyAlgebra<T, Utils>>(f, dummy_states);
+    *cost = rollout<TinyAlgebra<T, Utils>>(force, dummy_states, gSteps);
     return true;
   }
 };
 
-ceres::AutoDiffCostFunction<CeresFunctional, 1, steps> cost_function(
-    new CeresFunctional);
-
-void grad_ceres(double* force_y, double* cost, double* d_force_y) {
-  double const* const* params = &force_y;
-  cost_function.Evaluate(params, cost, &d_force_y);
+void print_trajectory(const std::vector<std::vector<DoubleAlgebra::Vector3>> &states, const std::vector<double> &inputs, size_t steps) {
+  printf("yb = y coord of target (blue); yw = y coord of 'robot' white; f = force applied to 'robot'\n");
+  for (size_t i = 0; i < steps; i++) {
+    printf("%lu: yb %.3f\tyw %.3f\tf %.3f\n", i, states[i][TARGET_ID][1], states[i][1][1], inputs[i]);
+  }
 }
 
 int main(int argc, char* argv[]) {
@@ -217,46 +219,46 @@ int main(int argc, char* argv[]) {
   if (connection_mode == "direct") mode = eCONNECT_DIRECT;
   if (connection_mode == "shared_memory") mode = eCONNECT_SHARED_MEMORY;
   visualizer->connect(mode);
-
   visualizer->resetSimulation();
 
+  //Initialize variables
   double init_force_y = 3.;
   DoubleAlgebra::Vector3 init_posn(0.0, 0.0, 0.0);
-  std::vector<DoubleAlgebra::Vector3> init_state(
-      2, init_posn);  // magic number 2 = num_bodies
-  std::vector<std::vector<DoubleAlgebra::Vector3>> states(steps, init_state);
+  std::vector<DoubleAlgebra::Vector3> init_state(gNumBodies, init_posn);
+  std::vector<std::vector<DoubleAlgebra::Vector3>> states(gSteps, init_state);
   double cost;
-  std::vector<double> d_force_y(steps, 0.0);
    // TODO: how to use DoubleAlgebra::VectorX here
-  std::vector<double> force_y(steps, init_force_y);
-  double learning_rate = 1e0;
+  std::vector<double> force_y(gSteps, init_force_y);
 
-  // Before optimization
-  printf("ROLLOUT BEFORE OPTIM (see bullet)");
-  rollout<DoubleAlgebra>(force_y.data(), states);
-  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, visualizer);
-
-  for (int iter = 0; iter < 50; ++iter) {
-    grad_ceres(force_y.data(), &cost, d_force_y.data());
-    printf("Iteration %02d - cost: %.3f \n", iter, cost);
-
-    for (size_t i = 0; i < steps; i++) {
-      force_y[i] -= learning_rate * d_force_y[i];
-    }
+  ceres::Problem problem;
+  ceres::AutoDiffCostFunction<CeresFunctional, 1, gSteps> cost_function(
+    new CeresFunctional);
+  problem.AddResidualBlock(&cost_function, NULL, force_y.data());
+  double max_force = 10.0;
+  for (size_t i = 0; i < force_y.size(); i++)
+  {
+    problem.SetParameterLowerBound(force_y.data(), i, 0.0);
+    problem.SetParameterUpperBound(force_y.data(), i, max_force);
   }
 
-  // Print decision variables (force_y)
-  // TODO: use DoubleAlgebra::print() after force_y is type VectorX
-  printf("Final force: [");
-  for (auto i : force_y) printf("%.2f, ", i);
-  std::cout << "]\n";
+  // Before optimization
+  printf("ROLLOUT BEFORE OPTIM (see bullet)\n");
+  rollout<DoubleAlgebra>(force_y.data(), states, gSteps);
+  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, gSteps, visualizer);
 
-  fflush(stdout);
+  ceres::Solver::Options options;
+  options.minimizer_progress_to_stdout = true;
+  options.max_num_iterations = 500;
+  ceres::Solver::Summary summary;
+  ceres::Solve(options, &problem, &summary);
+
+  std::cout << summary.BriefReport() << "\n";
 
   // After optimization
-  printf("ROLLOUT AFTER OPTIM (see bullet)");
-  rollout<DoubleAlgebra>(force_y.data(), states);
-  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, visualizer);
+  printf("ROLLOUT AFTER OPTIM (see bullet)\n");
+  rollout<DoubleAlgebra>(force_y.data(), states, gSteps);
+  print_trajectory(states, force_y, gSteps);
+  visualize_trajectory<DoubleAlgebra>(force_y.data(), states, gSteps, visualizer);
 
   visualizer->disconnect();
   delete visualizer;
