@@ -3,7 +3,6 @@
 
 #include "math/tiny/neural_scalar.hpp"
 #include "math/tiny/tiny_algebra.hpp"
-#include "utils/ceres_estimator.hpp"
 
 namespace tds {
 

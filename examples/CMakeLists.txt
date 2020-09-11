@@ -23,9 +23,6 @@ find_package(ct_optcon)
 find_package(Ceres)
 find_package(PkgConfig)
 
-# vcpkg dependencies
-find_package(cxxopts REQUIRED)
-
 if(DEFINED Bullet_DIR)
   message("Finding local Bullet")
   find_package(Bullet CONFIG)
@@ -90,8 +87,6 @@ endif()
 # foreach (_variableName ${_variableNames})
 #    message(STATUS "${_variableName}=${${_variableName}}")
 # endforeach()
-
-find_package(HighFive)
 
 
 set(MESHCAT_LIBRARIES crossguid cpp_base64 zmq)
@@ -172,18 +167,6 @@ if(Bullet_FOUND)
     #add_executable(neural_joint neural_joint.cpp ${TDS_HDRS})
     #target_link_libraries(neural_joint pybullet_visualizer_api ${DL}
     #        ${CERES_LIBRARIES})
-
-    if(HighFive_FOUND)
-      include_directories(${HighFive_INCLUDE_DIRS})
-      add_executable(neural_push neural_push.cpp ${TDS_HDRS})
-      target_compile_features(neural_push PRIVATE cxx_std_17)
-      target_link_libraries(
-        neural_push pybullet_visualizer_api ${DL}
-        HighFive ${PYTHON_LIBRARIES} python2.7 ${CERES_LIBRARIES}
-        -lstdc++fs
-      ) # -fsanitize=thread)
-      # target_compile_options(neural_push PRIVATE -fsanitize=thread)
-    endif(HighFive_FOUND)
 
     #add_executable(neural_heightfield neural_heightfield.cpp ${TDS_HDRS})
     #target_link_libraries(neural_heightfield pybullet_visualizer_api ${DL}
