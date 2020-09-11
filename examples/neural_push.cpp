@@ -10,11 +10,11 @@
 #include "neural_augmentation.h"
 #include "neural_push_utils.h"
 #include "pybullet_visualizer_api.h"
-#include "tiny_ceres_estimator.h"
+#include "utils/ceres_estimator.hpp"
 #include "tiny_dataset.h"
 #include "tiny_double_utils.h"
 #include "utils/file_utils.hpp"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_system_constructor.h"
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
@@ -68,10 +68,10 @@ struct Laboratory {
 
   TinyMultiBody<Scalar, Utils> *true_object{nullptr};
   TinyMultiBody<Scalar, Utils> *object{nullptr};
-  TinyDataset<double, 2> object_exterior;
+  Dataset<double, 2> object_exterior;
 
   // object exterior transformed by object pose
-  TinyDataset<Scalar, 2> tf_object_exterior;
+  Dataset<Scalar, 2> tf_object_exterior;
 
   TinyMultiBodyConstraintSolverSpring<Scalar, Utils> *contact_ground{nullptr};
   TinyMultiBodyConstraintSolver<Scalar, Utils> tip_contact_model;
@@ -102,7 +102,7 @@ struct Laboratory {
       }
     }
 
-    TinyNumpyReader<double, 2> npy_reader;
+    NumpyReader<double, 2> npy_reader;
     bool npy_success = npy_reader.Open(exterior_filename);
     assert(npy_success);
     object_exterior = npy_reader.Read();
@@ -485,7 +485,7 @@ int main(int argc, char *argv[]) {
   std::string exterior_filename;
   TinyFileUtils::find_file("mit-push/obj/" + shape + "_ext.npy",
                            exterior_filename);
-  TinyNumpyReader<Scalar, 2> npy_reader;
+  NumpyReader<Scalar, 2> npy_reader;
   bool npy_success = npy_reader.Open(exterior_filename);
   assert(npy_success);
   auto exterior = npy_reader.Read();

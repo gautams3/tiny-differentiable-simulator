@@ -77,6 +77,12 @@ class MultiBody {
     return links_.begin();
   }
   TINY_INLINE typename LinkCollection::iterator end() { return links_.end(); }
+  TINY_INLINE typename LinkCollection::const_iterator begin() const {
+    return links_.begin();
+  }
+  TINY_INLINE typename LinkCollection::const_iterator end() const {
+    return links_.end();
+  }
   TINY_INLINE typename LinkCollection::const_iterator cbegin() const {
     return links_.cbegin();
   }
@@ -238,6 +244,15 @@ class MultiBody {
     tau_ = Algebra::zerox(dof_actuated());
     if (is_floating_) {
       q_[3] = Algebra::one();  // make sure orientation is valid
+    }
+
+    base_abi_ = base_rbi_;
+    if (is_floating_ && !base_abi_.is_invertible()) {
+      fprintf(stderr,
+              "Error: floating-base inertia matrix (ABI) is not invertible. "
+              "Are you sure the model should be floating-base?\n");
+      Algebra::print("Floating-base ABI", base_abi_);
+      exit(1);
     }
   }
 

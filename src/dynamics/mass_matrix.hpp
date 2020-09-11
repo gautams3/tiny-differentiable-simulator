@@ -40,8 +40,9 @@ void mass_matrix(MultiBody<Algebra> &mb, const typename Algebra::VectorX &q,
     int parent = link.parent_index;
     const ArticulatedBodyInertia &Ic = link.abi;
     const Transform &Xp = link.X_parent;
-    // ArticulatedBodyInertia delta_I = Xp.apply(Ic);  // shift(Xp, Ic)
+    // ArticulatedBodyInertia delta_I = Xp.apply_transpose(Ic);  // shift(Xp, Ic)
     ArticulatedBodyInertia delta_I = Xp.matrix_transpose() * Ic.matrix() * Xp.matrix();
+    // ArticulatedBodyInertia delta_I = Xp.matrix() * Ic.matrix() * Xp.matrix_transpose();
     if (parent >= 0) {
       mb[parent].abi += delta_I;
     } else if (mb.is_floating()) {
@@ -55,7 +56,7 @@ void mass_matrix(MultiBody<Algebra> &mb, const typename Algebra::VectorX &q,
 
     int j = i;
     while (mb[j].parent_index != -1) {
-      Fi = mb[j].X_parent.apply_inverse(Fi);
+      Fi = mb[j].X_parent.apply(Fi);
       j = mb[j].parent_index;
       if (mb[j].joint_type == JOINT_FIXED) continue;
       int qd_j = mb[j].qd_index;
@@ -64,7 +65,7 @@ void mass_matrix(MultiBody<Algebra> &mb, const typename Algebra::VectorX &q,
     }
 
     if (mb.is_floating()) {
-      Fi = mb[j].X_parent.apply_inverse(Fi);
+      Fi = mb[j].X_parent.apply(Fi);
       Algebra::assign_column(*M, qd_i, Fi);
       Algebra::assign_row(*M, qd_i, Fi);
     }
@@ -76,6 +77,8 @@ void mass_matrix(MultiBody<Algebra> &mb, const typename Algebra::VectorX &q,
     M->assign_matrix(3, 0, Algebra::transpose(mb.base_abi().H));
     M->assign_matrix(3, 3, mb.base_abi().M);
   }
+
+  // Algebra::print("Mass matrix", *M);
 }
 
 template <typename Algebra>

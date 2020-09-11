@@ -43,11 +43,12 @@ class MultiBodyConstraintSolver {
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix3X = typename Algebra::Matrix3X;
   using MatrixX = typename Algebra::MatrixX;
+public:
   typedef tds::MultiBody<Algebra> MultiBody;
   typedef tds::Geometry<Algebra> Geometry;
   typedef tds::Transform<Algebra> Transform;
   typedef tds::MultiBodyContactPoint<Algebra> ContactPoint;
-
+private:
   SubmitProfileTiming profile_timing_func_{nullptr};
 
   int pgs_iterations_{50};

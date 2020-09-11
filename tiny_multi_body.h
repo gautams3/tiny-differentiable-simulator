@@ -25,12 +25,12 @@
 #include <string>
 #include <vector>
 
-#include "tiny_actuator.h"
-#include "tiny_geometry.h"
-#include "tiny_matrix_x.h"
-#include "tiny_spatial_motion_vector.h"
-#include "tiny_spatial_transform.h"
-#include "tiny_symmetric_spatial_dyad.h"
+#include "actuator.hpp"
+#include "geometry.h"
+#include "math/tiny/tiny_matrix_x.h"
+#include "math/tiny/tiny_spatial_motion_vector.h"
+#include "math/tiny/tiny_spatial_transform.h"
+#include "math/tiny/tiny_symmetric_spatial_dyad.h"
 
 #ifdef NEURAL_SIM
 #include "examples/neural_scalar.h"

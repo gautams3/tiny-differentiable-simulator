@@ -7,7 +7,7 @@
 
 #include "tiny_dataset.h"
 #include "tiny_mb_constraint_solver_spring.h"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 
 template <typename Scalar>
 Scalar yaw_correction(const Scalar &yaw) {
@@ -200,8 +200,8 @@ Scalar line_distance(const Scalar &px, const Scalar &py, const Scalar &x1,
  * dy.
  */
 template <typename Scalar, typename Utils>
-void transform_points(const TinyDataset<double, 2> &exterior,
-                      TinyDataset<Scalar, 2> &tf_exterior, const Scalar &dx,
+void transform_points(const Dataset<double, 2> &exterior,
+                      Dataset<Scalar, 2> &tf_exterior, const Scalar &dx,
                       const Scalar &dy, const Scalar &yaw) {
   const Scalar cos_yaw = Utils::cos1(yaw), sin_yaw = Utils::sin1(yaw);
   double exterior_center_x = 0;
@@ -238,7 +238,7 @@ void transform_points(const TinyDataset<double, 2> &exterior,
 template <typename Scalar, typename Utils>
 TinyContactPointMultiBody<Scalar, Utils> compute_contact(
     TinyMultiBody<Scalar, Utils> *tip, TinyMultiBody<Scalar, Utils> *object,
-    const TinyDataset<Scalar, 2> &exterior,
+    const Dataset<Scalar, 2> &exterior,
     const Scalar &tip_radius = Utils::fraction(45, 10000)) {  // 0.0045
   const Scalar tip_x = tip->m_q[0];
   const Scalar tip_y = tip->m_q[1];

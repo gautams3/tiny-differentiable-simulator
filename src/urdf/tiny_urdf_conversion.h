@@ -25,7 +25,7 @@
 
 #include "tiny_quaternion.h"
 #include "tiny_symmetric_spatial_dyad.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 template <typename TinyScalar, typename TinyConstants>
 struct TinyUrdfInertial {

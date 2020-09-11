@@ -59,7 +59,7 @@ class MultiBodyConstraintSolverSpring
   typedef typename Algebra::VectorX VectorX;
   typedef typename Algebra::Matrix3 Matrix3;
   typedef typename Algebra::Matrix3X Matrix3X;
-  typedef MultiBody<Algebra> MultiBody;
+  //typedef MultiBody<Algebra> MultiBody;
   typedef MultiBodyContactPoint<Algebra> ContactPoint;
 
   /**

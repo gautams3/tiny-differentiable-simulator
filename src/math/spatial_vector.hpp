@@ -11,6 +11,7 @@ struct SpatialVector {
   using Scalar = typename Algebra::Scalar;
   using Vector3 = typename Algebra::Vector3;
   // using Vector6 = typename Algebra::Vector6;
+  using Matrix6 = typename Algebra::Matrix6;
 
   Vector3 top{Algebra::zero3()};
   Vector3 bottom{Algebra::zero3()};
@@ -61,6 +62,16 @@ struct SpatialVector {
     printf("%.16f,%.16f,%.16f\n", x, y, z);
   }
 
+  friend SpatialVector operator*(const Matrix6 &m, const SpatialVector &v) {
+    SpatialVector result;
+    for (typename Algebra::Index i = 0; i < 6; ++i) {
+      for (typename Algebra::Index j = 0; j < 6; ++j) {
+        result[i] += m(i, j) * v[j];
+      }
+    }
+    return result;
+  }
+
   //   ENOKI_STRUCT(SpatialVector, top, bottom)
 };
 // ENOKI_STRUCT_SUPPORT(SpatialVector, top, bottom)
@@ -72,6 +83,11 @@ struct MotionVector : public SpatialVector<Algebra> {
   using SpatialVector::bottom;
   using SpatialVector::SpatialVector;
   using SpatialVector::top;
+
+  explicit MotionVector(const SpatialVector &v) {
+    top = v.top;
+    bottom = v.bottom;
+  }
 
   TINY_INLINE MotionVector operator-(const MotionVector &vec) const {
     return MotionVector(top - vec.top, bottom - vec.bottom);

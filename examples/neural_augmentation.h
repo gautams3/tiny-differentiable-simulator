@@ -1,18 +1,21 @@
 #ifndef NEURAL_AUGMENTATION_H
 #define NEURAL_AUGMENTATION_H
 
-#include "neural_scalar.h"
-#include "tiny_ceres_estimator.h"
+#include "math/tiny/neural_scalar.hpp"
+#include "math/tiny/tiny_algebra.hpp"
+#include "utils/ceres_estimator.hpp"
+
+namespace tds {
 
 struct NeuralAugmentation {
-  std::vector<TinyNeuralNetworkSpecification> specs;
+  std::vector<NeuralNetworkSpecification> specs;
 
   std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>
       output_inputs;
 
   static inline int default_hidden_layers{2};
   static inline int default_hidden_units{5};
-  TinyNeuralNetworkActivation activation_fn = NN_ACT_ELU;
+  NeuralNetworkActivation activation_fn = NN_ACT_ELU;
 
   // L1 regularization for input weights (lasso) to encourage sparse inputs
   double input_lasso_regularization{0};
@@ -22,22 +25,23 @@ struct NeuralAugmentation {
   double weight_limit = 0.1;
   double bias_limit = 0.2;
 
-  TinyNeuralNetworkSpecification &add_wiring(
+  NeuralNetworkSpecification &add_wiring(
       const std::string &output, const std::vector<std::string> &inputs,
       int hidden_layers = default_hidden_layers,
       int hidden_units = default_hidden_units,
-      TinyNeuralNetworkActivation output_fn = NN_ACT_IDENTITY) {
-    return add_wiring(std::vector<std::string>{output}, inputs, hidden_layers, hidden_units, output_fn);
+      NeuralNetworkActivation output_fn = NN_ACT_IDENTITY) {
+    return add_wiring(std::vector<std::string>{output}, inputs, hidden_layers,
+                      hidden_units, output_fn);
   }
 
-  TinyNeuralNetworkSpecification &add_wiring(
+  NeuralNetworkSpecification &add_wiring(
       const std::vector<std::string> &outputs,
       const std::vector<std::string> &inputs,
       int hidden_layers = default_hidden_layers,
       int hidden_units = default_hidden_units,
-      TinyNeuralNetworkActivation output_fn = NN_ACT_IDENTITY) {
+      NeuralNetworkActivation output_fn = NN_ACT_IDENTITY) {
     // TODO consider allowing biases on inputs?
-    TinyNeuralNetworkSpecification spec(static_cast<int>(inputs.size()), false);
+    NeuralNetworkSpecification spec(static_cast<int>(inputs.size()), false);
     // define overparameterized NN
     for (int li = 0; li < hidden_layers; ++li) {
       spec.add_linear_layer(activation_fn, hidden_units);
@@ -49,27 +53,27 @@ struct NeuralAugmentation {
     return specs.back();
   }
 
-  template <typename Scalar, typename Utils>
-  void instantiate(const std::vector<Scalar> &params,
+  template <typename Algebra>
+  void instantiate(const std::vector<typename Algebra::Scalar> &params,
                    std::size_t param_index_offset = 0) const {
     static_assert(
-        !is_neural_scalar<Scalar, Utils>::value,
+        !is_neural_algebra<Algebra>::value,
         "Parameter vector provided to NeuralAugmentation::instantiate() must "
         "not be of NeuralScalar type.\n");
 
-    typedef NeuralScalar<Scalar, Utils> NScalar;
+    using NAlgebra = NeuralAlgebra<Algebra>;
 
-    NScalar::clear_all_blueprints();
-    typedef typename NScalar::NeuralNetworkType NeuralNetwork;
+    NAlgebra::Scalar::clear_all_blueprints();
+    typedef typename NAlgebra::Scalar::NeuralNetworkType NeuralNetwork;
     std::size_t pi = param_index_offset;
     for (std::size_t i = 0; i < specs.size(); ++i) {
       NeuralNetwork net(specs[i]);
       int net_size = net.num_parameters();
-      std::vector<Scalar> net_params(params.begin() + pi,
-                                     params.begin() + pi + net_size);
+      std::vector<typename Algebra::Scalar> net_params(
+          params.begin() + pi, params.begin() + pi + net_size);
       net.set_parameters(net_params);
-      NScalar::add_blueprint(output_inputs[i].first, output_inputs[i].second,
-                             net);
+      NAlgebra::Scalar::add_blueprint(output_inputs[i].first,
+                                      output_inputs[i].second, net);
       pi += net_size;
     }
   }
@@ -78,9 +82,10 @@ struct NeuralAugmentation {
   void assign_estimation_parameters(
       std::array<EstimationParameter, ParameterDim> &params,
       std::size_t param_index_offset = 0,
-      TinyNeuralNetworkInitialization init_method = NN_INIT_XAVIER) const {
+      NeuralNetworkInitialization init_method = NN_INIT_XAVIER) const {
     if (num_total_parameters() + param_index_offset > ParameterDim) {
-      std::cerr << "Error: at least " << num_total_parameters() + param_index_offset 
+      std::cerr << "Error: at least "
+                << num_total_parameters() + param_index_offset
                 << " parameters are necessary for the neural augmentation.\n";
       assert(0);
       exit(1);
@@ -95,10 +100,10 @@ struct NeuralAugmentation {
       std::string net_prefix = output_name + "_";
       // create sensible initialization for network weights
       std::vector<double> init_weights, init_biases;
-      specs[i].template initialize<double, DoubleUtils>(
-          init_weights, init_biases, init_method);
+      specs[i].template initialize<DoubleAlgebra>(init_weights, init_biases,
+                                                  init_method);
 
-      specs[i].template save_graphviz<double, DoubleUtils>(
+      specs[i].template save_graphviz<DoubleAlgebra>(
           "init_net_" + std::to_string(i) + ".dot", output_inputs[i].second,
           output_inputs[i].first, init_weights, init_biases);
 
@@ -146,11 +151,13 @@ struct NeuralAugmentation {
         biases[j] = params[pi];
       }
 
-      specs[i].template save_graphviz<double, DoubleUtils>(
+      specs[i].template save_graphviz<DoubleAlgebra>(
           "net_" + std::to_string(i) + ".dot", output_inputs[i].second,
           {output_inputs[i].first}, weights, biases);
     }
   }
 };
+
+}  // namespace tds
 
 #endif  // NEURAL_AUGMENTATION_H

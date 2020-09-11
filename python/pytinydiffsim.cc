@@ -24,7 +24,7 @@
 #include "tiny_matrix3x3.h"
 #include "tiny_matrix_x.h"
 #include "tiny_mb_constraint_solver_spring.h"
-#include "tiny_multi_body.h"
+#include "multi_body.hpp
 #include "tiny_pose.h"
 #include "tiny_quaternion.h"
 #include "tiny_raycast.h"
@@ -32,7 +32,7 @@
 #include "tiny_urdf_structures.h"
 #include "tiny_urdf_to_multi_body.h"
 #include "tiny_vector3.h"
-#include "tiny_world.h"
+#include "world.hpp
 
 template <typename TinyScalar, typename TinyConstants>
 struct UrdfToMultiBody2 {

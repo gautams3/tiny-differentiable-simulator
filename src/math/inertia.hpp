@@ -17,14 +17,14 @@ struct RigidBodyInertia {
   /**
    * Mass \f$m\f$.
    */
-  Scalar mass{0};
+  Scalar mass{Algebra::zero()};
 
   /**
    * Center of mass, also denoted as \f$h\f$.
    */
-  Vector3 com{0};
+  Vector3 com{Algebra::zero3()};
 
-  Matrix3 inertia{Algebra::diagonal3(1)};
+  Matrix3 inertia{Algebra::diagonal3(Algebra::one())};
 
   RigidBodyInertia() = default;
 
@@ -246,6 +246,19 @@ struct ArticulatedBodyInertia {
     return abi;
   }
 
+  bool is_invertible() const {
+    if (Algebra::is_zero(Algebra::determinant(I))) {
+      return false;
+    }
+    Matrix3 Ainv = Algebra::inverse(I);
+    Matrix3 B = H;
+    Matrix3 C = -B;
+    if (Algebra::is_zero(Algebra::determinant(M - C * Ainv * B))) {
+      return false;
+    }
+    return true;
+  }
+
   ArticulatedBodyInertia inverse() const {
     // Inverse of a symmetric block matrix
     // according to (4.1) in
@@ -307,7 +320,8 @@ struct ArticulatedBodyInertia {
       for (int i = 0; i < indent; ++i) {
         printf(" ");
       }
-      printf("%.8f  %.8f  %.8f\n", m(j, 0), m(j, 1), m(j, 2));
+      printf("%.8f  %.8f  %.8f\n", Algebra::to_double(m(j, 0)),
+             Algebra::to_double(m(j, 1)), Algebra::to_double(m(j, 2)));
     }
   }
 };
