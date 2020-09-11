@@ -59,7 +59,6 @@ class MultiBodyConstraintSolverSpring
   typedef typename Algebra::VectorX VectorX;
   typedef typename Algebra::Matrix3 Matrix3;
   typedef typename Algebra::Matrix3X Matrix3X;
-  //typedef MultiBody<Algebra> MultiBody;
   typedef MultiBodyContactPoint<Algebra> ContactPoint;
 
   /**
@@ -289,8 +288,8 @@ class MultiBodyConstraintSolverSpring
 
     const ContactPoint& cp0 = cps[0];
 
-    MultiBody* mb_a = cp0.multi_body_a;
-    MultiBody* mb_b = cp0.multi_body_b;
+    MultiBody<Algebra>* mb_a = cp0.multi_body_a;
+    MultiBody<Algebra>* mb_b = cp0.multi_body_b;
 
     const int n_a = mb_a->dof_qd();
     const int n_b = mb_b->dof_qd();

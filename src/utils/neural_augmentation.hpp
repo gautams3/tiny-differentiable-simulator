@@ -3,6 +3,8 @@
 
 #include "math/tiny/neural_scalar.hpp"
 #include "math/tiny/tiny_algebra.hpp"
+#include "math/tiny/tiny_double_utils.h"
+#include "parameter.hpp"
 
 namespace tds {
 
