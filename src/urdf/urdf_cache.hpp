@@ -91,7 +91,7 @@ struct UrdfCache {
         retrieve(urdf_filename, sim, vis, args, ignore_cache);
     UrdfToMultiBody<Algebra>::convert_to_multi_body(urdf_data, world,
                                                               *mb);
-    mb->isFloating = is_floating;
+    mb->set_floating_base(is_floating);
     mb->initialize();
     return mb;
   }

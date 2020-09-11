@@ -43,14 +43,17 @@ class MultiBodyConstraintSolver {
   using Matrix3 = typename Algebra::Matrix3;
   using Matrix3X = typename Algebra::Matrix3X;
   using MatrixX = typename Algebra::MatrixX;
-public:
+
+ public:
   typedef tds::MultiBody<Algebra> MultiBody;
   typedef tds::Geometry<Algebra> Geometry;
   typedef tds::Transform<Algebra> Transform;
   typedef tds::MultiBodyContactPoint<Algebra> ContactPoint;
-private:
+
+ private:
   SubmitProfileTiming profile_timing_func_{nullptr};
 
+ public:
   int pgs_iterations_{50};
   double least_squares_residual_threshold_{0};
   std::vector<int> limit_dependency_;
@@ -63,6 +66,7 @@ private:
   // Number of friction force directions
   int num_friction_dir_{1};
 
+ private:
   /**
    * Projected Gauss-Seidel solver for a MLCP defined by coefficient matrix A
    * and vector b.
