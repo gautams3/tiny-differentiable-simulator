@@ -150,10 +150,6 @@ if(Bullet_FOUND)
     #target_link_libraries(ceres_estimation_real pybullet_visualizer_api ${DL}
     #        ${CERES_LIBRARIES} python2.7)
 
-    add_executable(box_opt_simple box_opt_simple.cpp ${TDS_HDRS})
-    target_link_libraries(box_opt_simple opengl_window ${DL}
-    ${CERES_LIBRARIES} ${MESHCAT_LIBRARIES} python2.7 tinyxml2)
-
     #add_executable(neural_pendulum neural_pendulum.cpp ${TDS_HDRS})
     #target_link_libraries(neural_pendulum pybullet_visualizer_api ${DL}
     #        ${CERES_LIBRARIES})
