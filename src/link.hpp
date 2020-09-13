@@ -89,13 +89,13 @@ struct Link {
     S.set_zero();
     switch (joint_type) {
       case JOINT_PRISMATIC_X:
-        S.bottom[0] = Algebra::from_double(1.);
+        S.bottom[0] = Algebra::one();
         break;
       case JOINT_PRISMATIC_Y:
-        S.bottom[1] = Algebra::from_double(1.);
+        S.bottom[1] = Algebra::one();
         break;
       case JOINT_PRISMATIC_Z:
-        S.bottom[2] = Algebra::from_double(1.);
+        S.bottom[2] = Algebra::one();
         break;
       case JOINT_PRISMATIC_AXIS:
         if (Algebra::norm(axis) == Algebra::zero()) {
@@ -107,13 +107,13 @@ struct Link {
         S.bottom = axis;
         break;
       case JOINT_REVOLUTE_X:
-        S.top[0] = Algebra::from_double(1.);
+        S.top[0] = Algebra::one();
         break;
       case JOINT_REVOLUTE_Y:
-        S.top[1] = Algebra::from_double(1.);
+        S.top[1] = Algebra::one();
         break;
       case JOINT_REVOLUTE_Z:
-        S.top[2] = Algebra::from_double(1.);
+        S.top[2] = Algebra::one();
         break;
       case JOINT_REVOLUTE_AXIS:
         if (Algebra::norm(axis) == Algebra::zero()) {

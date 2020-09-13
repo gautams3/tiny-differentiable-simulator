@@ -36,8 +36,6 @@
 typedef PyBulletVisualizerAPI VisualizerAPI;
 std::string sphere2red;
 
-VisualizerAPI* visualizer = nullptr;
-
 // ID of the ball whose position is optimized for
 const int TARGET_ID = 5;
 
@@ -52,7 +50,6 @@ typename Algebra::Scalar rollout(
   using Vector3 = typename Algebra::Vector3;
   typedef tds::RigidBody<Algebra> RigidBody;
   typedef tds::Geometry<Algebra> Geometry;
-
 
   std::vector<int> visuals;
   Vector3 target(Algebra::fraction(35, 10), Algebra::fraction(8, 1),
@@ -84,7 +81,7 @@ typename Algebra::Scalar rollout(
         b3RobotSimulatorLoadUrdfFileArgs args;
         args.m_startPosition.setX(Algebra::to_double(x));
         args.m_startPosition.setY(Algebra::to_double(y));
-        int sphere_id = visualizer->loadURDF(sphere2red, args);
+        int sphere_id = vis->loadURDF(sphere2red, args);
         visuals.push_back(sphere_id);
         if (ball_id == TARGET_ID) {
           b3RobotSimulatorChangeVisualShapeArgs vargs;
@@ -116,7 +113,7 @@ typename Algebra::Scalar rollout(
       args.m_startPosition.setX(Algebra::to_double(white.x()));
       args.m_startPosition.setY(Algebra::to_double(white.y()));
       args.m_startPosition.setZ(Algebra::to_double(white.z()));
-      int sphere_id = visualizer->loadURDF(sphere2red, args);
+      int sphere_id = vis->loadURDF(sphere2red, args);
       visuals.push_back(sphere_id);
       b3RobotSimulatorChangeVisualShapeArgs vargs;
       vargs.m_objectUniqueId = sphere_id;
@@ -131,7 +128,7 @@ typename Algebra::Scalar rollout(
       args.m_startPosition.setX(Algebra::to_double(target.x()));
       args.m_startPosition.setY(Algebra::to_double(target.y()));
       args.m_startPosition.setZ(Algebra::to_double(target.z()));
-      int sphere_id = visualizer->loadURDF(sphere2red, args);
+      int sphere_id = vis->loadURDF(sphere2red, args);
       visuals.push_back(sphere_id);
       b3RobotSimulatorChangeVisualShapeArgs vargs;
       vargs.m_objectUniqueId = sphere_id;
@@ -142,9 +139,7 @@ typename Algebra::Scalar rollout(
   }
 
   for (int i = 0; i < steps; i++) {
-    visualizer->submitProfileTiming("world.step");
     world.step(dt);
-    visualizer->submitProfileTiming("");
 
     if (vis) {
       double dtd = Algebra::to_double(dt);
@@ -162,8 +157,7 @@ typename Algebra::Scalar rollout(
             Algebra::to_double(Algebra::quat_z(body->world_pose().orientation)),
             Algebra::to_double(
                 Algebra::quat_w(body->world_pose().orientation)));
-        visualizer->resetBasePositionAndOrientation(sphere_id, base_pos,
-                                                    base_orn);
+        vis->resetBasePositionAndOrientation(sphere_id, base_pos, base_orn);
       }
     }
   }
@@ -260,7 +254,7 @@ int main(int argc, char* argv[]) {
 
   using namespace std::chrono;
 
-  visualizer = new VisualizerAPI;
+  auto* visualizer = new VisualizerAPI;
   visualizer->setTimeOut(1e30);
   printf("\nmode=%s\n", const_cast<char*>(connection_mode.c_str()));
   int mode = eCONNECT_GUI;

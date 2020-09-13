@@ -15,7 +15,8 @@
 
 #Tiny Differentiable Simulator or TDS
 
-cmake_minimum_required(VERSION 2.4.3)
+cmake_minimum_required(VERSION 3.13)
+
 set(CMAKE_ALLOW_LOOSE_LOOP_CONSTRUCTS true)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # For LLVM tooling
