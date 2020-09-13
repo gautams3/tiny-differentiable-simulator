@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include <chrono>
 #include <iostream>
 #include <thread>
 
 #define BULLET_VISUALIZER true
-
 
 #if !BULLET_VISUALIZER
 #include "opengl_window/tiny_opengl3_app.h"
@@ -36,7 +34,6 @@
 #include "urdf/urdf_cache.hpp"
 #include "utils/file_utils.hpp"
 #include "world.hpp"
-
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
 
@@ -90,7 +87,7 @@ int main(int argc, char *argv[]) {
   sim->resetSimulation();
   sim->setTimeOut(10);
   int grav_id = sim->addUserDebugParameter("gravity", -10, 10, -2.);
-  #endif
+#endif
 
   // int rotateCamera = 0;
 
@@ -98,19 +95,19 @@ int main(int argc, char *argv[]) {
   MultiBody *system = nullptr;
 
   if (true) {
-  system = world.create_multi_body();
-  tds::SystemConstructor constructor(urdf_filename, plane_filename);
-  constructor.is_floating = floating_base;
-  VisualizerAPI *sim_ = new VisualizerAPI();
-  sim_->connect(eCONNECT_DIRECT);
-  #if BULLET_VISUALIZER
-  constructor(sim2, sim, world, &system);
-  #else
-  constructor(sim_, sim_, world, &system);
-  #endif
+    system = world.create_multi_body();
+    tds::SystemConstructor constructor(urdf_filename, plane_filename);
+    constructor.is_floating = floating_base;
+    VisualizerAPI *sim_ = new VisualizerAPI();
+    sim_->connect(eCONNECT_DIRECT);
+#if BULLET_VISUALIZER
+    constructor(sim2, sim, world, &system);
+#else
+    constructor(sim_, sim_, world, &system);
+#endif
   } else {
-  tds::UrdfCache<Algebra> cache;
-  system = cache.construct(urdf_filename, world, false, floating_base);
+    tds::UrdfCache<Algebra> cache;
+    system = cache.construct(urdf_filename, world, false, floating_base);
   }
 
 #if !BULLET_VISUALIZER
@@ -126,7 +123,7 @@ int main(int argc, char *argv[]) {
     int cube_id = app.m_renderer->register_graphics_instance(cube_shape);
     tiny_visual_ids.push_back(cube_id);
   }
-  #endif
+#endif
 
   world.set_mb_constraint_solver(
       new tds::MultiBodyConstraintSolverSpring<Algebra>);
@@ -168,11 +165,11 @@ int main(int argc, char *argv[]) {
   double time = 0;
   int step = 0;
   while (true) {
-    #if BULLET_VISUALIZER
+#if BULLET_VISUALIZER
     double gravZ = sim->readUserDebugParameter(grav_id);
-    #else
+#else
     double gravZ = -9.81;
-    #endif
+#endif
     world.set_gravity(Vector3(0, 0, gravZ));
 
     {
@@ -183,28 +180,28 @@ int main(int argc, char *argv[]) {
     }
 
 #if BULLET_VISUALIZER
-      tds::PyBulletUrdfImport<Algebra>::sync_graphics_transforms(system, *sim);
-    #else
+    tds::PyBulletUrdfImport<Algebra>::sync_graphics_transforms(system, *sim);
+#else
     if (step % 10 == 0) {
-      auto& mb = *system;
+      auto &mb = *system;
       TinyVector3f parent_pos(
-        static_cast<float>(mb.base_X_world().translation[0]),
-        static_cast<float>(mb.base_X_world().translation[1]),
-        static_cast<float>(mb.base_X_world().translation[2]));
-    for (const auto &link : mb) {
-    app.m_renderer->update_camera(2);
-    DrawGridData data;
-    data.upAxis = 2;
-    app.draw_grid(data);
+          static_cast<float>(mb.base_X_world().translation[0]),
+          static_cast<float>(mb.base_X_world().translation[1]),
+          static_cast<float>(mb.base_X_world().translation[2]));
+      for (const auto &link : mb) {
+        app.m_renderer->update_camera(2);
+        DrawGridData data;
+        data.upAxis = 2;
+        app.draw_grid(data);
 
-      TinyVector3f link_pos(static_cast<float>(link.X_world.translation[0]),
-                            static_cast<float>(link.X_world.translation[1]),
-                            static_cast<float>(link.X_world.translation[2]));
+        TinyVector3f link_pos(static_cast<float>(link.X_world.translation[0]),
+                              static_cast<float>(link.X_world.translation[1]),
+                              static_cast<float>(link.X_world.translation[2]));
 
-      app.m_renderer->draw_line(link_pos, parent_pos,
-                                TinyVector3f(0.5, 0.5, 0.5), 2.f);
-      parent_pos = link_pos;
-      std::size_t j = 0;
+        app.m_renderer->draw_line(link_pos, parent_pos,
+                                  TinyVector3f(0.5, 0.5, 0.5), 2.f);
+        parent_pos = link_pos;
+        std::size_t j = 0;
         tds::Transform<Algebra> X_visual = link.X_world * link.X_visuals[j];
         // sync transform
         TinyVector3f geom_pos(static_cast<float>(X_visual.translation[0]),
@@ -219,13 +216,13 @@ int main(int argc, char *argv[]) {
             geom_pos, geom_orn, tiny_visual_ids[link.index]);
         TinyVector3f color(0.1, 0.6, 0.8);
         app.m_renderer->draw_line(link_pos, geom_pos, color, 2.f);
+      }
+      app.m_renderer->render_scene();
+      app.m_renderer->write_transforms();
+      app.swap_buffer();
     }
-    app.m_renderer->render_scene();
-    app.m_renderer->write_transforms();
-    app.swap_buffer();
-    }
-    #endif
-    std::this_thread::sleep_for(std::chrono::duration<double>(dt/5.));
+#endif
+    std::this_thread::sleep_for(std::chrono::duration<double>(dt / 5.));
 
     {
       // sim->submitProfileTiming("world_step");

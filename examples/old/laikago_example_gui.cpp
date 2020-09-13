@@ -24,7 +24,7 @@
 bool useLaikago = true;
 
 #define USE_TRB
-#include "math/tiny/tiny_double_utils.h"
+#include "math//_double_utils.h"
 
 bool floating_base = true;
 
@@ -41,11 +41,11 @@ double initial_poses[] = {
     abduction_angle, 0., knee_angle, abduction_angle, 0., knee_angle,
 };
 
-typedef ::TinyVector3<double, DoubleUtils> dvec3;
-typedef ::TinyMatrix3x3<double, DoubleUtils> dmat3;
+typedef ::Vector3<double, DoubleUtils> dvec3;
+typedef ::Matrix3x3<double, DoubleUtils> dmat3;
 
 static VisualizerAPI* gSim = 0;
-void MyTinySubmitProfileTiming3(const std::string& profile_name) {
+void MySubmitProfileTiming3(const std::string& profile_name) {
   if (gSim) {
     gSim->submitProfileTiming(profile_name);
   }
@@ -68,11 +68,11 @@ int main(int argc, char* argv[]) {
   std::string connection_mode = "gui";
 
   std::string plane_urdf_filename;
-  TinyFileUtils::find_file("plane_implicit.urdf", plane_urdf_filename);
+  tds::FileUtils::find_file("plane_implicit.urdf", plane_urdf_filename);
 
-  char path[TINY_MAX_EXE_PATH_LEN];
-  TinyFileUtils::extract_path(plane_urdf_filename.c_str(), path,
-                              TINY_MAX_EXE_PATH_LEN);
+  char path[_MAX_EXE_PATH_LEN];
+  tds::FileUtils::extract_path(plane_urdf_filename.c_str(), path,
+                              _MAX_EXE_PATH_LEN);
   std::string search_path = path;
 
   printf("search_path=%s\n", search_path.c_str());
@@ -107,14 +107,14 @@ int main(int argc, char* argv[]) {
 
   int rotateCamera = 0;
 
-  TinyWorld<double, DoubleUtils> world;
-  world.m_profileTimingFunc = MyTinySubmitProfileTiming3;
-  typedef ::TinyRigidBody<double, DoubleUtils> TinyRigidBodyDouble;
+  World<double, DoubleUtils> world;
+  world.m_profileTimingFunc = MySubmitProfileTiming3;
+  typedef ::RigidBody<double, DoubleUtils> RigidBodyDouble;
 
-  std::vector<TinyRigidBody<double, DoubleUtils>*> bodies;
+  std::vector<RigidBody<double, DoubleUtils>*> bodies;
   std::vector<int> visuals;
 
-  std::vector<TinyMultiBody<double, DoubleUtils>*> mbbodies;
+  std::vector<MultiBody<double, DoubleUtils>*> mbbodies;
   std::vector<int> paramUids;
 
   int grav_id = sim->addUserDebugParameter("gravity", -10, 0, 0);
@@ -124,27 +124,27 @@ int main(int argc, char* argv[]) {
 
 #ifdef USE_TRB
   if (useLaikago) {
-    TinyMultiBody<double, DoubleUtils>* mb = world.create_multi_body();
+    MultiBody<double, DoubleUtils>* mb = world.create_multi_body();
     int robotId = sim2->loadURDF("plane_implicit.urdf");
-    TinyUrdfStructures<double, DoubleUtils> urdf_data;
+    UrdfStructures<double, DoubleUtils> urdf_data;
     PyBulletUrdfImport<double, DoubleUtils>::extract_urdf_structs(
         urdf_data, robotId, *sim2, *sim);
-    TinyUrdfToMultiBody<double, DoubleUtils>::convert_to_multi_body(urdf_data,
+    UrdfToMultiBody<double, DoubleUtils>::convert_to_multi_body(urdf_data,
                                                                     world, *mb);
     mb->initialize();
   }
   if (!useLaikago) {
-    TinyMultiBody<double, DoubleUtils>* mb = world.create_multi_body();
+    MultiBody<double, DoubleUtils>* mb = world.create_multi_body();
     int robotId = sim2->loadURDF("sphere2.urdf");
-    TinyUrdfStructures<double, DoubleUtils> urdf_data;
+    UrdfStructures<double, DoubleUtils> urdf_data;
     PyBulletUrdfImport<double, DoubleUtils>::extract_urdf_structs(urdf_data, 0,
                                                                   *sim2, *sim);
-    TinyUrdfToMultiBody<double, DoubleUtils>::convert_to_multi_body(urdf_data,
+    UrdfToMultiBody<double, DoubleUtils>::convert_to_multi_body(urdf_data,
                                                                     world, *mb);
     mb->initialize();
   }
 
-  TinyMultiBody<double, DoubleUtils>* mb = world.create_multi_body();
+  MultiBody<double, DoubleUtils>* mb = world.create_multi_body();
   {
     // int robotId = sim2->loadURDF("sphere8cube.urdf");// laikago /
     // laikago_toes_zup.urdf");// sphere8cube.urdf");//pendulum2.urdf");//
@@ -157,20 +157,20 @@ int main(int argc, char* argv[]) {
       robotId = sim2->loadURDF("sphere2.urdf");
     }
 
-    TinyUrdfStructures<double, DoubleUtils> urdf_data;
+    UrdfStructures<double, DoubleUtils> urdf_data;
     PyBulletUrdfImport<double, DoubleUtils>::extract_urdf_structs(
         urdf_data, robotId, *sim2, *sim);
-    TinyUrdfToMultiBody<double, DoubleUtils>::convert_to_multi_body(urdf_data,
+    UrdfToMultiBody<double, DoubleUtils>::convert_to_multi_body(urdf_data,
                                                                     world, *mb);
 
     mb->m_base_X_world.m_translation.setValue(
         laikago_initial_pos[0], laikago_initial_pos[1], laikago_initial_pos[2]);
     mb->m_base_X_world.m_rotation.setRotation(
-        TinyQuaternion<double, DoubleUtils>(
+        Quaternion<double, DoubleUtils>(
             laikago_initial_orn[0], laikago_initial_orn[1],
             laikago_initial_orn[2], laikago_initial_orn[3]));
     mb->m_isFloating = floating_base;
-    mb->m_profileTimingFunc = MyTinySubmitProfileTiming3;
+    mb->m_profileTimingFunc = MySubmitProfileTiming3;
 
     int pose_index = 0;
     for (int i = 0; i < sim2->getNumJoints(robotId); i++) {
@@ -210,7 +210,7 @@ int main(int argc, char* argv[]) {
     }
     // mb->m_q[7] = -1.57/2.;
   }
-  // mb->m_profileTimingFunc = MyTinySubmitProfileTiming3;
+  // mb->m_profileTimingFunc = MySubmitProfileTiming3;
   // sim->removeBody(robotId);
 #endif  // USE_TRB
 
@@ -237,7 +237,7 @@ int main(int argc, char* argv[]) {
     // while (sim->canSubmitCommand())  // for (int i = 0; i < 3000; i++)
     {
       double gravZ = sim->readUserDebugParameter(grav_id);
-      world.set_gravity(TinyVector3<double, DoubleUtils>(0, 0, gravZ));
+      world.set_gravity(Vector3<double, DoubleUtils>(0, 0, gravZ));
       {
         sim->submitProfileTiming("forward_kinematics");
         mb->forward_kinematics();
@@ -323,7 +323,7 @@ int main(int argc, char* argv[]) {
         // sync physics to visual transforms
         {
           for (int b = 0; b < mbbodies.size(); b++) {
-            const TinyMultiBody<double, DoubleUtils>* body = mbbodies[b];
+            const MultiBody<double, DoubleUtils>* body = mbbodies[b];
             PyBulletUrdfImport<double, DoubleUtils>::sync_graphics_transforms(
                 body, *sim);
           }

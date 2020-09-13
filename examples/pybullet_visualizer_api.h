@@ -19,7 +19,7 @@
 
 #include <string>
 
-#include "SharedMemory/b3RobotSimulatorClientAPI_NoGUI.h"
+#include <bullet/SharedMemory/b3RobotSimulatorClientAPI_NoGUI.h>
 
 /// The PyBulletVisualizerAPI is pretty much the C++ version of pybullet
 /// as documented in the pybullet Quickstart Guide
