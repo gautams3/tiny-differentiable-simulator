@@ -120,9 +120,6 @@ if(Bullet_FOUND)
   target_compile_definitions(pybullet_visualizer_api PUBLIC ${BULLET_DEFINITIONS})
   target_link_directories(pybullet_visualizer_api PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
 
-
-
-
   if(Ceres_FOUND)
     find_package(PythonLibs REQUIRED)
     include_directories(
@@ -132,9 +129,6 @@ if(Bullet_FOUND)
 
     add_executable(billiard_opt_gui billiard_opt_gui.cpp ${TDS_HDRS})
     target_link_libraries(billiard_opt_gui pybullet_visualizer_api ${DL} ${CERES_LIBRARIES})
-
-    #set_target_properties(billiard_opt_gui PROPERTIES FOLDER autodiff)
-    #target_compile_definitions(billiard_opt_gui PRIVATE STAN_MATH)
 
     #add_executable(cartpole_opt cartpole_opt.cpp ${TDS_HDRS})
     #target_link_libraries(cartpole_opt pybullet_visualizer_api ${DL}
@@ -204,8 +198,8 @@ if(Bullet_FOUND)
     #        -lpthread hpipm blasfeo)
   endif(ct_core_FOUND AND ct_optcon_FOUND AND Eigen3_FOUND)
 
-  add_executable(laikago_example_gui laikago_example_gui.cpp ${TDS_HDRS})
-  target_link_libraries(laikago_example_gui pybullet_visualizer_api)
+  # add_executable(laikago_example_gui laikago_example_gui.cpp ${TDS_HDRS})
+  # target_link_libraries(laikago_example_gui pybullet_visualizer_api)
 
   if(Eigen3_FOUND)
     #add_executable(laikago_footstep_ik laikago_footstep_ik.cpp ${TDS_HDRS})
