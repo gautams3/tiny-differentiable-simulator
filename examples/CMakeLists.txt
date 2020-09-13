@@ -204,8 +204,8 @@ if(Bullet_FOUND)
     #        -lpthread hpipm blasfeo)
   endif(ct_core_FOUND AND ct_optcon_FOUND AND Eigen3_FOUND)
 
-  add_executable(laikago_example_gui laikago_example_gui.cpp ${TDS_HDRS})
-  target_link_libraries(laikago_example_gui pybullet_visualizer_api)
+  # add_executable(laikago_example_gui laikago_example_gui.cpp ${TDS_HDRS})
+  # target_link_libraries(laikago_example_gui pybullet_visualizer_api)
 
   if(Eigen3_FOUND)
     #add_executable(laikago_footstep_ik laikago_footstep_ik.cpp ${TDS_HDRS})
