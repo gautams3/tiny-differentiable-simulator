@@ -22,7 +22,6 @@
 #include <chrono>  // std::chrono::seconds
 #include <thread>  // std::this_thread::sleep_for
 
-#include "math/enoki_algebra.hpp"
 #include "math/pose.hpp"
 #include "math/tiny/ceres_utils.h"
 #include "math/tiny/tiny_algebra.hpp"
@@ -36,8 +35,6 @@
 
 typedef PyBulletVisualizerAPI VisualizerAPI;
 std::string sphere2red;
-
-VisualizerAPI* visualizer = nullptr;
 
 // ID of the ball whose position is optimized for
 const int TARGET_ID = 5;
@@ -53,7 +50,6 @@ typename Algebra::Scalar rollout(
   using Vector3 = typename Algebra::Vector3;
   typedef tds::RigidBody<Algebra> RigidBody;
   typedef tds::Geometry<Algebra> Geometry;
-
 
   std::vector<int> visuals;
   Vector3 target(Algebra::fraction(35, 10), Algebra::fraction(8, 1),
@@ -85,7 +81,7 @@ typename Algebra::Scalar rollout(
         b3RobotSimulatorLoadUrdfFileArgs args;
         args.m_startPosition.setX(Algebra::to_double(x));
         args.m_startPosition.setY(Algebra::to_double(y));
-        int sphere_id = visualizer->loadURDF(sphere2red, args);
+        int sphere_id = vis->loadURDF(sphere2red, args);
         visuals.push_back(sphere_id);
         if (ball_id == TARGET_ID) {
           b3RobotSimulatorChangeVisualShapeArgs vargs;
@@ -117,7 +113,7 @@ typename Algebra::Scalar rollout(
       args.m_startPosition.setX(Algebra::to_double(white.x()));
       args.m_startPosition.setY(Algebra::to_double(white.y()));
       args.m_startPosition.setZ(Algebra::to_double(white.z()));
-      int sphere_id = visualizer->loadURDF(sphere2red, args);
+      int sphere_id = vis->loadURDF(sphere2red, args);
       visuals.push_back(sphere_id);
       b3RobotSimulatorChangeVisualShapeArgs vargs;
       vargs.m_objectUniqueId = sphere_id;
@@ -132,7 +128,7 @@ typename Algebra::Scalar rollout(
       args.m_startPosition.setX(Algebra::to_double(target.x()));
       args.m_startPosition.setY(Algebra::to_double(target.y()));
       args.m_startPosition.setZ(Algebra::to_double(target.z()));
-      int sphere_id = visualizer->loadURDF(sphere2red, args);
+      int sphere_id = vis->loadURDF(sphere2red, args);
       visuals.push_back(sphere_id);
       b3RobotSimulatorChangeVisualShapeArgs vargs;
       vargs.m_objectUniqueId = sphere_id;
@@ -143,9 +139,7 @@ typename Algebra::Scalar rollout(
   }
 
   for (int i = 0; i < steps; i++) {
-    visualizer->submitProfileTiming("world.step");
     world.step(dt);
-    visualizer->submitProfileTiming("");
 
     if (vis) {
       double dtd = Algebra::to_double(dt);
@@ -163,8 +157,7 @@ typename Algebra::Scalar rollout(
             Algebra::to_double(Algebra::quat_z(body->world_pose().orientation)),
             Algebra::to_double(
                 Algebra::quat_w(body->world_pose().orientation)));
-        visualizer->resetBasePositionAndOrientation(sphere_id, base_pos,
-                                                    base_orn);
+        vis->resetBasePositionAndOrientation(sphere_id, base_pos, base_orn);
       }
     }
   }
@@ -185,23 +178,6 @@ void grad_finite(double force_x, double force_y, double* cost,
   *d_force_x = (cx - *cost) / eps;
   *d_force_y = (cy - *cost) / eps;
 }
-
-// void grad_stan(double force_x, double force_y, double* cost, double*
-// d_force_x,
-//               double* d_force_y, int steps = 300, double eps = 1e-5) {
-//  standouble fx = force_x;
-//  fx.d_ = 1;
-//  standouble fy = force_y;
-//
-//  standouble c = rollout<standouble, StanDoubleUtils>(fx, fy, steps);
-//  *cost = c.val();
-//  *d_force_x = c.tangent();
-//
-//  fx.d_ = 0;
-//  fy.d_ = 1;
-//  c = rollout<standouble, StanDoubleUtils>(fx, fy, steps);
-//  *d_force_y = c.tangent();
-//}
 
 void grad_dual(double force_x, double force_y, double* cost, double* d_force_x,
                double* d_force_y, int steps = 300, double eps = 1e-5) {
@@ -254,66 +230,24 @@ void grad_ceres(double force_x, double force_y, double* cost, double* d_force_x,
   *d_force_y = gradient[1];
 }
 
-void grad_enoki(double force_x, double force_y, double* cost, double* d_force_x,
-                double* d_force_y, int steps = 300) {
-                  using FloatC    = enoki::CUDAArray<float>;
-  using FloatD = enoki::DiffArray<FloatC>;
-  enoki::Matrix<float, 3> matf(1.);
-  std::cout << matf << std::endl;
-  enoki::Matrix<FloatD, 3> mat(1.);
-  std::cout << mat << std::endl;
-  enoki::requires_gradient(mat(0,0));
-  enoki::Matrix<FloatD, 3> mat2(2.);
-  std::cout << mat2 << std::endl;
-enoki::Matrix<FloatD, 3> result = mat * mat2;
-  std::cout << result << std::endl;
-  enoki::backward(mat(0,0));
-
-  std::cout << "Gradient: " << enoki::gradient(mat(0,0)) << std::endl;
-
-
-
-
-  // using Algebra = EnokiAlgebraT<FloatD>;
-  // FloatD fx(force_x), fy(force_y);
-  // enoki::set_requires_gradient(fx);
-  // enoki::set_requires_gradient(fy);
-
-  // typename Algebra::Matrix3 mat = Algebra::eye3();
-  // typename Algebra::Vector3 vec = Algebra::zero3();
-
-  // typename Algebra::Vector3  temp = mat * vec;
-  // Algebra::print("mat * vec", temp);
-
-  // FloatD e = rollout<Algebra>(fx, fy, steps);
-  // printf("main.cpp:%i\n", __LINE__);
-  // fflush(stdout);
-  // enoki::backward(e);
-  // printf("main.cpp:%i\n", __LINE__);
-  // fflush(stdout);
-  // *cost = Algebra::to_double(e);
-  // printf("main.cpp:%i\n", __LINE__);
-  // fflush(stdout);
-  // *d_force_x = enoki::gradient(fx);
-  // printf("main.cpp:%i\n", __LINE__);
-  // fflush(stdout);
-  // *d_force_y = enoki::gradient(fy);
-  // printf("main.cpp:%i\n", __LINE__);
-  // fflush(stdout);
-}
-
 int main(int argc, char* argv[]) {
   tds::FileUtils::find_file("sphere2red.urdf", sphere2red);
-  std::string connection_mode = "gui";
+  std::string connection_mode =
+      "shared_memory";  // needs pybullet server running in the background
 
   using namespace std::chrono;
 
-  visualizer = new VisualizerAPI;
+  auto* visualizer = new VisualizerAPI;
   visualizer->setTimeOut(1e30);
-  printf("mode=%s\n", const_cast<char*>(connection_mode.c_str()));
+  printf("\nmode=%s\n", const_cast<char*>(connection_mode.c_str()));
   int mode = eCONNECT_GUI;
   if (connection_mode == "direct") mode = eCONNECT_DIRECT;
-  if (connection_mode == "shared_memory") mode = eCONNECT_SHARED_MEMORY;
+  if (connection_mode == "shared_memory") {
+    mode = eCONNECT_SHARED_MEMORY;
+    printf(
+        "Shared memory mode: Ensure you have visualizer server running (e.g. "
+        "python -m pybullet_utils.runServer)\n");
+  }
   visualizer->connect(mode);
 
   visualizer->resetSimulation();
@@ -341,25 +275,7 @@ int main(int argc, char* argv[]) {
            static_cast<long>(duration.count()));
     fflush(stdout);
   }
-  //  {
-  //    auto start = high_resolution_clock::now();
-  //    double cost, d_force_x, d_force_y;
-  //    double learning_rate = 1e2;
-  //    double force_x = init_force_x, force_y = init_force_y;
-  //    for (int iter = 0; iter < 50; ++iter) {
-  //      grad_stan(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-  //      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter,
-  //      cost,
-  //             force_x, force_y);
-  //      force_x -= learning_rate * d_force_x;
-  //      force_y -= learning_rate * d_force_y;
-  //    }
-  //    auto stop = high_resolution_clock::now();
-  //    auto duration = duration_cast<microseconds>(stop - start);
-  //    printf("Stan's forward-mode AD took %ld microseconds.",
-  //    static_cast<long>(duration.count()));
-  fflush(stdout);
-  //  }
+
   {
     auto start = high_resolution_clock::now();
     double cost, d_force_x, d_force_y;
@@ -397,24 +313,6 @@ int main(int argc, char* argv[]) {
     fflush(stdout);
     rollout<DoubleAlgebra>(force_x, force_y, steps, visualizer);
   }
-  // {
-  //   auto start = high_resolution_clock::now();
-  //   double cost, d_force_x, d_force_y;
-  //   double learning_rate = 1e2;
-  //   double force_x = init_force_x, force_y = init_force_y;
-  //   for (int iter = 0; iter < 50; ++iter) {
-  //     grad_enoki(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-  //     printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter, cost,
-  //            force_x, force_y);
-  //     force_x -= learning_rate * d_force_x;
-  //     force_y -= learning_rate * d_force_y;
-  //   }
-  //   auto stop = high_resolution_clock::now();
-  //   auto duration = duration_cast<microseconds>(stop - start);
-  //   printf("Enoki took %ld microseconds.", static_cast<long>(duration.count()));
-  //   fflush(stdout);
-  //   // rollout<DoubleAlgebra>(force_x, force_y, steps, visualizer);
-  // }
 
   visualizer->disconnect();
   delete visualizer;

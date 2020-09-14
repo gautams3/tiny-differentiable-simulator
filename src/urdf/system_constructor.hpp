@@ -21,8 +21,6 @@ struct SystemConstructor {
 
   std::vector<int> control_indices;
 
-  // Actuator<Algebra>* actuator{nullptr};
-
   explicit SystemConstructor(const std::string& system_urdf_filename,
                              const std::string& plane_urdf_filename = "")
       : system_urdf_filename(system_urdf_filename),
@@ -64,9 +62,6 @@ struct SystemConstructor {
         mb->set_control_indices(control_indices);
       }
       mb->initialize();
-      //   if (actuator) {
-      //     mb->actuator = new Actuator<Algebra>(*m_actuator);
-      //   }
       for (auto& link : *mb) {
         link.stiffness = Algebra::from_double(joint_stiffness);
         link.damping = Algebra::from_double(joint_damping);

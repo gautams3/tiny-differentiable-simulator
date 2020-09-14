@@ -25,7 +25,7 @@ bool useShadowMap = true;
 #include <stdio.h>
 #include <algorithm>  // std::sort
 #include <vector>
-#include "../tiny_min_max.h"
+#include "../utils/tiny_min_max.h"
 #include "tiny_opengl_include.h"
 #include "tiny_window_interface.h"
 

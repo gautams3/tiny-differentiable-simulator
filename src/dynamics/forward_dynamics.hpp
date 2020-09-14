@@ -107,6 +107,7 @@ void forward_dynamics(MultiBody<Algebra> &mb,
     Algebra::print("delta_pA", delta_pA);
 #endif
     // ArticulatedBodyInertia delta_I = link.X_parent.apply(Ia);
+    // ArticulatedBodyInertia delta_I = link.X_parent.apply_transpose(Ia);
     ArticulatedBodyInertia delta_I =
         link.X_parent.matrix_transpose() * Ia.matrix() * link.X_parent.matrix();
     if (parent >= 0) {
@@ -147,7 +148,9 @@ void forward_dynamics(MultiBody<Algebra> &mb,
     //       NEURAL_ASSIGN(base_bias_force[5], "base_bias_force_5");
     // #endif
 
-    mb.base_acceleration() = -mb.base_abi().inv_mul(mb.base_bias_force());
+    // mb.base_acceleration() = -mb.base_abi().inv_mul(mb.base_bias_force());
+    mb.base_acceleration() = -MotionVector(
+        Algebra::inverse(mb.base_abi().matrix()) * mb.base_bias_force());
 
   } else {
     mb.base_acceleration() = -spatial_gravity;

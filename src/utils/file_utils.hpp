@@ -30,6 +30,11 @@ struct ResourcePath {
 };
 
 struct FileUtils {
+  static inline std::string root{""};
+  static inline std::vector<std::string> prefixes{
+      {"./", "./data/", "../data/", "../../data/", "../../../data/",
+       "../../../../data/"}};
+
   // find_file searches files in 'data' folder in the current working directory
   // and relative to executable directory and many of their parent directories.
   static bool find_file(const std::string& org_file_name,
@@ -42,18 +47,12 @@ struct FileUtils {
       return true;
     }
 
-    const std::string prefix[] = {
-        "./",          "./data/",        "../data/",
-        "../../data/", "../../../data/", "../../../../data/"};
-    int num_prefixes = sizeof(prefix) / sizeof(std::string);
-
     f = 0;
     bool file_found = false;
-    std::string root = "";
 
     for (int j = 0; j < 2; j++) {
-      for (int i = 0; !f && i < num_prefixes; i++) {
-        relative_file_name = root + prefix[i] + org_file_name;
+      for (std::size_t i = 0; !f && i < prefixes.size(); i++) {
+        relative_file_name = root + prefixes[i] + org_file_name;
         f = fopen(relative_file_name.c_str(), "rb");
         if (f) {
           file_found = true;

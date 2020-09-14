@@ -19,9 +19,9 @@
 
 #include <vector>
 
-#include "tiny_matrix3x3.h"
-#include "tiny_spatial_motion_vector.h"
-#include "tiny_vector3.h"
+#include "math/tiny/tiny_matrix3x3.h"
+#include "math/tiny/tiny_spatial_motion_vector.h"
+#include "math/tiny/tiny_vector3.h"
 
 /**
  * We follow the spatial algebra from Featherstone, but use right-handed

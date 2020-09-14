@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "math/transform.hpp"
 #include "geometry.hpp"
+#include "math/transform.hpp"
 
 namespace tds {
 enum JointType {
@@ -73,8 +73,8 @@ struct Link {
   int q_index{-2};
   int qd_index{-2};
 
-  Scalar stiffness{0};
-  Scalar damping{0};
+  Scalar stiffness{Algebra::zero()};
+  Scalar damping{Algebra::zero()};
 
   Link() = default;
   Link(JointType joint_type, const Transform &parent_link_to_joint,
@@ -89,35 +89,54 @@ struct Link {
     S.set_zero();
     switch (joint_type) {
       case JOINT_PRISMATIC_X:
-        S.bottom[0] = 1.;
+        S.bottom[0] = Algebra::one();
         break;
       case JOINT_PRISMATIC_Y:
-        S.bottom[1] = 1.;
+        S.bottom[1] = Algebra::one();
         break;
       case JOINT_PRISMATIC_Z:
-        S.bottom[2] = 1.;
+        S.bottom[2] = Algebra::one();
         break;
       case JOINT_PRISMATIC_AXIS:
+        if (Algebra::norm(axis) == Algebra::zero()) {
+          fprintf(stderr,
+                  "Error: tried to set zero vector as prismatic joint axis.\n");
+          assert(0);
+          exit(1);
+        }
         S.bottom = axis;
         break;
       case JOINT_REVOLUTE_X:
-        S.top[0] = 1.;
+        S.top[0] = Algebra::one();
         break;
       case JOINT_REVOLUTE_Y:
-        S.top[1] = 1.;
+        S.top[1] = Algebra::one();
         break;
       case JOINT_REVOLUTE_Z:
-        S.top[2] = 1.;
+        S.top[2] = Algebra::one();
         break;
       case JOINT_REVOLUTE_AXIS:
+        if (Algebra::norm(axis) == Algebra::zero()) {
+          fprintf(stderr,
+                  "Error: tried to set zero vector as revolute joint axis.\n");
+          assert(0);
+          exit(1);
+        }
         S.top = axis;
         break;
       case JOINT_FIXED:
         break;
       default:
         fprintf(stderr,
-                "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
+                "Error: unknown joint type encountered in " __FILE__ ":%i\n",
                 __LINE__);
+    }
+    if (Algebra::norm(S) == Algebra::zero()) {
+      fprintf(stderr,
+              "Error: subspace matrix S is zero after setting joint type on "
+              "link.\n");
+      assert(0);
+      exit(1);
     }
   }
 
@@ -149,7 +168,7 @@ struct Link {
         X_J->rotation = Algebra::rotation_z_matrix(q);
         break;
       case JOINT_REVOLUTE_AXIS: {
-        const Vector3 &axis = S.bottom;
+        const Vector3 &axis = S.top;
         const auto quat = Algebra::axis_angle_quaternion(axis, q);
         X_J->rotation = Algebra::quat_to_matrix(quat);
         break;
@@ -163,7 +182,11 @@ struct Link {
                 "Error: Unknown joint type encountered in " __FILE__ ":%i\n",
                 __LINE__);
     }
+#if SWAP_TRANSFORM_ASSOCIATIVITY
+    *X_parent = (*X_J) * X_T;
+#else
     *X_parent = X_T * (*X_J);
+#endif
   }
 
   inline void jcalc(const Scalar &qd, MotionVector *v_J) const {
