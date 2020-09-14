@@ -173,8 +173,6 @@ if(USE_RBDL)
   SUBDIRS(${CMAKE_CURRENT_LIST_DIR}/third_party/rbdl)
 endif(USE_RBDL)
 
-
-
 SUBDIRS(${CMAKE_CURRENT_LIST_DIR}/third_party/cpp_base64)
 
 SUBDIRS(${CMAKE_CURRENT_LIST_DIR}/examples)

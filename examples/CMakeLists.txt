@@ -136,9 +136,6 @@ if(Bullet_FOUND)
     add_executable(billiard_opt_gui billiard_opt_gui.cpp ${TDS_HDRS})
     target_link_libraries(billiard_opt_gui pybullet_visualizer_api ${DL} ${CERES_LIBRARIES})
 
-    #set_target_properties(billiard_opt_gui PROPERTIES FOLDER autodiff)
-    #target_compile_definitions(billiard_opt_gui PRIVATE STAN_MATH)
-
     #add_executable(cartpole_opt cartpole_opt.cpp ${TDS_HDRS})
     #target_link_libraries(cartpole_opt pybullet_visualizer_api ${DL}
     #        ${CERES_LIBRARIES})

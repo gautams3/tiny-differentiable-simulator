@@ -179,23 +179,6 @@ void grad_finite(double force_x, double force_y, double* cost,
   *d_force_y = (cy - *cost) / eps;
 }
 
-// void grad_stan(double force_x, double force_y, double* cost, double*
-// d_force_x,
-//               double* d_force_y, int steps = 300, double eps = 1e-5) {
-//  standouble fx = force_x;
-//  fx.d_ = 1;
-//  standouble fy = force_y;
-//
-//  standouble c = rollout<standouble, StanDoubleUtils>(fx, fy, steps);
-//  *cost = c.val();
-//  *d_force_x = c.tangent();
-//
-//  fx.d_ = 0;
-//  fy.d_ = 1;
-//  c = rollout<standouble, StanDoubleUtils>(fx, fy, steps);
-//  *d_force_y = c.tangent();
-//}
-
 void grad_dual(double force_x, double force_y, double* cost, double* d_force_x,
                double* d_force_y, int steps = 300, double eps = 1e-5) {
   typedef TinyDual<double> Dual;
@@ -249,16 +232,22 @@ void grad_ceres(double force_x, double force_y, double* cost, double* d_force_x,
 
 int main(int argc, char* argv[]) {
   tds::FileUtils::find_file("sphere2red.urdf", sphere2red);
-  std::string connection_mode = "gui";
+  std::string connection_mode =
+      "shared_memory";  // needs pybullet server running in the background
 
   using namespace std::chrono;
 
   auto* visualizer = new VisualizerAPI;
   visualizer->setTimeOut(1e30);
-  printf("mode=%s\n", const_cast<char*>(connection_mode.c_str()));
+  printf("\nmode=%s\n", const_cast<char*>(connection_mode.c_str()));
   int mode = eCONNECT_GUI;
   if (connection_mode == "direct") mode = eCONNECT_DIRECT;
-  if (connection_mode == "shared_memory") mode = eCONNECT_SHARED_MEMORY;
+  if (connection_mode == "shared_memory") {
+    mode = eCONNECT_SHARED_MEMORY;
+    printf(
+        "Shared memory mode: Ensure you have visualizer server running (e.g. "
+        "python -m pybullet_utils.runServer)\n");
+  }
   visualizer->connect(mode);
 
   visualizer->resetSimulation();
@@ -286,25 +275,7 @@ int main(int argc, char* argv[]) {
            static_cast<long>(duration.count()));
     fflush(stdout);
   }
-  //  {
-  //    auto start = high_resolution_clock::now();
-  //    double cost, d_force_x, d_force_y;
-  //    double learning_rate = 1e2;
-  //    double force_x = init_force_x, force_y = init_force_y;
-  //    for (int iter = 0; iter < 50; ++iter) {
-  //      grad_stan(force_x, force_y, &cost, &d_force_x, &d_force_y, steps);
-  //      printf("Iteration %02d - cost: %.3f \tforce: [%.2f %2.f]\n", iter,
-  //      cost,
-  //             force_x, force_y);
-  //      force_x -= learning_rate * d_force_x;
-  //      force_y -= learning_rate * d_force_y;
-  //    }
-  //    auto stop = high_resolution_clock::now();
-  //    auto duration = duration_cast<microseconds>(stop - start);
-  //    printf("Stan's forward-mode AD took %ld microseconds.",
-  //    static_cast<long>(duration.count()));
-  fflush(stdout);
-  //  }
+
   {
     auto start = high_resolution_clock::now();
     double cost, d_force_x, d_force_y;
