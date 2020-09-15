@@ -38,31 +38,43 @@ typename Algebra::Scalar rollout(
   typedef tds::RigidBody<Algebra> RigidBody;
   typedef tds::Geometry<Algebra> Geometry;
 
-  Vector3 target(Algebra::zero(), Algebra::two(), Algebra::zero());
-  Scalar gravity_z = Algebra::zero();
+  Scalar radius = Algebra::half();
+  Scalar mass = Algebra::one();
+
+  //Goal location
+  Vector3 target(Algebra::zero(), Algebra::two(), radius);
+  Scalar gravity_z = -Algebra::fraction(981, 100);
   tds::World<Algebra> world(gravity_z);
 
   std::vector<RigidBody*> bodies;
-
-  Scalar radius = Algebra::half();
-  Scalar mass = Algebra::one();
 
   // Create target ball
   Scalar x = Algebra::zero(), y = Algebra::zero();
   const Geometry* geom = world.create_sphere(radius);
   RigidBody* body = world.create_rigid_body(mass, geom);
-  body->world_pose().position = Vector3(x, y, Algebra::zero());
+  body->world_pose().position = Vector3(x, y, radius);
   bodies.push_back(body);
 
   // Create white ball
   const Geometry* white_geom = world.create_sphere(radius);
   RigidBody* white_ball = world.create_rigid_body(mass, white_geom);
   white_ball->world_pose().position =
-      Vector3(Algebra::zero(), -Algebra::two(), Algebra::zero());
+      Vector3(Algebra::zero(), -Algebra::two(), radius);
   bodies.push_back(white_ball);
 
   assert(("Optim problem setup assuming kNumBodies number of bodies",
           bodies.size() == kNumBodies));
+
+  {
+    Scalar mass = Scalar(0.0);
+    std::string filename;
+    tds::FileUtils::find_file("plane_implicit.urdf", filename);
+    int plane_id = visualizer->loadURDF(filename);
+    const tds::Geometry<Algebra>* geom = world.create_plane();
+    tds::RigidBody<Algebra>* body = world.create_rigid_body(mass, geom);
+    // bodies.push_back(body);
+    // visuals.push_back(plane_id);
+  }
 
   for (int i = 0; i < steps; i++) {
     white_ball->apply_central_force(
@@ -95,10 +107,10 @@ void visualize_trajectory(
   typedef tds::Geometry<Algebra> Geometry;
 
   std::vector<int> visuals;
-  Vector3 target(Algebra::zero(), Algebra::two(), Algebra::zero());
+  Vector3 target(Algebra::zero(), Algebra::two(), Algebra::fraction(1, 2));
   vis->resetSimulation();
 
-  Scalar gravity_z = Algebra::zero();
+  Scalar gravity_z = -Algebra::fraction(981, 100);
   tds::World<Algebra> world(gravity_z);
 
   std::vector<RigidBody*> bodies;
@@ -111,11 +123,12 @@ void visualize_trajectory(
     // Create target ball
     const Geometry* geom = world.create_sphere(radius);
     RigidBody* body = world.create_rigid_body(mass, geom);
-    body->world_pose().position = Vector3(x, y, Algebra::zero());
+    body->world_pose().position = Vector3(x, y, radius);
     bodies.push_back(body);
     b3RobotSimulatorLoadUrdfFileArgs args;
     args.m_startPosition.setX(Algebra::to_double(x));
     args.m_startPosition.setY(Algebra::to_double(y));
+    args.m_startPosition.setZ(Algebra::to_double(radius));
     int sphere_id = visualizer->loadURDF(sphere2red, args);
     visuals.push_back(sphere_id);
 
@@ -129,7 +142,7 @@ void visualize_trajectory(
 
   {
     // Create white ball
-    Vector3 white = Vector3(Algebra::zero(), -Algebra::two(), Algebra::zero());
+    Vector3 white = Vector3(Algebra::zero(), -Algebra::two(), radius);
     const Geometry* white_geom = world.create_sphere(radius);
     RigidBody* white_ball = world.create_rigid_body(mass, white_geom);
     white_ball->world_pose().position =
@@ -163,6 +176,18 @@ void visualize_trajectory(
     vargs.m_hasRgbaColor = true;
     vargs.m_rgbaColor = btVector4(1, 0.6, 0, 0.8);
     vis->changeVisualShape(vargs);
+  }
+
+  //visualize plane
+  {
+  Scalar mass = Scalar(0.0);
+  std::string filename;
+  tds::FileUtils::find_file("plane_implicit.urdf", filename);
+  int plane_id = visualizer->loadURDF(filename);
+  const tds::Geometry<Algebra>* geom = world.create_plane();
+  tds::RigidBody<Algebra>* body = world.create_rigid_body(mass, geom);
+  // bodies.push_back(body);
+  visuals.push_back(plane_id);
   }
 
   // Visualization over time
