@@ -66,14 +66,13 @@ typename Algebra::Scalar rollout(
           bodies.size() == kNumBodies));
 
   {
-    Scalar mass = Scalar(0.0);
+    Scalar mass = Scalar(0);
     std::string filename;
     tds::FileUtils::find_file("plane_implicit.urdf", filename);
     int plane_id = visualizer->loadURDF(filename);
     const tds::Geometry<Algebra>* geom = world.create_plane();
     tds::RigidBody<Algebra>* body = world.create_rigid_body(mass, geom);
     // bodies.push_back(body);
-    // visuals.push_back(plane_id);
   }
 
   for (int i = 0; i < steps; i++) {
@@ -241,7 +240,12 @@ int main(int argc, char* argv[]) {
   printf("\nmode=%s\n", const_cast<char*>(connection_mode.c_str()));
   int mode = eCONNECT_GUI;
   if (connection_mode == "direct") mode = eCONNECT_DIRECT;
-  if (connection_mode == "shared_memory") mode = eCONNECT_SHARED_MEMORY;
+  if (connection_mode == "shared_memory") {
+    mode = eCONNECT_SHARED_MEMORY;
+    printf(
+        "Shared memory mode: Ensure you have visualizer server running (e.g. "
+        "python -m pybullet_utils.runServer)\n");
+  }
   visualizer->connect(mode);
   visualizer->resetSimulation();
 
