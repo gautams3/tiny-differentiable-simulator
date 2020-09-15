@@ -124,7 +124,7 @@ if(Bullet_FOUND)
 
 
   add_executable(world_example_gui world_example_gui.cpp ${TDS_HDRS})
-  target_link_libraries(world_example_gui pybullet_visualizer_api ${DL})
+  target_link_libraries(world_example_gui pybullet_visualizer_api ${DL} -lstdc++fs)
 
   if(Ceres_FOUND)
     find_package(PythonLibs REQUIRED)

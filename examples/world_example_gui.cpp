@@ -31,7 +31,7 @@ typedef TinyAlgebra<double, DoubleUtils> Algebra;
 typedef typename Algebra::Vector3 Vector3;
 
 int main(int argc, char* argv[]) {
-  std::string connection_mode = "gui";
+  std::string connection_mode = "shared_memory";
   auto* visualizer = new VisualizerAPI;
   visualizer->setTimeOut(1e30);
   printf("\nmode=%s\n", const_cast<char*>(connection_mode.c_str()));
