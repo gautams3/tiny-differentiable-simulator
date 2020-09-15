@@ -120,6 +120,12 @@ if(Bullet_FOUND)
   target_compile_definitions(pybullet_visualizer_api PUBLIC ${BULLET_DEFINITIONS})
   target_link_directories(pybullet_visualizer_api PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
 
+
+
+
+  add_executable(world_example_gui world_example_gui.cpp ${TDS_HDRS})
+  target_link_libraries(world_example_gui pybullet_visualizer_api ${DL})
+
   if(Ceres_FOUND)
     find_package(PythonLibs REQUIRED)
     include_directories(

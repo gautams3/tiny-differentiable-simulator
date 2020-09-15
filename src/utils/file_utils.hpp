@@ -1,5 +1,7 @@
 #pragma once
 
+#include <filesystem>
+
 #ifdef __APPLE__
 #include <mach-o/dyld.h> /* _NSGetExecutablePath */
 #else
@@ -33,16 +35,19 @@ struct FileUtils {
   static inline std::string root{""};
   static inline std::vector<std::string> prefixes{
       {"./", "./data/", "../data/", "../../data/", "../../../data/",
-       "../../../../data/"}};
+       "../../../../data/", "./tds/", "./tds/data/", "../tds/data/",
+       "../../tds/data/"}};
 
   // find_file searches files in 'data' folder in the current working directory
   // and relative to executable directory and many of their parent directories.
   static bool find_file(const std::string& org_file_name,
                         std::string& relative_file_name) {
+    namespace fs = std::filesystem;
+
     FILE* f = 0;
     f = fopen(org_file_name.c_str(), "rb");
     if (f) {
-      relative_file_name = org_file_name;
+      relative_file_name = fs::canonical(fs::path(org_file_name));
       fclose(f);
       return true;
     }
@@ -55,6 +60,7 @@ struct FileUtils {
         relative_file_name = root + prefixes[i] + org_file_name;
         f = fopen(relative_file_name.c_str(), "rb");
         if (f) {
+          relative_file_name = fs::canonical(fs::path(relative_file_name));
           file_found = true;
           break;
         }
@@ -72,6 +78,10 @@ struct FileUtils {
     }
     if (f) {
       fclose(f);
+    }
+
+    if (!file_found) {
+      fprintf(stderr, "Could not find file \"%s\".\n", org_file_name.c_str());
     }
 
     return file_found;

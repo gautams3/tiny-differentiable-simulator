@@ -149,7 +149,7 @@ struct PyBulletUrdfImport {
   static void sync_graphics_transforms(
       const MultiBody<Algebra>* body,
       class b3RobotSimulatorClientAPI_NoDirect& viz_api) {
-    for (int v = 0; v < body->visual_ids().size(); v++) {
+    for (std::size_t v = 0; v < body->visual_ids().size(); v++) {
       int visual_id = body->visual_ids()[v];
       Quaternion rot;
       Transform geom_X_world = body->base_X_world() * body->X_visuals()[v];
@@ -379,7 +379,7 @@ struct PyBulletUrdfImport {
   static void convert_visuals(
       UrdfStructures& urdf_structures, UrdfLink<Algebra>& link,
       class b3RobotSimulatorClientAPI_NoDirect& viz_api) {
-    for (int v = 0; v < link.urdf_visual_shapes.size(); v++) {
+    for (std::size_t v = 0; v < link.urdf_visual_shapes.size(); v++) {
       UrdfVisual<Algebra>& visual_shape = link.urdf_visual_shapes[v];
       b3RobotSimulatorCreateVisualShapeArgs args;
       args.m_shapeType = visual_shape.geometry.geom_type;
