@@ -130,6 +130,9 @@ if(Bullet_FOUND)
     add_executable(billiard_opt_gui billiard_opt_gui.cpp ${TDS_HDRS})
     target_link_libraries(billiard_opt_gui pybullet_visualizer_api ${DL} ${CERES_LIBRARIES})
 
+    add_executable(billiard_simple_trajOpt billiard_simple_trajOpt.cpp ${TDS_HDRS})
+    target_link_libraries(billiard_simple_trajOpt pybullet_visualizer_api ${DL} ${CERES_LIBRARIES})
+
     #add_executable(cartpole_opt cartpole_opt.cpp ${TDS_HDRS})
     #target_link_libraries(cartpole_opt pybullet_visualizer_api ${DL}
     #        ${CERES_LIBRARIES})
